@@ -2,9 +2,10 @@ from pathlib import Path
 import logging
 import pandas as pd
 import numpy as np
+import re
 
 from idat import IdatDataset
-from annotations import Annotations, Channel
+from annotations import Annotations, Channel, ArrayType
 from sample_sheet import SampleSheet
 
 LOGGER = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ class Samples:
         LOGGER.info(f'>> start reading sample files from {datadir}')
 
         for _, line in self.sheet.df.iterrows():
-            sample = Sample(line.sample_name)
+            sample = Sample(line.sample_name, self.annotation)
             for channel in Channel:
                 pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat'
                 paths = [p.__str__() for p in Path(datadir).rglob(pattern)]
@@ -63,11 +64,12 @@ class Samples:
 
 class Sample:
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, annotation: Annotations):
         self.idata = dict()
         self.df = None
         self.full_df = None
         self.name = name
+        self.annotation = annotation
 
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
         self.idata[channel] = dataset
@@ -180,4 +182,90 @@ class Sample:
                           .reorder_levels(['type', 'channel', 'probe_type', 'probe_id']))
 
     def reset_channel_index(self):
+        """Set the channel index as the manifest channel"""
         self.set_channel_index_as('manifest_channel', False)
+
+    @property
+    def oob_red(self) -> pd.DataFrame:
+        """Get the subset of out-of-band red probes (for type I probes only)"""
+        return self.df.xs('G', level='channel')['R']
+
+    @property
+    def oob_green(self) -> pd.DataFrame:
+        """Get the subset of out-of-band green probes (for type I probes only)"""
+        return self.df.xs('R', level='channel')['G']
+
+    @property
+    def ib_red(self) -> pd.DataFrame:
+        """Get the subset of in-band red probes (for type I probes only)"""
+        return self.df.xs('G', level='channel')['G']
+
+    @property
+    def ib_green(self) -> pd.DataFrame:
+        """Get the subset of in-band green probes (for type I probes only)"""
+        return self.df.xs('R', level='channel')['R']
+
+    @property
+    def type1(self) -> pd.DataFrame:
+        """Get the subset of in-band green probes (for type I probes only)"""
+        return self.df.loc['I']
+
+    @property
+    def type2(self) -> pd.DataFrame:
+        """Get the subset of in-band green probes (for type I probes only)"""
+        return self.df.loc['II', [['R', 'U'], ['G', 'M']]]
+
+    @property
+    def controls(self) -> pd.DataFrame | None:
+        """Get the subset of control probes"""
+        if 'ctl' not in self.df.index.get_level_values('probe_type'):
+            LOGGER.warning('no control probes found')
+            return None
+
+        return self.df.xs('ctl', level='probe_type')[['R', 'G']]
+
+    def mean_intensity(self) -> float:
+        """Computes the mean intensity of all the in-band measurements. This includes all Type-I in-band measurements
+        and all Type-II probe measurements. Both methylated and unmethylated alleles are considered."""
+        return np.nanmean(np.concatenate([self.ib_red, self.ib_green, self.type2]))
+
+    def norm_controls(self, average=False) -> dict | pd.DataFrame | None:
+        """Returns the control values to normalize green and red probes. If `average=True`, returns a dict with keys 'G'
+        and 'R' containing the average of the control probes. Otherwise, returns a dataframe with selected probes."""
+        if self.controls is None:
+            return None
+
+        # patterns to find the probe IDs we need
+        if self.annotation == ArrayType.HUMAN_27K:
+            pattern_green = r'norm.green$'
+            pattern_red = r'norm.red$'
+        else:
+            pattern_green = r'norm_c|norm_g$'
+            pattern_red = r'norm_a|norm_t$'
+
+        controls = self.controls.reset_index()
+        # find the red and green norm control probes according to their probe ID, and set the channel accordingly
+        idx_green = controls.probe_id.str.contains(pattern_green, flags=re.IGNORECASE)
+        idx_red = controls.probe_id.str.contains(pattern_red, flags=re.IGNORECASE)
+        controls.loc[idx_green, 'channel'] = 'G'
+        controls.loc[idx_red, 'channel'] = 'R'
+
+        if average:
+            return {'G': np.nanmean(controls.loc[idx_green, [['G', 'M']]]),
+                    'R': np.nanmean(controls.loc[idx_red, [['R', 'U']]])}
+        else:
+            # return a dataframe with the norm probes, and the multi index format as usual
+            return controls.loc[idx_green | idx_red].set_index(['type', 'channel', 'probe_id'])
+
+    def dye_bias_correction(self, reference: float | None = None):
+        """ Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If
+        the reference level is not given, it is set to the mean intensity of all the in-band signals."""
+
+        if reference is None:
+            reference = self.mean_intensity()
+
+        norm_values_dict = self.norm_controls(average=True)
+
+        for channel in ['R', 'G']:
+            factor = reference / norm_values_dict[channel]
+            self.df[channel] = self.df[channel] * factor

@@ -8,6 +8,7 @@ from utils import column_names_to_snake_case, concatenate_non_na
 
 LOGGER = logging.getLogger(__name__)
 
+
 @unique
 class Channel(Enum):
     """ idat probes measure either a red or green fluorescence.
@@ -38,7 +39,7 @@ class GenomeVersion(Enum):
 
 
 class ArrayType(Enum):
-
+    HUMAN_27K = 'HM27'
     HUMAN_450K = 'HM450'
     HUMAN_MSA = 'MSA'
     HUMAN_EPIC = 'EPIC'
