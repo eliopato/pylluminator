@@ -148,19 +148,41 @@ class Sample:
     ####################################################################################################################
 
     @property
+    def type1(self) -> pd.DataFrame:
+        """Get the subset of Infinium type I probes"""
+        return self.df_masked.xs('I', level='type', drop_level=False)
+
+    @property
+    def type2(self) -> pd.DataFrame:
+        """Get the subset of Infinium type II probes"""
+        return self.df_masked.xs('II', level='type', drop_level=False)[[['R', 'U'], ['G', 'M']]]
+
+    @property
     def oob_red(self) -> pd.DataFrame:
         """Get the subset of out-of-band red probes (for type I probes only)"""
-        return self.df_masked.xs('G', level='channel', drop_level=False)[['R']]
+        return self.type1.xs('G', level='channel', drop_level=False)[['R']]
 
     @property
     def oob_green(self) -> pd.DataFrame:
         """Get the subset of out-of-band green probes (for type I probes only)"""
-        return self.df_masked.xs('R', level='channel', drop_level=False)[['G']]
+        return self.type1.xs('R', level='channel', drop_level=False)[['G']]
 
     @property
     def oob(self) -> pd.DataFrame:
         """Get the subset of out-of-band probes (for type I probes only)"""
         return pd.concat([self.oob_green, self.oob_red])
+
+    def get_oob(self, channel=None) -> pd.DataFrame | None:
+        """Get the subset of out-of-band probes (for type I probes only)"""
+        if channel is None:
+            return pd.concat([self.oob_green, self.oob_red])
+        elif channel == 'R':
+            return self.oob_red
+        elif channel == 'G':
+            return self.oob_green
+        else:
+            LOGGER.error(f'Unknown channel {channel}')
+            return None
 
     @property
     def ib_red(self) -> pd.DataFrame:
@@ -176,16 +198,6 @@ class Sample:
     def ib(self) -> pd.DataFrame:
         """Get the subset of in-band probes (for type I probes only)"""
         return pd.concat([self.ib_red, self.ib_green])
-
-    @property
-    def type1(self) -> pd.DataFrame:
-        """Get the subset of Infinium type I probes"""
-        return self.df_masked.xs('I', level='type', drop_level=False)
-
-    @property
-    def type2(self) -> pd.DataFrame:
-        """Get the subset of Infinium type II probes"""
-        return self.df_masked.xs('II', level='type', drop_level=False)[[['R', 'U'], ['G', 'M']]]
 
     # def get_probes(self, probe_ids: list[str]) -> pd.DataFrame | None:
     #     """Returns the probes dataframe filtered on a list of probe IDs"""
@@ -214,6 +226,15 @@ class Sample:
         if self.indexes_not_masked is None:
             return 0
         return len(self.df) - len(self.indexes_not_masked)
+
+    def get_visible_indexes(self):
+        if self.indexes_not_masked is None:
+            return None
+        else:
+            return self.indexes_not_masked
+
+    def set_visible_indexes(self, indexes) -> None:
+        self.indexes_not_masked = indexes
 
     def reset_mask(self, names_to_mask: str | None = None):
         """Reset the mask to None (=no probe masked) and optionally set it to a new mask if `names_to_mask` is set"""
@@ -424,7 +445,7 @@ class Sample:
         self.add_mask(self.annotation.non_unique_mask_names)
 
         # Background = out-of-band type 1 probes + (optionally) negative controls
-        background_df = self.oob
+        background_df = self.get_oob()
         if use_negative_controls:
             neg_controls = self.get_negative_controls()
             background_df = pd.concat([background_df, neg_controls])
@@ -458,3 +479,14 @@ class Sample:
 
             self.df.loc[:, [[channel, 'M']]] = meth_corrected_signal
             self.df.loc[:, [[channel, 'U']]] = unmeth_corrected_signal
+
+    def scrub_background_correction(self):
+        """Subtract residual background using background median.
+        This function is meant to be used after noob."""
+
+        median_bg = {'G': np.median(self.oob_green),
+                     'R': np.median(self.oob_red)}
+        for channel in ['G', 'R']:
+            for methylation_state in ['U', 'M']:
+                idx = [[channel, methylation_state]]
+                self.df.loc[:, idx] = np.clip(self.df[idx] - median_bg[channel], a_min=1, a_max=None)

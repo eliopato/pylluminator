@@ -23,7 +23,7 @@ def concatenate_non_na(row: pd.Series, col_names: list[str]) -> list:
     return values
 
 
-def get_column_as_flat_array(df: pd.DataFrame, column: str, remove_na: bool=True):
+def get_column_as_flat_array(df: pd.DataFrame, column: str | list, remove_na: bool = False):
     values = df[[column]].values
     if remove_na:
         return values[~np.isnan(values)]
