@@ -1,6 +1,7 @@
 import os.path
 from enum import Enum, unique
 import pandas as pd
+import numpy as np
 import urllib.request
 import logging
 
@@ -56,60 +57,85 @@ class ArrayType(Enum):
 
 class Annotations:
 
-    def __init__(self, array_type: ArrayType, genome_version: GenomeVersion, with_mask=True):
+    def __init__(self, array_type: ArrayType, genome_version: GenomeVersion):
         self.array_type = array_type
         self.genome_version = genome_version
-        self.manifest = None
-        self.mask = None
+        self.mask = self.load_annotation('mask')
+        self.manifest = self.load_annotation('manifest')
 
-        # open the manifest and mask files if they already exist, or download them
-        stems = ['manifest', 'mask'] if with_mask else ['manifest']
-        for stem in stems:
+    def download_from_github(self, data_folder: str, tsv_filename: str) -> int:
+        """Download a manifest or mask from Zhou lab github page, and returns it as a dataframe. Returns -1 if the
+        file could not be downloaded"""
 
-            LOGGER.info(f'>> loading {stem} for {array_type} {genome_version}')
-            tsv_filename = f'{array_type}.{genome_version}.{stem}.tsv.gz'
-            pkl_filename = tsv_filename.replace('tsv.gz', 'pkl')
-            data_folder = f'./data/{stem}s/'
+        dl_link = f'https://github.com/zhou-lab/InfiniumAnnotationV1/raw/main/Anno/{self.array_type}/{tsv_filename}'
+        LOGGER.info(f'file {tsv_filename} not found in {data_folder}, trying to download it from {dl_link}')
 
-            # if the pickled file doesn't already exist, create it
-            if not os.path.exists(f'{data_folder}{pkl_filename}'):
+        os.makedirs(data_folder, exist_ok=True)  # create destination directory
 
-                # if the csv manifest file doesn't exist, download it
-                if not os.path.exists(f'{data_folder}{tsv_filename}'):
-                    os.makedirs(data_folder, exist_ok=True)
-                    dl_link = f'https://github.com/zhou-lab/InfiniumAnnotationV1/raw/main/Anno/{array_type}/{tsv_filename}'
-                    LOGGER.info(f'file {tsv_filename} not found in {data_folder}, trying to download it from {dl_link}')
-                    try:
-                        urllib.request.urlretrieve(dl_link, f'{data_folder}{tsv_filename}')
-                        LOGGER.info(f'download successful')
-                    except:
-                        link = 'https://zwdzwd.github.io/InfiniumAnnotation'
-                        LOGGER.info(f'download failed, download it from {link} and add it to the {data_folder} folder')
-                        continue
+        try:
+            urllib.request.urlretrieve(dl_link, f'{data_folder}{tsv_filename}')
+            LOGGER.info(f'download successful')
+        except:
+            link = 'https://zwdzwd.github.io/InfiniumAnnotation'
+            LOGGER.info(f'download failed, download it from {link} and add it to the {data_folder} folder')
+            return -1
 
-                # now read the downloaded manifest/mask file
-                df = pd.read_csv(f'{data_folder}{tsv_filename}', delimiter='\t')
+        return 1
 
-                # uniformization - who likes camel case ?
-                df = column_names_to_snake_case(df)
+    def load_annotation(self, name: str) -> pd.DataFrame | None:
+        """Download or read an annotation file. Name must be 'mask' or 'manifest'"""
 
-                # extract probe type from probe id (first letters, identifies control probes, snp...)
-                df['probe_type'] = df['probe_id'].str.extract(r'^([a-zA-Z]+)')
+        LOGGER.info(f'>> loading {name} for {self.array_type} {self.genome_version}')
 
-                # set dataframes index
-                if stem == 'manifest':
-                    # for type I probes that have both address A and address B set, split them in two rows
-                    # todo apply concatenate to each _a/_b column?
-                    df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
-                    df = df.explode('illumina_id', ignore_index=True)
-                    df['illumina_id'] = df['illumina_id'].astype('int')
-                    df.set_index('illumina_id', inplace=True)
-                elif stem == 'mask':
-                    df.set_index('probe_id', inplace=True)
+        if name not in ['mask', 'manifest']:
+            LOGGER.warning(f'Unknown annotation {name}, must be one of `mask`, `manifest`')
+            return None
 
-                pd.to_pickle(df, f'{data_folder}{pkl_filename}')
-            else:
-                df = pd.read_pickle(f'{data_folder}{pkl_filename}')
-                LOGGER.info('loading from pickle file done\n')
+        data_folder = f'./data/{name}s/'
+        tsv_filename = f'{self.array_type}.{self.genome_version}.{name}.tsv.gz'
+        pkl_filename = tsv_filename.replace('tsv.gz', 'pkl')
 
-            self.__setattr__(stem, df)
+        # if the pickled file doesn't already exist, create it
+        if not os.path.exists(f'{data_folder}{pkl_filename}'):
+
+            # if the csv manifest file doesn't exist, download it
+            if not os.path.exists(f'{data_folder}{tsv_filename}'):
+                if self.download_from_github(data_folder, tsv_filename) == -1:
+                    return None
+
+            # now read the downloaded manifest file
+            df = pd.read_csv(f'{data_folder}{tsv_filename}', delimiter='\t')
+
+            # uniformization - who likes camel case ?
+            df = column_names_to_snake_case(df)
+
+            # extract probe type from probe id (first letters, identifies control probes, snp...)
+            df['probe_type'] = df['probe_id'].str.extract(r'^([a-zA-Z]+)')
+
+            # set dataframes index
+            if name == 'manifest':
+                # for type I probes that have both address A and address B set, split them in two rows
+                # todo apply concatenate to each _a/_b column?
+                df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
+                df = df.explode('illumina_id', ignore_index=True)
+                df['illumina_id'] = df['illumina_id'].astype('int')
+                df.set_index('illumina_id', inplace=True)
+            elif name == 'mask':
+                df = df.set_index('probe_id')
+                df = df.rename(columns={'mask': 'mask_info'})
+
+            pd.to_pickle(df, f'{data_folder}{pkl_filename}')
+
+        else:
+
+            df = pd.read_pickle(f'{data_folder}{pkl_filename}')
+            LOGGER.info('loading from pickle file done\n')
+
+        return df
+
+    @property
+    def non_unique_mask_names(self):
+        return 'M_nonuniq|nonunique|sub35_copy|multi|design_issue'
+
+    def __str__(self):
+        return f'{self.array_type} - {self.genome_version}'

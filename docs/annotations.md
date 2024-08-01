@@ -16,3 +16,37 @@ Mapping information for allele A. NM is the number of mutations. AS represents a
 - `mapFlag_B, mapChrm_B, mapPos_B, mapQ_B, mapCigar_B, AlleleB_ProbeSeq, mapNM_B, mapAS_B, mapYD_B` :
 Mapping information for allele B. Same as allele A.
 - `type`: Infinium-I or Infinium-II
+
+Mask columns meaning :
+
+(1) Probe_ID: Probe ID
+(2) mask: ","-delimited description of masks
+(3) maskUniq: unique short form of the mask without additional info.
+(4) M_general: TRUE/FALSE, merged from other masks:
+
+    human: M_mapping+M_nonuniq+M_SNPcommon_5pt+M_1baseSwitchSNPcommon_5pt+M_2extBase_SNPcommon_5pt.
+    mouse: M_mapping+M_nonuniq
+
+Common masks:
+
+    M_mapping: unmapped probes, or probes having too low mapping quality (alignment score under 35, either probe for Infinium-I) or Infinium-I probe allele A and B mapped to different locations
+    M_nonuniq: mapped probes but with mapping quality smaller than 10, either probe for Infinium-I
+    M_uncorr_titration: CpGs with titration correlation under 0.9. Functioning probes should have very high correlation with titrated methylation fraction.
+
+Human masks (general and population-specific):
+
+    M_commonSNP5_5pt: mapped probes having at least a common SNP with MAF>=5% within 5bp from 3'-extension
+    M_commonSNP5_1pt: mapped probes having at least a common SNP with MAF>=1% within 5bp from 3'-extension
+    M_1baseSwitchSNPcommon_1pt: mapped Infinium-I probes with SNP (MAF>=1%) hitting the extension base and changing the color channel
+    M_2extBase_SNPcommon_1pt: mapped Infinium-II probes with SNP (MAF>=1%) hitting the extension base.
+    M_SNP_EAS_1pt: EAS population-specific mask (MAF>=1%).
+    M_1baseSwitchSNP_EAS_1pt: EAS population-specific mask (MAF>=1%).
+    M_2extBase_SNP_EAS_1pt: EAS population-specific mask (MAF>=1%).
+    ... more populations, e.g., EAS, EUR, AFR, AMR, SAS.
+
+Mouse masks (general and strain-specific):
+
+    M_PWK_PhJ: mapped probes having at least a PWK_PhJ strain-specific SNP within 5bp from 3'-extension
+    M_1baseSwitchPWK_PhJ: mapped Infinium-I probes with PWK_PhJ strain-specific SNP hitting the extension base and changing the color channel
+    M_2extBase_PWK_PhJ: mapped Infinium-II probes with PWK_PhJ strain-specific SNP hitting the extension base.
+    ... more strains, e.g., AKR_J, A_J, NOD_ShiLtJ, MOLF_EiJ, 129P2_OlaHsd ...

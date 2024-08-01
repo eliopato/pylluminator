@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -13,10 +14,17 @@ def column_names_to_snake_case(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Function to concatenate values of N columns into a list, excluding NaN
 def concatenate_non_na(row: pd.Series, col_names: list[str]) -> list:
+    """Function to concatenate values of N columns into a list, excluding NaN"""
     values = []
     for col_name in col_names:
         if pd.notna(row[col_name]):
             values.append(row[col_name])
     return values
+
+
+def get_column_as_flat_array(df: pd.DataFrame, column: str, remove_na: bool=True):
+    values = df[[column]].values
+    if remove_na:
+        return values[~np.isnan(values)]
+    return values.flatten()
