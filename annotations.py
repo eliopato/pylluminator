@@ -115,7 +115,6 @@ class Annotations:
             # set dataframes index
             if name == 'manifest':
                 # for type I probes that have both address A and address B set, split them in two rows
-                # todo apply concatenate to each _a/_b column?
                 df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
                 df = df.explode('illumina_id', ignore_index=True)
                 df['illumina_id'] = df['illumina_id'].astype('int')
@@ -134,8 +133,28 @@ class Annotations:
         return df
 
     @property
-    def non_unique_mask_names(self):
+    def non_unique_mask_names(self) -> str:
+        """Mask names for non-unique probes, as defined in Sesame."""
         return 'M_nonuniq|nonunique|sub35_copy|multi|design_issue'
+
+    @property
+    def quality_mask_names(self) -> str:
+        """Recommended mask names for each Infinium platform, as defined in Sesame. We're assuming that EPIC+ arrays
+        have the same masks as EPIC v2 arrays."""
+        if self.array_type in [ArrayType.HUMAN_EPIC_V2, ArrayType.HUMAN_EPIC_PLUS]:
+            names = ['M_1baseSwitchSNPcommon_5pt', 'M_2extBase_SNPcommon_5pt', 'M_mapping', 'M_nonuniq',
+                     'M_SNPcommon_5pt']
+        elif self.array_type in [ArrayType.HUMAN_EPIC, ArrayType.HUMAN_450K]:
+            names = ['mapping', 'channel_switch', 'snp5_GMAF1p', 'extension', 'sub30_copy']
+        elif self.array_type == ArrayType.HUMAN_27K:
+            names = ['mask']
+        elif self.array_type == ArrayType.MOUSE_MM285:
+            names = ['ref_issue', 'nonunique', 'design_issue']
+        else:
+            LOGGER.warning(f'No quality mask names defined for array type {self.array_type}')
+            names = ['']
+
+        return '|'.join(names)
 
     def __str__(self):
         return f'{self.array_type} - {self.genome_version}'
