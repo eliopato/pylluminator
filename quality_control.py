@@ -5,16 +5,19 @@ from sample import Sample
 
 
 def print_header(title: str) -> None:
+    """Format and print a QC section header"""
     print('\n===================================================================')
     print(f'|  {title}')
     print('===================================================================\n')
 
 
-def print_value(name, value) -> None:
+def print_value(name: str, value) -> None:
+    """Format and print a QC value"""
     print(f'{name}\t\t:  {value}')
 
 
-def print_pct(name, value) -> None:
+def print_pct(name: str, value) -> None:
+    """Format and print a QC percentage (x100 will be applied to the input value)"""
     print(f'{name}\t\t:  {100*value} %')
 
 
@@ -78,3 +81,25 @@ def intensity_stats(sample: Sample) -> None:
     print_value('Number of NAs in Type 2 signal', sample.type2.isna().values.sum())
     print('-- note : these NA values don\'t count probes that don\'t appear in .idat files; these are only counted in '
           'the `Detection - missing raw intensity` QC line')
+
+
+def nb_probes_stats(sample: Sample, mask=False) -> None:
+    """Print probe counts per Infinium type and Probe type"""
+
+    previous_mask = sample.indexes_not_masked
+
+    if mask:
+        print_header('Number of probes (mask applied)')
+    else:
+        print_header('Number of probes')
+        sample.reset_mask()
+
+    print_value('Total : ', len(sample.df))
+    print_value('Type II : ', len(sample.type2))
+    print_value('Type I Green : ', len(sample.type1_green))
+    print_value('Type I Red : ', len(sample.type1_red))
+    print_value('CG : ', len(sample.cg_probes))
+    print_value('CH : ', len(sample.ch_probes))
+    print_value('SNP : ', len(sample.snp_probes))
+
+    sample.indexes_not_masked = previous_mask

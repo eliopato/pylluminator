@@ -217,13 +217,28 @@ class Sample:
         """Get the subset of unmethylated probes"""
         return self.df_masked.xs('U', level='methylation_state', drop_level=False, axis=1)
 
-    # def get_probes(self, probe_ids: list[str]) -> pd.DataFrame | None:
-    #     """Returns the probes dataframe filtered on a list of probe IDs"""
-    #     if probe_ids is None or len(probe_ids) == 0:
-    #         return None
-    #
-    #     idx = pd.IndexSlice
-    #     return self.df.loc[idx[:, :, :, probe_ids], :]
+    @property
+    def cg_probes(self) -> pd.DataFrame:
+        """Get CG type probes"""
+        return self.get_probes_with_probe_type('cg')
+
+    @property
+    def ch_probes(self) -> pd.DataFrame:
+        """Get CH type probes"""
+        return self.get_probes_with_probe_type('ch')
+
+    @property
+    def snp_probes(self) -> pd.DataFrame:
+        """Get SNP type probes ('rs' probes in manifest, but replaced by 'snp' when loaded)"""
+        return self.get_probes_with_probe_type('snp')
+
+    def get_probes_with_probe_type(self, probe_type: str) -> pd.DataFrame | None:
+        """Select probes by probe type, meaning e.g. CG, Control, SNP... (not infinium type I/II type)"""
+        if probe_type not in self.df.index.get_level_values('probe_type'):
+            LOGGER.warning(f'no {probe_type} probes found')
+            return None
+
+        return self.df_masked.xs(probe_type, level='probe_type', drop_level=False)[['R', 'G']]
 
     ####################################################################################################################
     # Mask functions
@@ -287,11 +302,10 @@ class Sample:
     @property
     def controls(self) -> pd.DataFrame | None:
         """Get the subset of control probes"""
-        if 'ctl' not in self.df.index.get_level_values('probe_type'):
-            LOGGER.warning('no control probes found')
+        df = self.get_probes_with_probe_type('ctl')
+        if df is None:
             return None
-
-        return self.df_masked.xs('ctl', level='probe_type', drop_level=False)[['R', 'G']]
+        return df[['R', 'G']]
 
     def get_control_probes_indexes(self, pattern: str):
         probe_ids = self.controls.index.get_level_values('probe_id')
