@@ -103,3 +103,23 @@ def nb_probes_stats(sample: Sample, mask=False) -> None:
     print_value('SNP : ', len(sample.snp_probes))
 
     sample.indexes_not_masked = previous_mask
+
+
+def type1_color_channels_stats(sample: Sample, mask=False):
+    """Print channel switch counts for Infinium type I probes"""
+
+    previous_mask = sample.indexes_not_masked
+
+    if mask:
+        print_header('Type I color channel (mask applied)')
+    else:
+        print_header('Type I color channel (no mask applied)')
+        sample.reset_mask()
+
+    summary_inferred_channels = sample.infer_type1_channel(summary_only=True)
+    print_value('Green to Green : ', summary_inferred_channels['G']['G'])
+    print_value('Green to Red : ', summary_inferred_channels['G']['R'])
+    print_value('Red to Red : ', summary_inferred_channels['R']['R'])
+    print_value('Red to Green : ', summary_inferred_channels['R']['G'])
+
+    sample.indexes_not_masked = previous_mask

@@ -395,14 +395,16 @@ class Sample:
         """Set the channel index as the manifest channel"""
         self.set_channel_index_as('manifest_channel', False)
 
-    def infer_type1_channel(self, switch_failed=False, mask_failed=False) -> None:
+    def infer_type1_channel(self, switch_failed=False, mask_failed=False, summary_only=False) -> None | pd.DataFrame:
         """For Infinium type I probes, infer the channel from the signal values, setting it to the channel with the max
         signal. If max values are equals, the channel is set to R (as opposed to G in sesame).
 
-        switch_failed: if set to True, probes with NA values or whose max values are under a threshold (the 95th
+        `switch_failed`: if set to True, probes with NA values or whose max values are under a threshold (the 95th
         percentile of the background signals) will be switched back to their original value
 
-        mask_failed: mask failed probes (same probes as switch_failed)"""
+        `mask_failed`: mask failed probes (same probes as switch_failed)
+
+        `summary_only`: does not replace the sample dataframe, only return the summary (useful for QC)"""
 
         # subset to use
         type1_df = self.df.loc['I'].droplevel('methylation_state', axis=1).copy()
@@ -423,16 +425,20 @@ class Sample:
                 # reset color channel to the value of 'manifest_channel' for failed indexes of type I probes
                 failed_idxs_manifest_values = type1_df.loc[failed_idxs, 'manifest_channel'].tolist()
                 type1_df.loc[failed_idxs, 'inferred_channel'] = failed_idxs_manifest_values
-            # todo
-            # if mask_failed:
-            #     sdf.loc[inf1_idx[idx], 'mask'] = True
 
-        LOGGER.info(f"summary: \n{type1_df.groupby(['manifest_channel', 'inferred_channel']).count().max(axis=1)}")
+            if mask_failed:
+                self.indexes_not_masked = self.df_masked[~self.df_masked.index.isin(failed_idxs)].index
 
-        self.df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
+        summary = type1_df.groupby(['manifest_channel', 'inferred_channel']).count().max(axis=1)
 
-        # make the inferred channel the new channel index
-        self.set_channel_index_as('inferred_channel', drop=True)
+        # set the inferred channel as the new 'channel' index
+        if not summary_only:
+            self.df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
+            # make the inferred channel the new channel index
+            self.set_channel_index_as('inferred_channel', drop=True)
+            LOGGER.info(f"Type 1 channel inference summary: \n{summary}")
+
+        return summary
 
     ####################################################################################################################
     # Preprocessing functions
