@@ -1,3 +1,5 @@
+import pandas as pd
+
 from detection import pOOBAH
 from sample import Sample
 
@@ -17,6 +19,7 @@ def print_pct(name, value) -> None:
 
 
 def detection_stats(sample: Sample) -> None:
+    """Print detection statistics of the given sample."""
     print_header('Detection')
 
     pvals_df = pOOBAH(sample, threshold=0.05)
@@ -51,3 +54,27 @@ def detection_stats(sample: Sample) -> None:
         probes_value = sum(probes['mask'])
         print_value(f'N. Probes w/ Detection Success {probe_type}', probes_value)
         print_pct(f'% Detection Success {probe_type}', probes_value / len(probes))
+
+
+def intensity_stats(sample: Sample) -> None:
+    """Print intensity statistics of the given sample."""
+    print_header('Signal intensity')
+    print_value('Mean in-band signal intensity (masked)', sample.get_mean_ib_intensity())
+    print_value('Mean in-band signal intensity (M+U, not masked)', sample.get_total_ib_intensity().mean())
+    print_value('Mean in-band type II signal intensity ', sample.type2.mean(axis=None))
+    print_value('Mean in-band type I Red signal intensity ', sample.ib_red.mean(axis=None))
+    print_value('Mean in-band type I Green signal intensity ', sample.ib_green.mean(axis=None))
+    print_value('Mean out-of-band type I Red signal intensity ', sample.oob_green.mean(axis=None))
+    print_value('Mean out-of-band type I Green signal intensity ', sample.oob_red.mean(axis=None))
+
+    type_i_m_na = pd.isna(sample.meth.loc['I']).values.sum()
+    type_ii_m_na = pd.isna(sample.meth.loc['II', 'G']).values.sum()
+    print_value('Number of NAs in Methylated signal', type_i_m_na + type_ii_m_na)
+    type_i_u_na = pd.isna(sample.unmeth.loc['I']).values.sum()
+    type_ii_u_na = pd.isna(sample.unmeth.loc['II', 'R']).values.sum()
+    print_value('Number of NAs in Unmethylated signal', type_ii_u_na + type_i_u_na)
+    print_value('Number of NAs in Type 1 Red signal', sample.type1_red.isna().values.sum())
+    print_value('Number of NAs in Type 1 Green signal', sample.type1_green.isna().values.sum())
+    print_value('Number of NAs in Type 2 signal', sample.type2.isna().values.sum())
+    print('-- note : these NA values don\'t count probes that don\'t appear in .idat files; these are only counted in '
+          'the `Detection - missing raw intensity` QC line')

@@ -199,6 +199,24 @@ class Sample:
         """Get the subset of in-band probes (for type I probes only)"""
         return pd.concat([self.ib_red, self.ib_green])
 
+    @property
+    def type1_green(self) -> pd.DataFrame:
+        return self.type1.xs('G', level='channel', drop_level=False)
+
+    @property
+    def type1_red(self) -> pd.DataFrame:
+        return self.type1.xs('R', level='channel', drop_level=False)
+
+    @property
+    def meth(self) -> pd.DataFrame:
+        """Get the subset of methylated probes"""
+        return self.df_masked.xs('M', level='methylation_state', drop_level=False, axis=1)
+
+    @property
+    def unmeth(self) -> pd.DataFrame:
+        """Get the subset of unmethylated probes"""
+        return self.df_masked.xs('U', level='methylation_state', drop_level=False, axis=1)
+
     # def get_probes(self, probe_ids: list[str]) -> pd.DataFrame | None:
     #     """Returns the probes dataframe filtered on a list of probe IDs"""
     #     if probe_ids is None or len(probe_ids) == 0:
@@ -406,10 +424,37 @@ class Sample:
     # Preprocessing functions
     ####################################################################################################################
 
-    def get_mean_intensity(self) -> float:
+    def get_mean_ib_intensity(self, mask=True) -> float:
         """Computes the mean intensity of all the in-band measurements. This includes all Type-I in-band measurements
-        and all Type-II probe measurements. Both methylated and unmethylated alleles are considered."""
-        return np.nanmean(np.concatenate([self.ib_red, self.ib_green, self.type2]))
+        and all Type-II probe measurements. Both methylated and unmethylated alleles are considered.
+        Switch `mask` to False if you don't want any mask to be applied (default is True)"""
+
+        # if the mask should be applied, or if no mask is set
+        if mask or self.indexes_not_masked is None:
+            return np.nanmean(np.concatenate([self.ib_red, self.ib_green, self.type2]))
+
+        # if a mask is set and shouldn't be applied, reset the mask before calculating the value
+        previous_mask = self.indexes_not_masked
+        self.reset_mask()
+        mean_intensity = np.nanmean(np.concatenate([self.ib_red, self.ib_green, self.type2]))
+        self.indexes_not_masked = previous_mask
+        return mean_intensity
+
+    def get_total_ib_intensity(self, mask=False) -> pd.DataFrame:
+        """Computes the total intensity of all the in-band measurements. This includes all Type-I in-band measurements
+        and all Type-II probe measurements. Both methylated and unmethylated alleles are considered.
+        Switch `mask` to True if you want the mask to be applied (default is False)"""
+
+        # if the mask should be applied, or if no mask is set
+        if mask or self.indexes_not_masked is None:
+            return pd.concat([self.ib_red.sum(axis=1), self.ib_green.sum(axis=1), self.type2.sum(axis=1)])
+
+        # if a mask is set and shouldn't be applied, reset the mask before calculating the value
+        previous_mask = self.indexes_not_masked
+        self.reset_mask()
+        signal_intensity = pd.concat([self.ib_red.sum(axis=1), self.ib_green.sum(axis=1), self.type2.sum(axis=1)])
+        self.indexes_not_masked = previous_mask
+        return signal_intensity
 
     def get_betas(self) -> pd.Series:
         # todo check why sesame gives the option to calculate separately R/G channels for Type I probes (sum.TypeI arg)
@@ -425,7 +470,7 @@ class Sample:
         the reference level is not given, it is set to the mean intensity of all the in-band signals."""
 
         if reference is None:
-            reference = self.get_mean_intensity()
+            reference = self.get_mean_ib_intensity()
 
         norm_values_dict = self.get_normalization_controls(average=True)
 
