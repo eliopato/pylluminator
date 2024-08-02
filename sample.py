@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 import numpy as np
 import re
+from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
 from idat import IdatDataset
 from annotations import Annotations, Channel, ArrayType
@@ -479,7 +480,10 @@ class Sample:
     def get_betas(self) -> pd.Series:
         # todo check why sesame gives the option to calculate separately R/G channels for Type I probes (sum.TypeI arg)
         # https://github.com/zwdzwd/sesame/blob/261e811c5adf3ec4ecc30cdf927b9dcbb2e920b6/R/sesame.R#L191
-        df = self.df.fillna(0)
+        # set NAs for Type II probes to 0, only where no methylation signal is expected
+        df = self.df.copy()
+        df.loc['II', [['R', 'M']]] = 0
+        df.loc['II', [['G', 'U']]] = 0
         methylated_signal = df['R', 'M'] + df['G', 'M']
         unmethylated_signal = df['R', 'U'] + df['G', 'U']
         # use clip function to set minimum values for each term as set in sesame
@@ -555,3 +559,40 @@ class Sample:
             for methylation_state in ['U', 'M']:
                 idx = [[channel, methylation_state]]
                 self.df.loc[:, idx] = np.clip(self.df[idx] - median_bg[channel], a_min=1, a_max=None)
+
+    def poobah(self, use_negative_controls=True, threshold=0.05) -> None:
+        """Detection P-value based on empirical cumulative distribution function (ECDF) of out-of-band signal
+        aka pOOBAH (p-vals by Out-Of-Band Array Hybridization).
+        Parameter `threshold` is used to output a mask based on the p_values.
+        Return a dataframe with columns `p_value` and `mask`."""
+
+        # mask non-unique probes - but first save previous mask to reset it afterward
+        previous_unmasked_indexes = self.indexes_not_masked
+        self.add_mask(self.annotation.non_unique_mask_names)
+
+        # Background = out-of-band type 1 probes + (optionally) negative controls
+        background_df = self.get_oob()
+        if use_negative_controls:
+            neg_controls = self.get_negative_controls()
+            background_df = pd.concat([background_df, neg_controls])
+
+        bg_green = get_column_as_flat_array(background_df, 'G', remove_na=True)
+        bg_red = get_column_as_flat_array(background_df, 'R', remove_na=True)
+
+        if np.sum(bg_red, where=~np.isnan(bg_red)) <= 100:
+            LOGGER.info('Not enough out of band signal, use empirical prior')
+            bg_red = [n for n in range(1000)]
+
+        if np.sum(bg_green, where=~np.isnan(bg_green)) <= 100:
+            LOGGER.info('Not enough out of band signal, use empirical prior')
+            bg_green = [n for n in range(1000)]
+
+        # reset mask
+        self.indexes_not_masked = previous_unmasked_indexes
+
+        pval_green = 1 - ecdf(bg_green)(self.df[['G']].max(axis=1))
+        pval_red = 1 - ecdf(bg_red)(self.df[['R']].max(axis=1))
+
+        self.df['p_value'] = np.min([pval_green, pval_red], axis=0)
+        self.df['poobah_mask'] = self.df['p_value'] <= threshold
+        self.indexes_not_masked = self.df_masked.loc[self.df['poobah_mask']].index
