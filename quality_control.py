@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from detection import pOOBAH
 from sample import Sample
@@ -122,4 +123,32 @@ def type1_color_channels_stats(sample: Sample, mask=False):
     print_value('Red to Red : ', summary_inferred_channels['R']['R'])
     print_value('Red to Green : ', summary_inferred_channels['R']['G'])
 
+    sample.indexes_not_masked = previous_mask
+
+
+def dye_bias_stats(sample: Sample, mask=False):
+    """Print dye bias stats for Infinium type I probes"""
+    previous_mask = sample.indexes_not_masked
+
+    if mask:
+        print_header('Dye bias (mask applied)')
+    else:
+        print_header('Dye bias (no mask applied)')
+        sample.reset_mask()
+
+    total_intensity_type1 = sample.get_total_ib_intensity().loc['I']
+
+    median_red = np.median(total_intensity_type1.loc['R'])
+    median_green = np.median(total_intensity_type1.loc['G'])
+    print('Median Inf type I red channel intensity', median_red)
+    print('Median Inf type I green channel intensity', median_green)
+
+    top_20_median_red = np.median(total_intensity_type1.loc['R'].nlargest(20))
+    top_20_median_green = np.median(total_intensity_type1.loc['G'].nlargest(20))
+    print('Median of top 20 Inf type I red channel intensity', top_20_median_red)
+    print('Median of top 20 Inf type I green channel intensity', top_20_median_green)
+
+    print('Ratio of Red-to-green median intensities', median_red / median_green)
+    red_green_distortion = (top_20_median_red/top_20_median_green) / (median_red / median_green)
+    print('Ratio of top vs global Red-to-green median intensities', red_green_distortion)
     sample.indexes_not_masked = previous_mask
