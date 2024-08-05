@@ -205,12 +205,6 @@ class IdatSectionCode(IntEnum):
     NUM_SNPS_READ = 1000
 
 
-
-
-# Object Definitions
-# ----------------------------------------------------------------------------
-
-
 class IdatDataset:
     """Validates and parses an Illumina IDAT file.
 

@@ -1,7 +1,6 @@
 import os.path
 from enum import Enum, unique
 import pandas as pd
-import numpy as np
 import urllib.request
 import logging
 
