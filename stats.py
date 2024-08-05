@@ -125,3 +125,21 @@ def norm_exp_convolution(mu: float, sigma: float, alpha: float, signal_values: n
 
     # Add the offset to the corrected signal
     return adjusted_signal + offset
+
+
+def quantile_normalization_using_target(source_array: np.array, target_array: np.array) -> np.array:
+    """ Perform quantile normalization on the source_array using target_array as the target distribution, even if the
+    arrays have different sizes.
+    return the quantile-normalized array, of the same size as source_array
+    """
+
+    target_sorted = np.sort(target_array)
+    source_ranks = source_array.argsort().argsort()
+
+    interp_target = np.interp(
+        np.linspace(0, 1, len(source_array)),
+        np.linspace(0, 1, len(target_sorted)),
+        target_sorted
+    )
+
+    return interp_target[source_ranks]

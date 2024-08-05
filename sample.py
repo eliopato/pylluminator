@@ -467,6 +467,64 @@ class Sample:
             factor = reference / norm_values_dict[channel]
             self.signal_df[channel] = self.signal_df[channel] * factor
 
+    def dye_bias_correction_nl(self, mask=False) -> None:
+        """Dye bias correction by matching green and red to mid-point.
+
+        This function compares the Type-I Red probes and Type-I Grn probes and generates and mapping to correct signal of
+        the two channels to the middle.
+
+        `mask` : if True include masked probes in Infinium-I probes. No big difference is noted in practice. More probes are
+        generally better.
+        """
+        LOGGER.info('>>> starting non linear dye bias correction')
+        total_intensity_type1 = self.get_total_ib_intensity(False).loc['I']
+
+        median_red = np.median(total_intensity_type1.loc['R'])
+        median_green = np.median(total_intensity_type1.loc['G'])
+
+        top_20_median_red = np.median(total_intensity_type1.loc['R'].nlargest(20))
+        top_20_median_green = np.median(total_intensity_type1.loc['G'].nlargest(20))
+
+        red_green_distortion = (top_20_median_red / top_20_median_green) / (median_red / median_green)
+
+        if red_green_distortion is None or red_green_distortion > 10:
+            LOGGER.info(f'Red-Green distortion is too high ({red_green_distortion}. Masking green probes')
+            self.mask_indexes(self.type1_green(True).index)
+            return
+
+        sorted_intensities = {'G': np.sort(get_column_as_flat_array(self.type1_green(mask), 'G')),
+                              'R': np.sort(get_column_as_flat_array(self.type1_red(mask), 'R'))}
+
+        if np.max(sorted_intensities['G']) <= 0 or np.max(sorted_intensities['R']) <= 0:
+            LOGGER.warning('Max green or red intensities is <= 0. Aborting dye bias correction.')
+            return
+
+        for channel, reference_channel in [('R', 'G'), ('G', 'R')]:
+            channel_intensities = sorted_intensities[channel]
+            ref_intensities = sorted_intensities[reference_channel]
+
+            max_intensity = np.max(channel_intensities)
+            min_intensity = np.min(channel_intensities)
+
+            normalized_intensities = np.sort(quantile_normalization_using_target(channel_intensities, ref_intensities))
+            midpoint_intensities = (channel_intensities + normalized_intensities) / 2
+            max_midpoint_intensity = np.max(midpoint_intensities)
+            min_midpoint_intensity = np.min(midpoint_intensities)
+
+            def fit_function(data: np.array) -> np.array:
+                within_range = (data <= max_intensity) & (data >= min_intensity) & (~np.isnan(data))
+                above_range = (data > max_intensity) & (~np.isnan(data))
+                below_range = (data < min_intensity) & (~np.isnan(data))
+                data[within_range] = np.interp(x=data[within_range], xp=channel_intensities, fp=midpoint_intensities)
+                data[above_range] = data[above_range] - max_intensity + max_midpoint_intensity
+                data[below_range] = data[below_range] * (min_midpoint_intensity / min_intensity)
+                return data
+
+            self.signal_df.loc[:, [[channel, 'M']]] = fit_function(self.signal_df[[[channel, 'M']]].values)
+            self.signal_df.loc[:, [[channel, 'U']]] = fit_function(self.signal_df[[[channel, 'U']]].values)
+
+        LOGGER.info('non linear dye bias correction done\n')
+
     def apply_noob_background_correction(self, mask: bool, use_negative_controls=True, offset=15) -> None:
         """
         Subtract the background. Background was modelled in a normal distribution and true signal in an exponential
@@ -569,3 +627,4 @@ class Sample:
 
         # add pOOBAH mask to masked indexes
         self.mask_indexes(self.signal_df.loc[self.signal_df['poobah_mask']].index)
+
