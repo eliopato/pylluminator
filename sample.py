@@ -221,6 +221,14 @@ class Sample:
 
         return self.get_signal_df(mask).xs(probe_type, level='probe_type', drop_level=False)[['R', 'G']]
 
+    def get_probes_with_probe_ids(self, mask: bool, probe_ids: list[str]) -> pd.DataFrame | None:
+        """Returns the probes dataframe filtered on a list of probe IDs"""
+        if probe_ids is None or len(probe_ids) == 0:
+            return None
+
+        idx = pd.IndexSlice
+        return self.get_signal_df(mask).loc[idx[:, :, :, probe_ids], :]
+
     def oob(self, mask: bool, channel=None) -> pd.DataFrame | None:
         """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `mask` is True"""
         if channel is None:
@@ -439,11 +447,11 @@ class Sample:
 
         return pd.concat([self.ib_red(mask).sum(axis=1), self.ib_green(mask).sum(axis=1), self.type2(mask).sum(axis=1)])
 
-    def get_betas(self) -> pd.Series:
+    def get_betas(self, mask: bool) -> pd.Series:
         # todo check why sesame gives the option to calculate separately R/G channels for Type I probes (sum.TypeI arg)
         # https://github.com/zwdzwd/sesame/blob/261e811c5adf3ec4ecc30cdf927b9dcbb2e920b6/R/sesame.R#L191
         # set NAs for Type II probes to 0, only where no methylation signal is expected
-        df = self.signal_df.copy()
+        df = self.get_signal_df(mask).copy()
         df.loc['II', [['R', 'M']]] = 0
         df.loc['II', [['G', 'U']]] = 0
         methylated_signal = df['R', 'M'] + df['G', 'M']
@@ -525,12 +533,12 @@ class Sample:
 
         LOGGER.info('non linear dye bias correction done\n')
 
-    def apply_noob_background_correction(self, mask: bool, use_negative_controls=True, offset=15) -> None:
+    def noob_background_correction(self, mask: bool, use_negative_controls=True, offset=15) -> None:
         """
         Subtract the background. Background was modelled in a normal distribution and true signal in an exponential
         distribution. The Norm-Exp deconvolution is parameterized using Out-Of-Band (oob) probes. Multi-mapping probes
         are excluded.
-        When `use_negative_controls = True`, background will be calculated ib both negative control and out-of-band probes
+        If `use_negative_controls=True`, background will be calculated with both negative control and out-of-band probes
         """
         # mask non unique probes - saves previous mask to reset it afterwards
         previous_masked_indexes = self.masked_indexes

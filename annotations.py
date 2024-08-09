@@ -3,6 +3,7 @@ from enum import Enum, unique
 import pandas as pd
 import urllib.request
 import logging
+import pyranges as pr
 
 from utils import column_names_to_snake_case, concatenate_non_na
 
@@ -54,6 +55,16 @@ class ArrayType(Enum):
         return self.value
 
 
+class GenomeInfo:
+
+    def __init__(self):
+        self.seq_length = None
+        self.cen_info = None
+        self.txns = None
+        self.gap_info = None
+        self.cyto_band = None
+
+
 class Annotations:
 
     def __init__(self, array_type: ArrayType, genome_version: GenomeVersion):
@@ -61,6 +72,7 @@ class Annotations:
         self.genome_version = genome_version
         self.mask = self.load_annotation('mask')
         self.manifest = self.load_annotation('manifest')
+        self.genome_info = self.load_annotation('genome_info')
 
     def download_from_github(self, data_folder: str, tsv_filename: str) -> int:
         """Download a manifest or mask from Zhou lab github page, and returns it as a dataframe. Returns -1 if the
@@ -82,11 +94,14 @@ class Annotations:
         return 1
 
     def load_annotation(self, name: str) -> pd.DataFrame | None:
-        """Download or read an annotation file. Name must be 'mask' or 'manifest'"""
+        """Download or read an annotation file. Name must be 'mask', 'manifest', or 'genome_info'"""
 
         LOGGER.info(f'>> loading {name} for {self.array_type} {self.genome_version}')
 
-        if name not in ['mask', 'manifest']:
+        if name == 'genome_info':
+            return self.load_genome_info()
+
+        elif name not in ['mask', 'manifest']:
             LOGGER.warning(f'Unknown annotation {name}, must be one of `mask`, `manifest`')
             return None
 
@@ -131,6 +146,44 @@ class Annotations:
 
         return df
 
+    def load_genome_info(self) -> GenomeInfo | None:
+        """Given a genome version, load the files (cen_info.csv, cyto_band.csv, gap_info.csv, seq_length.csv and
+        txns.csv) into a GenomeVersion object. If any file is missing, return None."""
+
+        if self.genome_version is None:
+            LOGGER.warning('You must set genome version to load genome information')
+            return None
+
+        genome_info = GenomeInfo()
+        folder_genome = f'./data/genomes/{self.genome_version}/'
+
+        if not os.path.exists(folder_genome):
+            LOGGER.warning(f'No genome information found in {folder_genome}')
+            return None
+
+        for info in ['cen_info', 'cyto_band', 'gap_info', 'seq_length', 'txns']:
+            filepath = f'{folder_genome}/{info}.csv'
+
+            if not os.path.exists(filepath):
+                LOGGER.warning(f'Missing genome information file {filepath}. Abort genome info loading.')
+                return None
+
+            df = pd.read_csv(filepath)
+            if 'End' in df.columns:
+                df.End = df.End.astype('int')
+                df.Start = df.Start.astype('int')
+            genome_info.__setattr__(info, df)
+
+        # rename some columns to turn the gap info df into a genomic ranges object
+        # genome_info.gap_info = genome_info.gap_info.rename(columns={'start': 'starts', 'end': 'ends'})
+        # genome_info.gap_info = GenomicRanges(genome_info.gap_info)
+
+        genome_info.gap_info = pr.PyRanges(genome_info.gap_info)
+        genome_info.seq_length = dict(zip(genome_info.seq_length.Chromosome, genome_info.seq_length.SeqLength))
+
+        LOGGER.info('loading done\n')
+        return genome_info
+
     @property
     def non_unique_mask_names(self) -> str:
         """Mask names for non-unique probes, as defined in Sesame."""
@@ -157,3 +210,19 @@ class Annotations:
 
     def __str__(self):
         return f'{self.array_type} - {self.genome_version}'
+
+    def get_genomic_ranges(self) -> pd.DataFrame:
+        """Extract genomic ranges information from manifest dataframe"""
+        genomic_ranges = self.manifest[['probe_id', 'cpg_chrm', 'cpg_beg', 'cpg_end', 'map_yd_a']].drop_duplicates()
+        genomic_ranges = genomic_ranges.set_index('probe_id')
+        # rename column to fit pyRanges naming convention
+        genomic_ranges = genomic_ranges.rename(columns={'cpg_chrm': 'Chromosome',
+                                                        'cpg_beg': 'Start',
+                                                        'cpg_end': 'End',
+                                                        'map_yd_a': 'Strand'})
+
+        genomic_ranges['Strand'] = genomic_ranges.Strand.replace({'f': '-', 'r': '+', 'u': '*'}).fillna('*')
+        genomic_ranges['Chromosome'] = genomic_ranges.Chromosome.fillna('*')
+        genomic_ranges['Start'] = genomic_ranges.Start.fillna(0).astype(int)
+        genomic_ranges['End'] = genomic_ranges.End.fillna(0).astype(int)
+        return genomic_ranges

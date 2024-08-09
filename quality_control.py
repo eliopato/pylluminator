@@ -138,10 +138,10 @@ def betas_stats(sample: Sample, mask=False):
 
     print_header('Betas', mask)
 
-    sample.dye_bias_correction(mask)  # todo apply NL dye bias correction instead of linear
-    sample.apply_noob_background_correction(mask)
+    sample.dye_bias_correction_nl(mask)
+    sample.noob_background_correction(mask)
     sample.poobah(mask)
-    betas_df = sample.get_betas()
+    betas_df = sample.get_betas(mask)
 
     print_value('Mean', betas_df.mean())
     print_value('Median', betas_df.median())
