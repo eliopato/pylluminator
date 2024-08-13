@@ -14,8 +14,24 @@ class SampleSheet:
         self.df = df
         self.filepath = filepath
 
+    def __str__(self):
+        description = f'Sample sheet object read from {self.filepath}'
+        description += 'Content (accessible through .df attribute) : '
+        description += self.df.__str__()
+        return description
+
+    def __repr__(self):
+        return self.__str__()
+
+
 def read_from_file(filepath: str = '', delimiter: str = ',') -> SampleSheet | None:
-    """Read sample sheet from the provided filepath"""
+    """Read sample sheet from the provided filepath. You can define a delimiter.
+    Required columns in input file :
+    - sentrix_id or sentrix_barcode or sentrix_barcode_a
+    - sentrix_position or sentrix_position_a
+    Optional :
+    - sample_name : name the sample. If non-existent, the name is the value of sentrix_id
+    Any other column will be left untouched in the sample sheet dataframe (with its name converted to snake case)"""
 
     extension = filepath.split('.')[-1]
     if extension != 'csv':

@@ -64,13 +64,50 @@ class Samples:
             sample.infer_type1_channel(switch_failed, mask_failed)
         LOGGER.info(f'done inferring probes\n')
 
-    def get_betas(self) -> dict:
+    def get_betas(self, mask: bool = False, include_out_of_band: bool = False) -> pd.DataFrame:
+        """Compute beta values for all samples.
+        Set `mask` to True to apply current mask to each sample.
+        Set `include_out_of_band` to true to include Out-of-band signal of Type I probes in the Beta values
+        Return a dataframe with samples as column, and probes (multi-indexed) as rows """
         betas_dict = {}
         LOGGER.info(f'>> start calculating betas')
         for name, sample in self.samples.items():
-            betas_dict[name] = sample.get_betas()
+            betas_dict[name] = sample.get_betas(mask, include_out_of_band)
         LOGGER.info(f'done calculating betas\n')
-        return betas_dict
+        return pd.DataFrame(betas_dict)
+
+    @property
+    def nb_samples(self) -> int:
+        """Count the number of samples contained in the object"""
+        return len(self.samples)
+
+    def __str__(self):
+        description = ''
+        description += '\n====================================================================='
+        description += 'Samples object :'
+        description += '====================================================================='
+
+        if self.annotation is None:
+            description += 'No annotation'
+        else:
+            description += self.annotation
+        description += '---------------------------------------------------------------------'
+
+        if self.samples is None:
+            description += 'No samples'
+        else:
+            description += f'{self.nb_samples} samples : {self.samples.keys()}'
+        description += '---------------------------------------------------------------------'
+
+        if self.sheet is None:
+            description += 'No sample sheet'
+        else:
+            description += self.sheet
+        description += '=====================================================================\n'
+        return description
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class Sample:
@@ -88,6 +125,12 @@ class Sample:
         self.which_index_channel = None
         self.masked_indexes = None
 
+    def __str__(self):
+        return f'Sample {self.name}'
+
+    def __repr__(self):
+        return self.__str__()
+
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
         self.idata[channel] = dataset
 
@@ -96,7 +139,7 @@ class Sample:
         channel information, methylation state and mask names for each probe. For manifest file, merging is done on
         `Illumina ID`, contained in columns `address_a` and `address_b` of the manifest file. For the mask file, we use
         the `Probe_ID` to merge. We further use `Probe_ID` as an index throughout the code."""
-
+        # todo speed up loading
         LOGGER.info(f'merging sample {self.name} with manifest {annotation}')
         self.annotation = annotation
         channel_dfs = []
@@ -129,12 +172,11 @@ class Sample:
             channel_dfs.append(sample_df)
 
         self.full_signal_df = pd.concat(channel_dfs)
-        # self.full_signal_df['masked'] = False  # not sure if needed
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
         self.signal_df = self.full_signal_df.pivot(values='mean_value',
                                                    columns=['signal_channel', 'methylation_state'],
-                                                   index=['type', 'channel', 'probe_type', 'probe_id', 'mask_info'])  # 'masked'
+                                                   index=['type', 'channel', 'probe_type', 'probe_id', 'mask_info'])
 
         # index column 'channel' corresponds by default to the manifest channel. But it could change by calling
         # 'infer_type_i_channel()' e.g., so we need to keep track of the manifest_channel in another column
@@ -367,7 +409,7 @@ class Sample:
             return
 
         # save index levels order to keep the same index structure
-        levels_order = self.signal_df.index.names
+        lvl_order = self.signal_df.index.names
 
         if 'channel' in self.signal_df.columns and column != 'channel':
             LOGGER.warning('dropping existing column `channel`')
@@ -378,7 +420,7 @@ class Sample:
         else:
             self.signal_df['channel'] = self.signal_df[column]  # copy values in a new column
 
-        self.signal_df = self.signal_df.droplevel('channel').set_index('channel', append=True).reorder_levels(levels_order)
+        self.signal_df = self.signal_df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order)
 
     def reset_channel_index(self) -> None:
         """Set the channel index as the manifest channel"""
@@ -447,13 +489,20 @@ class Sample:
 
         return pd.concat([self.ib_red(mask).sum(axis=1), self.ib_green(mask).sum(axis=1), self.type2(mask).sum(axis=1)])
 
-    def get_betas(self, mask: bool) -> pd.Series:
-        # todo check why sesame gives the option to calculate separately R/G channels for Type I probes (sum.TypeI arg)
-        # https://github.com/zwdzwd/sesame/blob/261e811c5adf3ec4ecc30cdf927b9dcbb2e920b6/R/sesame.R#L191
+    def get_betas(self, mask: bool, include_out_of_band=False) -> pd.Series:
+        """Calculate beta values for all probes (if mask=false) or unmasked probes (if mask=true).
+        If `include_out_of_band` is set to true, the Type 1 probes Beta values will be calculated on in-band AND
+        out-of-band signal values. If set to false (default), they will be calculated on in-band values only."""
+        df = self.get_signal_df(mask).copy()  # work on a copy, as we don't want these changes to propagate
         # set NAs for Type II probes to 0, only where no methylation signal is expected
-        df = self.get_signal_df(mask).copy()
         df.loc['II', [['R', 'M']]] = 0
         df.loc['II', [['G', 'U']]] = 0
+        # set out-of-band signal to 0 if the option sum_type1 is not activated
+        if not include_out_of_band:
+            idx = pd.IndexSlice
+            df.loc[idx['I', 'G'], 'R'] = 0
+            df.loc[idx['I', 'R'], 'G'] = 0
+        # now we can calculate beta values
         methylated_signal = df['R', 'M'] + df['G', 'M']
         unmethylated_signal = df['R', 'U'] + df['G', 'U']
         # use clip function to set minimum values for each term as set in sesame
@@ -577,7 +626,8 @@ class Sample:
 
             mu, sigma, alpha = background_correction_noob_fit(fg[channel], bg[channel])
             meth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, self.signal_df[channel]['M'].values, offset)
-            unmeth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, self.signal_df[channel]['U'].values, offset)
+            unmeth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, self.signal_df[channel]['U'].values,
+                                                           offset)
 
             self.signal_df.loc[:, [[channel, 'M']]] = meth_corrected_signal
             self.signal_df.loc[:, [[channel, 'U']]] = unmeth_corrected_signal
@@ -635,4 +685,3 @@ class Sample:
 
         # add pOOBAH mask to masked indexes
         self.mask_indexes(self.signal_df.loc[self.signal_df['poobah_mask']].index)
-
