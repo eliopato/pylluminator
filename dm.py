@@ -11,6 +11,7 @@ from patsy import dmatrix
 from scipy.stats import norm
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
+from joblib import Parallel, delayed
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 LOGGER = logging.getLogger(__name__)
@@ -22,18 +23,9 @@ def combine_pvalues(pvals):
     combined_pval = norm.cdf(combined_z)  # Convert back to p-value
     return combined_pval
 
-#
-# def get_model_parameters(betas_values: pd.Series, design_matrix_p: pd.DataFrame, factor_names: list[str]) -> np.array:
-#     m0 = sm.OLS(betas_values, design_matrix_p).fit()
-#     results = [m0.f_pvalue]
-#     column_names = ['p_value']
-#     for factor in factor_names:
-#         column_names.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
-#         results.extend([m0.tvalues[factor], m0.params[factor], m0.bse[factor]])
-#     return pd.Series(results, index=column_names)
 
-def get_model_parameters(probe_beta_values: np.array, design_matrix: pd.DataFrame, factor_names: list[str]) -> np.array:
-    m0 = sm.OLS(probe_beta_values, design_matrix).fit()
+def get_model_parameters(betas_values: np.array, design_matrix_p: pd.DataFrame, factor_names: list[str]) -> np.array:
+    m0 = sm.OLS(betas_values, design_matrix_p).fit()
     results = [m0.f_pvalue]
     for factor in factor_names:
         results.extend([m0.tvalues[factor], m0.params[factor], m0.bse[factor]])
@@ -61,15 +53,20 @@ def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | Sampl
     design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
     factor_names = design_matrix.columns[1:]  # remove 'Intercept' from factors
 
-    betas_values = betas.values
-    results = np.empty((betas.shape[0], len(factor_names) * 3 + 1))
-    for i in range(betas_values.shape[0]):
-        results[i, :] = get_model_parameters(betas_values[i, :], design_matrix, factor_names)
-
-    values_columns = ['p_value']
+    # output column names
+    column_names = ['p_value']
     for factor in factor_names:
-        values_columns.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
-    return pd.DataFrame(results, index=betas.index, columns=values_columns)
+        column_names.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
+
+    # if it's a small dataset, don't parallelize
+    if len(betas) <= 10000:
+        result_array = [get_model_parameters(row[1:], design_matrix, factor_names) for row in betas.itertuples()]
+    else:
+        def wrapper_get_model_parameters(row):
+            return get_model_parameters(row, design_matrix, factor_names)
+        result_array = Parallel(n_jobs=-1)(delayed(wrapper_get_model_parameters)(row[1:]) for row in betas.itertuples())
+
+    return pd.DataFrame(result_array, index=betas.index, columns=column_names)
 
 
 def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
@@ -148,6 +145,7 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
 
     # compute values per segment
     grouped_seg = combined.groupby('segment_id')
+    # todo fix factor en dur
     seg_est = pd.DataFrame({'segment_estimate': grouped_seg['estimate_sample_group[T.Sain]'].mean(),
                             'segment_p_value': grouped_seg['p_value'].apply(lambda p_values: combine_pvalues(p_values))})
 
