@@ -37,3 +37,14 @@ def mask_dataframe(df: pd.DataFrame, indexes_to_mask: pd.MultiIndex) -> pd.DataF
     if indexes_to_mask is None or len(indexes_to_mask) == 0:
         return df
     return df[~df.index.isin(indexes_to_mask)]
+
+
+def remove_probe_suffix(probe_id: str) -> str:
+    """Remove the last part of a probe ID, split by underscore. The last part is usually 2 letters and 2 numbers,
+    refering to : top or bottom strand (T/B), converted or opposite strand (C/O), Infinium probe type (1/2),
+    and the number of synthesis for representation of the probe on the array (1,2,3,…,n)."""
+    str_split = probe_id.split('_')
+    if len(str_split) < 2:
+        return probe_id
+    else:
+        return '_'.join(str_split[:-1])

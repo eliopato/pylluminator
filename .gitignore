@@ -1,3 +1,4 @@
 .idea
 *.gz
 __pycache__
+drafts/
