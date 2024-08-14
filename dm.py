@@ -22,26 +22,22 @@ def combine_pvalues(pvals):
     combined_pval = norm.cdf(combined_z)  # Convert back to p-value
     return combined_pval
 
-
-# def get_model_parameters(betas_values: pd.Series, design_matrix_p: pd.DataFrame, factor: str) -> np.array:
+#
+# def get_model_parameters(betas_values: pd.Series, design_matrix_p: pd.DataFrame, factor_names: list[str]) -> np.array:
 #     m0 = sm.OLS(betas_values, design_matrix_p).fit()
-#     return pd.Series([m0.f_pvalue, m0.tvalues[factor], m0.params[factor], m0.bse[factor]],
-#                      ['p_value', 't_value', 'estimate', 'std_err'])
-#
-#
+#     results = [m0.f_pvalue]
+#     column_names = ['p_value']
+#     for factor in factor_names:
+#         column_names.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
+#         results.extend([m0.tvalues[factor], m0.params[factor], m0.bse[factor]])
+#     return pd.Series(results, index=column_names)
 
-def get_model_parameters(betas_values: pd.Series, design_matrix_p: pd.DataFrame, factor_names: list[str]) -> np.array:
-    # m0 = sm.OLS(betas.loc['cg00000029_TC21'], design_matrix_p).fit()
-    m0 = sm.OLS(betas_values, design_matrix_p).fit()
-    # summary = m0.summary()
-    # stat = m0.fvalue
-    results = [m0.f_pvalue] # p_value
-    column_names = ['p_value']
+def get_model_parameters(probe_beta_values: np.array, design_matrix: pd.DataFrame, factor_names: list[str]) -> np.array:
+    m0 = sm.OLS(probe_beta_values, design_matrix).fit()
+    results = [m0.f_pvalue]
     for factor in factor_names:
-        column_names.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
-        # append : t_value, estimate and std_error
         results.extend([m0.tvalues[factor], m0.params[factor], m0.bse[factor]])
-    return pd.Series(results, column_names)
+    return results
 
 
 def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | SampleSheet) -> pd.DataFrame | None:
@@ -58,13 +54,22 @@ def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | Sampl
 
     # data init.
     betas = betas.reset_index().set_index('probe_id')
-    betas = betas.drop(columns=['type', 'channel', 'probe_type'])
+    betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
     # model
     sample_info = sample_info.set_index('sample_name')
     design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
     factor_names = design_matrix.columns[1:]  # remove 'Intercept' from factors
-    return betas.apply(lambda row: get_model_parameters(row, design_matrix, factor_names), axis=1)
+
+    betas_values = betas.values
+    results = np.empty((betas.shape[0], len(factor_names) * 3 + 1))
+    for i in range(betas_values.shape[0]):
+        results[i, :] = get_model_parameters(betas_values[i, :], design_matrix, factor_names)
+
+    values_columns = ['p_value']
+    for factor in factor_names:
+        values_columns.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
+    return pd.DataFrame(results, index=betas.index, columns=values_columns)
 
 
 def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
@@ -73,8 +78,9 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
 
     # data init.
     betas = betas.reset_index().set_index('probe_id')
-    betas = betas.drop(columns=['type', 'channel', 'probe_type'])
+    betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
+    # get genomic range information (for chromosome id and probe position)
     probe_coords_df = annotation.get_genomic_ranges().drop(columns='Strand', errors='ignore')
     non_empty_coords_df = probe_coords_df[probe_coords_df.End > probe_coords_df.Start]  # remove 0-width ranges
 
@@ -91,20 +97,20 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
         return pd.DataFrame()
 
     # sort ranges and identify last probe of each chromosome
-    cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges(natsorting=True)  # to have the same sorting as sesame
-    # cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges()
+    # cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges(natsorting=True)  # to have the same sorting as sesame
+    cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges()
     next_chromosome = cpg_ranges['Chromosome'].shift(-1)
     last_probe_in_chromosome = cpg_ranges['Chromosome'] != next_chromosome
 
-    # compute Euclidian distance between two consecutive probes
+    # compute Euclidian distance of beta values between two consecutive probes of each sample
     sample_names = betas.columns
     beta_euclidian_dist = (cpg_ranges[sample_names].diff(-1) ** 2).sum(axis=1)
     beta_euclidian_dist.iloc[-1] = None  # last probe shouldn't have a distance (default is 0 otherwise)
 
     # determine cut-off if not provided
     if dist_cutoff is None:
-        dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
-        # dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
+        # dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
+        dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
 
     if dist_cutoff <= 0:
         LOGGER.warning(f'Euclidian distance cutoff for DMP should be > 0')
@@ -137,7 +143,7 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
     segments['segment_start'] = segments_grouped['Start'].transform('min')
     segments['segment_end'] = segments_grouped['End'].transform('max')
 
-    # combine pvals
+    # combine probes p values with segments
     combined = segments.join(dml)
 
     # compute values per segment
