@@ -8,23 +8,7 @@ from utils import column_names_to_snake_case
 LOGGER = logging.getLogger(__name__)
 
 
-class SampleSheet:
-
-    def __init__(self, df: pd.DataFrame, filepath: str):
-        self.df = df
-        self.filepath = filepath
-
-    def __str__(self):
-        description = f'Sample sheet object read from {self.filepath}'
-        description += 'Content (accessible through .df attribute) : '
-        description += self.df.__str__()
-        return description
-
-    def __repr__(self):
-        return self.__str__()
-
-
-def read_from_file(filepath: str = '', delimiter: str = ',') -> SampleSheet | None:
+def read_from_file(filepath: str = '', delimiter: str = ',') -> pd.DataFrame | None:
     """Read sample sheet from the provided filepath. You can define a delimiter.
     Required columns in input file :
     - sentrix_id or sentrix_barcode or sentrix_barcode_a
@@ -73,10 +57,10 @@ def read_from_file(filepath: str = '', delimiter: str = ',') -> SampleSheet | No
         LOGGER.error(f'Column sentrix_position not found in {df.columns}')
         return None
 
-    return SampleSheet(df, filepath)
+    return df
 
 
-def create_from_idats(idat_folder: str, output_filename='samplesheet.csv', sample_type: str = '') -> SampleSheet:
+def create_from_idats(idat_folder: str, output_filename='samplesheet.csv', sample_type: str = '') -> (pd.DataFrame, str):
     """Creates a samplesheet.csv file from a folder containing .IDAT files. Files need to follow a format :
     either [GSM_id]_[sentrix id]_[sentrix_position]_[Grn|Red].idat
     or [sentrix id]_[sentrix_position]_[Grn|Red].idat"""
@@ -111,11 +95,8 @@ def create_from_idats(idat_folder: str, output_filename='samplesheet.csv', sampl
         samples_dict['sample_name'].append(f'Sample_{idx}')
 
     df = pd.DataFrame(data=samples_dict)
-    filepath = f"{idat_folder}/{output_filename}"
-
+    filepath = f'{idat_folder}/{output_filename}'
     df.to_csv(path_or_buf=filepath, index=False)
     LOGGER.info(f'Created sample sheet: {filepath} with {len(df)} samples')
 
-    return SampleSheet(df, filepath)
-
-
+    return df, filepath

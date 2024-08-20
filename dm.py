@@ -1,6 +1,5 @@
 from annotations import Annotations
 from utils import remove_probe_suffix
-from sample_sheet import SampleSheet
 
 import numpy as np
 import logging
@@ -32,25 +31,23 @@ def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names
     return results
 
 
-def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | SampleSheet) -> pd.DataFrame | None:
+def get_dml(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame) -> pd.DataFrame | None:
     """Find Differentially Methylated Locus (DML)
 
     Parameters
     ---------------
     `betas` : DataFrame returned by Samples.get_betas() : beta values of all the samples to use to find DMRs
     `formula` : R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
-    `sample_info` : dataframe or SampleSheet object containing the metadata used in the model. It must have the samples'
-    names in a column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex']).
+    `sample_sheet` : dataframe containing the metadata used in the model, typically a samplesheet. It must have the
+    samples' names in a column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex']).
 
     more info on  design matrices and formulas:
         - https://www.statsmodels.org/devel/gettingstarted.html
         - https://patsy.readthedocs.io/en/latest/overview.html"""
 
     # check the input
-    if isinstance(sample_info, SampleSheet):
-        sample_info = sample_info.df
-    elif not isinstance(sample_info, pd.DataFrame):
-        LOGGER.error('get_dml() : parameter sample_info must be a dataframe or a sample sheet object')
+    if 'sample_name' not in sample_sheet.columns:
+        LOGGER.error('get_dml() :  dataframe sample_sheet must have a sample_name column')
         return None
 
     # data init.
@@ -58,7 +55,7 @@ def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | Sampl
     betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
     # make the design matrix
-    sample_info = sample_info.set_index('sample_name')
+    sample_info = sample_sheet.set_index('sample_name')
     design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
 
     # remove the intercept from the factors if it exists

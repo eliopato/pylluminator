@@ -222,7 +222,6 @@ class IdatDataset:
     """
 
     def __init__(self, filepath: str, bit='float32'):
-
         """Initializes the IdatDataset, reads and parses the IDAT file."""
         self.barcode = None
         self.chip_type = None
@@ -361,3 +360,6 @@ class IdatDataset:
             if (self.probe_means.values < 0).any():
                 return False
         return True
+
+    def __str__(self):
+        return f'{self.probe_means.head(3)}'

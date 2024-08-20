@@ -12,8 +12,7 @@ LOGGER = logging.getLogger(__name__)
 
 @unique
 class Channel(Enum):
-    """ idat probes measure either a red or green fluorescence.
-    This specifies which to return within idat.py: red_idat or green_idat."""
+    """Probes measure either a red or green fluorescence. This class defines their names and values."""
     RED = 'Red'
     GREEN = 'Grn'
 
@@ -30,6 +29,7 @@ class Channel(Enum):
 
 
 class GenomeVersion(Enum):
+    """Names of the different genome versions supported"""
     HG38 = 'hg38'
     HG19 = 'hg19'
     MM10 = 'mm10'
@@ -40,6 +40,7 @@ class GenomeVersion(Enum):
 
 
 class ArrayType(Enum):
+    """Names of the different array types supported"""
     HUMAN_27K = 'HM27'
     HUMAN_450K = 'HM450'
     HUMAN_MSA = 'MSA'
@@ -56,6 +57,7 @@ class ArrayType(Enum):
 
 
 class GenomeInfo:
+    """Additional genome information provided by external files"""
 
     def __init__(self):
         self.seq_length = None
@@ -161,6 +163,7 @@ class Annotations:
             LOGGER.warning(f'No genome information found in {folder_genome}')
             return None
 
+        # read all the csv files
         for info in ['cen_info', 'cyto_band', 'gap_info', 'seq_length', 'txns']:
             filepath = f'{folder_genome}/{info}.csv'
 
@@ -174,10 +177,7 @@ class Annotations:
                 df.Start = df.Start.astype('int')
             genome_info.__setattr__(info, df)
 
-        # rename some columns to turn the gap info df into a genomic ranges object
-        # genome_info.gap_info = genome_info.gap_info.rename(columns={'start': 'starts', 'end': 'ends'})
-        # genome_info.gap_info = GenomicRanges(genome_info.gap_info)
-
+        # make gap info a pyranges object
         genome_info.gap_info = pr.PyRanges(genome_info.gap_info)
         genome_info.seq_length = dict(zip(genome_info.seq_length.Chromosome, genome_info.seq_length.SeqLength))
 
@@ -208,9 +208,6 @@ class Annotations:
 
         return '|'.join(names)
 
-    def __str__(self):
-        return f'{self.array_type} - {self.genome_version}'
-
     def get_genomic_ranges(self) -> pd.DataFrame:
         """Extract genomic ranges information from manifest dataframe"""
         genomic_ranges = self.manifest[['probe_id', 'cpg_chrm', 'cpg_beg', 'cpg_end', 'map_yd_a']].drop_duplicates()
@@ -226,3 +223,10 @@ class Annotations:
         genomic_ranges['Start'] = genomic_ranges.Start.fillna(0).astype(int)
         genomic_ranges['End'] = genomic_ranges.End.fillna(0).astype(int)
         return genomic_ranges
+
+    def __str__(self):
+        return f'{self.array_type} - {self.genome_version}'
+
+    def __repr__(self):
+        return f'Annotation : \nArray type : {self.array_type} - Genome version : {self.genome_version}\n'
+

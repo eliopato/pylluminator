@@ -7,8 +7,7 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
 from idat import IdatDataset
 from annotations import Annotations, Channel, ArrayType
-from sample_sheet import SampleSheet
-from stats import *
+from stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, iqr
 from utils import get_column_as_flat_array, mask_dataframe
 
 LOGGER = logging.getLogger(__name__)
@@ -16,9 +15,9 @@ LOGGER = logging.getLogger(__name__)
 
 class Samples:
 
-    def __init__(self, sheet: SampleSheet):
+    def __init__(self, sample_sheet: pd.DataFrame):
         self.annotation = None
-        self.sheet = sheet
+        self.sample_sheet = sample_sheet
         self.samples = {}
 
     def read_samples(self, datadir: str, max_samples: int | None = None) -> None:
@@ -29,7 +28,7 @@ class Samples:
 
         LOGGER.info(f'>> start reading sample files from {datadir}')
 
-        for _, line in self.sheet.df.iterrows():
+        for _, line in self.sample_sheet.iterrows():
             sample = Sample(line.sample_name)
             for channel in Channel:
                 pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat'
@@ -82,32 +81,24 @@ class Samples:
         return len(self.samples)
 
     def __str__(self):
-        description = ''
-        description += '\n====================================================================='
-        description += 'Samples object :'
-        description += '====================================================================='
-
-        if self.annotation is None:
-            description += 'No annotation'
-        else:
-            description += self.annotation
-        description += '---------------------------------------------------------------------'
-
-        if self.samples is None:
-            description += 'No samples'
-        else:
-            description += f'{self.nb_samples} samples : {self.samples.keys()}'
-        description += '---------------------------------------------------------------------'
-
-        if self.sheet is None:
-            description += 'No sample sheet'
-        else:
-            description += self.sheet
-        description += '=====================================================================\n'
-        return description
+        return f'{[sample_name for sample_name in self.samples.keys()]}'
 
     def __repr__(self):
-        return self.__str__()
+        description = f'<{self.__module__}.{type(self).__name__} object at {hex(id(self))}>\n'
+        description += '\n=====================================================================\n'
+        description += 'Samples object :\n'
+        description += '=====================================================================\n'
+
+        description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
+        description += '\n---------------------------------------------------------------------\n'
+
+        description += 'No sample' if self.samples is None else f'{self.nb_samples} sample(s) :\n{self.__str__()}'
+        description += '\n---------------------------------------------------------------------\n'
+
+        description += 'No sample sheet' if self.sample_sheet is None else (f'Sample sheet first items : \n '
+                                                                            f'{self.sample_sheet.head(3)}')
+        description += '\n=====================================================================\n'
+        return description
 
 
 class Sample:
@@ -117,7 +108,7 @@ class Sample:
     ####################################################################################################################
 
     def __init__(self, name: str):
-        self.idata = dict()
+        self.idata = None
         self.signal_df = None
         self.full_signal_df = None
         self.name = name
@@ -125,14 +116,12 @@ class Sample:
         self.which_index_channel = None
         self.masked_indexes = None
 
-    def __str__(self):
-        return f'Sample {self.name}'
-
-    def __repr__(self):
-        return self.__str__()
-
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
-        self.idata[channel] = dataset
+        """Add idata dataset to the sample idat dictionary, for the channel key passed in the argument"""
+        if self.idata is None:
+            self.idata = {channel: dataset}
+        else:
+            self.idata[channel] = dataset
 
     def merge_annotation_info(self, annotation: Annotations) -> None:
         """ Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
@@ -685,3 +674,27 @@ class Sample:
 
         # add pOOBAH mask to masked indexes
         self.mask_indexes(self.signal_df.loc[self.signal_df['poobah_mask']].index)
+
+    def __str__(self):
+        description = '\n=====================================================================\n'
+        description += f'Sample {self.name} :\n'
+        description += '=====================================================================\n'
+
+        description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
+        description += '---------------------------------------------------------------------\n'
+
+        if self.signal_df is None:
+            if self.idata is None:
+                description += 'No data\n'
+            else:
+                description += 'Probes raw information : (dict self.idata)\n'
+                for channel, dataset in self.idata.items():
+                    description += f'\nChannel {channel} head data:\n {dataset}\n'
+        else:
+            description += 'Signal dataframe first items (self.signal_df or self.get_signal_df(mask=True|False)): \n'
+            description += f'{self.signal_df.head(3)}\n'
+        description += '=====================================================================\n'
+        return description
+
+    def __repr__(self):
+        return self.__str__()

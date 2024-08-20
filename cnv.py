@@ -3,7 +3,6 @@ import logging
 import pandas as pd
 import pyranges as pr
 import numpy as np
-import datetime
 import linear_segment
 
 from sample import Samples, Sample
@@ -18,7 +17,7 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
         if sample.annotation.array_type == ArrayType.HUMAN_EPIC_V2:
             # Epicv2 : sdfs.normal[c("GM12878_206909630042_R08C01","GM12878_206909630040_R03C01")]
             idat_dir = '/home/elsa/Documents/data/methylation/EPIC/geo_idats/'
-            normal_samples_sheet = create_from_idats(idat_dir)
+            normal_samples_sheet, _ = create_from_idats(idat_dir)
             normal_samples = Samples(normal_samples_sheet)
             normal_samples.read_samples(idat_dir)
             normal_samples.merge_annotation_info(sample.annotation)
@@ -31,7 +30,7 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
         LOGGER.warning('Array types of input sample and normalization samples are different')
 
     genome_info = sample.annotation.genome_info
-    probes_coords_df = sample.annotation.get_genomic_ranges()
+    probe_coords_df = sample.annotation.get_genomic_ranges()
 
     # get total intensity per probe and drop unnecessary indexes
     target_intensity = sample.get_total_ib_intensity()
@@ -44,17 +43,18 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
 
     # keep only probes that are in all 3 files (target methylation, normalization methylation and genome ranges)
     overlapping_probes = [p for p in target_intensity.index if
-                          p in norm_intensities.index and p in probes_coords_df.index]
+                          p in norm_intensities.index and p in probe_coords_df.index]
+    LOGGER.info(f'Keeping {len(overlapping_probes)} overlapping probes')
     target_intensity = target_intensity.loc[overlapping_probes]
     norm_intensities = norm_intensities.loc[overlapping_probes]
-    probes_coords_df = probes_coords_df.loc[overlapping_probes]
+    probe_coords_df = probe_coords_df.loc[overlapping_probes]
 
-    # fit a linear regression on normal intensities
+    LOGGER.info(f'Fitting the linear regression on normalization intensities')
     X = norm_intensities.values
     y = target_intensity.values
     fitted_model = LinearRegression().fit(X, y)
     predicted = np.maximum(fitted_model.predict(X), 1)
-    probes_coords_df['cnv'] = np.log2(target_intensity / predicted)
+    probe_coords_df['cnv'] = np.log2(target_intensity / predicted)
 
     # make tiles
     tile_width = 50000
@@ -62,15 +62,15 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
     diff_tiles = tiles.subtract_ranges(genome_info.gap_info).reset_index(drop=True)
 
     # make bins
-    non_empty_coords = probes_coords_df[probes_coords_df.End > probes_coords_df.Start]  # remove 0-width ranges
-    probes_coords = pr.PyRanges(non_empty_coords)
-    diff_tiles = diff_tiles.count_overlaps(probes_coords.reset_index())
+    non_empty_coords = probe_coords_df[probe_coords_df.End > probe_coords_df.Start]  # remove 0-width ranges
+    probe_coords = pr.PyRanges(non_empty_coords)
+    diff_tiles = diff_tiles.count_overlaps(probe_coords.reset_index())
 
     # merge small bins together, until they reach a minimum of 20 overlapping probes
-    bins = merge_bins_to_minimum_overlap(diff_tiles, probes_coords, 20, 1)
+    bins = merge_bins_to_minimum_overlap(diff_tiles, probe_coords, 20, 1)
 
     # segment the signal
-    joined_pr = probes_coords.reset_index().join_ranges(bins, suffix='_bin')
+    joined_pr = probe_coords.reset_index().join_ranges(bins, suffix='_bin')
     signal_bins = joined_pr.groupby(['Chromosome', 'Start_bin', 'End_bin'])['cnv'].median().reset_index()
     signal_bins['map_loc'] = ((signal_bins['Start_bin'] + signal_bins['End_bin']) / 2).astype(int)
 
@@ -95,7 +95,7 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
 
     seg_df = pd.DataFrame(seg_values, columns=['chromosome', 'seg_id', 'start', 'end', 'nb_bins', 'mean_cnv'])
 
-    return probes_coords, signal_bins, seg_df.set_index('seg_id')
+    return probe_coords, signal_bins, seg_df.set_index('seg_id')
 
 
 def merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: pr.PyRanges, minimum_overlap=20,
@@ -150,7 +150,7 @@ def merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: 
 
         to_merge = to_merge_right | to_merge_left  # merge indexes of identified intervals together
         if not to_merge.any():
-            print(f'Nothing to merge for min {current_min}')
+            LOGGER.debug(f'Nothing to merge for min {current_min}')
             pr_to_merge = pr_to_merge[columns_ini]
             continue
 
