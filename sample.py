@@ -8,7 +8,7 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 from idat import IdatDataset
 from annotations import Annotations, Channel, ArrayType
 from stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, iqr
-from utils import get_column_as_flat_array, mask_dataframe
+from utils import get_column_as_flat_array, mask_dataframe, save_object, load_object
 
 LOGGER = logging.getLogger(__name__)
 
@@ -99,6 +99,15 @@ class Samples:
                                                                             f'{self.sample_sheet.head(3)}')
         description += '\n=====================================================================\n'
         return description
+
+    def save(self, filepath: str):
+        """Save the current Samples object to `filepath`, as a pickle file"""
+        save_object(self, filepath)
+
+    @staticmethod
+    def load(filepath: str):
+        """Load a pickled Samples object from `filepath`"""
+        return load_object(filepath, Samples)
 
 
 class Sample:
@@ -690,6 +699,15 @@ class Sample:
 
         # add pOOBAH mask to masked indexes
         self.mask_indexes(self.signal_df.loc[self.signal_df['poobah_mask']].index)
+
+    def save(self, filepath: str):
+        """Save the current Sample object to `filepath`, as a pickle file"""
+        save_object(self, filepath)
+
+    @staticmethod
+    def load(filepath: str):
+        """Load a pickled Sample object from `filepath`"""
+        return load_object(filepath, Sample)
 
     def __str__(self):
         description = '\n=====================================================================\n'

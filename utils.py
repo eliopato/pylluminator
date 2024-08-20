@@ -1,6 +1,9 @@
+import pickle
+import logging
 import numpy as np
 import pandas as pd
 
+LOGGER = logging.getLogger(__name__)
 
 def column_names_to_snake_case(df: pd.DataFrame) -> pd.DataFrame:
     """converts the dataframe's column names from camel case to snake case, and replace spaces by underscores"""
@@ -48,3 +51,22 @@ def remove_probe_suffix(probe_id: str) -> str:
         return probe_id
     else:
         return '_'.join(str_split[:-1])
+
+
+def save_object(object_to_save, filepath: str):
+    """Save any object as a pickle file"""
+    LOGGER.info(f'Saving {type(object_to_save)} object in {filepath}')
+    with open(filepath, 'wb') as f:
+        pickle.dump(object_to_save, f)
+
+
+def load_object(filepath: str, object_type):
+    """Load any object from a pickle file"""
+    LOGGER.info(f'Loading {object_type} object from {filepath}')
+    with open(filepath, 'rb') as f:
+        loaded_object = pickle.load(f)
+
+    if not isinstance(loaded_object, object_type):
+        LOGGER.error(f'The saved object type {type(loaded_object)} doesnt match the requested type ({object_type})')
+
+    return loaded_object
