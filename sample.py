@@ -123,23 +123,34 @@ class Sample:
         else:
             self.idata[channel] = dataset
 
-    def merge_annotation_info(self, annotation: Annotations) -> None:
-        """ Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
+    def merge_annotation_info(self, annotation: Annotations, light_mode=True) -> None:
+        """Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
         channel information, methylation state and mask names for each probe. For manifest file, merging is done on
         `Illumina ID`, contained in columns `address_a` and `address_b` of the manifest file. For the mask file, we use
         the `Probe_ID` to merge. We further use `Probe_ID` as an index throughout the code."""
-        # todo speed up loading
         LOGGER.info(f'merging sample {self.name} with manifest {annotation}')
         self.annotation = annotation
         channel_dfs = []
 
+        if light_mode:
+            manifest = annotation.manifest.loc[:, ['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b']]
+            mask = annotation.mask.loc[:, ['mask_info']] if annotation.mask is not None else None
+        else:
+            manifest = annotation.manifest
+            mask = annotation.mask.drop(columns='probe_type') if annotation.mask is not None else None
+
+        for column in ['type', 'probe_type', 'channel']:
+            manifest[column] = manifest[column].astype('category')
+
         for channel, idata in self.idata.items():
-            idata_df = idata.probe_means
+
+            idata_df = idata.probe_means[['mean_value']] if light_mode else idata.probe_means
 
             # merge manifest and mask
-            sample_df = idata_df.join(annotation.manifest, how='inner')
-            if annotation.mask is not None:
-                sample_df = sample_df.join(annotation.mask.drop(columns='probe_type'), on='probe_id', how='left')
+            sample_df = idata_df.join(manifest, how='inner')
+
+            if mask is not None:
+                sample_df = sample_df.join(mask, on='probe_id', how='left')
 
             # check for any lost probe when merge manifest (as it is an inner merge)
             lost_probes = len(sample_df) - len(idata_df)
@@ -156,13 +167,18 @@ class Sample:
             sample_df['signal_channel'] = channel.value[0]
 
             # to improve readability
-            sample_df.loc[sample_df.probe_type == 'rs', 'probe_type'] = 'snp'
+            sample_df['probe_type'] = sample_df.probe_type.cat.rename_categories({'rs': 'snp'})
 
-            channel_dfs.append(sample_df)
+            channel_dfs.append(sample_df.drop(columns=['address_a', 'address_b']))
 
-        self.full_signal_df = pd.concat(channel_dfs)
+        self.full_signal_df = pd.concat(channel_dfs, ignore_index=True)
+
+        # make columns categories to fasten other functions
+        for column in ['methylation_state', 'signal_channel']:
+            self.full_signal_df[column] = self.full_signal_df[column].astype('category')
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
+        # todo : optimize here (4s)
         self.signal_df = self.full_signal_df.pivot(values='mean_value',
                                                    columns=['signal_channel', 'methylation_state'],
                                                    index=['type', 'channel', 'probe_type', 'probe_id', 'mask_info'])
