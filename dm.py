@@ -8,7 +8,7 @@ import pandas as pd
 import pyranges as pr
 
 from patsy import dmatrix
-from scipy.stats import norm
+from scipy.stats import combine_pvalues
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
@@ -17,25 +17,34 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(leve
 LOGGER = logging.getLogger(__name__)
 
 
-def combine_pvalues(pvals):
-    z_scores = norm.ppf(pvals)  # Convert p-values to z-scores
-    combined_z = np.sum(z_scores) / np.sqrt(len(z_scores))  # Sum z-scores and normalize
-    combined_pval = norm.cdf(combined_z)  # Convert back to p-value
-    return combined_pval
+def combine_p_values_stouffer(p_values: np.ndarray):
+    """shortcut to scipy's function, using Stouffer method to combine p-values. Only return the combined p-value"""
+    return combine_pvalues(p_values, method='stouffer')[1]
 
 
-def get_model_parameters(betas_values: np.array, design_matrix_p: pd.DataFrame, factor_names: list[str]) -> np.array:
-    m0 = sm.OLS(betas_values, design_matrix_p).fit()
-    results = [m0.f_pvalue]
+def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str]) -> list[float]:
+    """Create an Ordinary Least Square model for the betas values, using the design matrix provided, fit it and
+    extract the required results for DML detection (p-value, t-value, estimate, standard error)"""
+    fitted_ols = sm.OLS(betas_values, design_matrix).fit()
+    results = [fitted_ols.f_pvalue]
     for factor in factor_names:
-        results.extend([m0.tvalues[factor], m0.params[factor], m0.bse[factor]])
+        results.extend([fitted_ols.tvalues[factor], fitted_ols.params[factor], fitted_ols.bse[factor]])
     return results
 
 
 def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | SampleSheet) -> pd.DataFrame | None:
-    """Get Differentially Methylated Locus
-    `sample_info` must be either a pandas dataframe or a sample sheet. It must have the sample names in a column
-        called `sample_names` and the column(s) used in the formula."""
+    """Find Differentially Methylated Locus (DML)
+
+    Parameters
+    ---------------
+    `betas` : DataFrame returned by Samples.get_betas() : beta values of all the samples to use to find DMRs
+    `formula` : R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
+    `sample_info` : dataframe or SampleSheet object containing the metadata used in the model. It must have the samples'
+    names in a column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex']).
+
+    more info on  design matrices and formulas:
+        - https://www.statsmodels.org/devel/gettingstarted.html
+        - https://patsy.readthedocs.io/en/latest/overview.html"""
 
     # check the input
     if isinstance(sample_info, SampleSheet):
@@ -48,12 +57,14 @@ def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | Sampl
     betas = betas.reset_index().set_index('probe_id')
     betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
-    # model
+    # make the design matrix
     sample_info = sample_info.set_index('sample_name')
     design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
-    factor_names = design_matrix.columns[1:]  # remove 'Intercept' from factors
 
-    # output column names
+    # remove the intercept from the factors if it exists
+    factor_names = [f for f in design_matrix.columns if 'intercept' not in f.lower()]
+
+    # derive output columns' names for factors' names
     column_names = ['p_value']
     for factor in factor_names:
         column_names.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
@@ -61,6 +72,7 @@ def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | Sampl
     # if it's a small dataset, don't parallelize
     if len(betas) <= 10000:
         result_array = [get_model_parameters(row[1:], design_matrix, factor_names) for row in betas.itertuples()]
+    # otherwise parallelize
     else:
         def wrapper_get_model_parameters(row):
             return get_model_parameters(row, design_matrix, factor_names)
@@ -71,7 +83,17 @@ def get_dml(betas: pd.DataFrame, formula: str, sample_info: pd.DataFrame | Sampl
 
 def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
             dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
-    """Get Differentially Methylated Regions (DMR) """
+    """Find Differentially Methylated Regions (DMR) based on euclidian distance between Beta values
+
+    Parameters:
+    -------------------
+    `betas` : DataFrame returned by Samples.get_betas() : beta values of all the samples to use to find DMRs
+    `annotation` : samples' annotation information
+    `dml` : DataFrame returned by get_dml(), with p-values and statistics for each locus
+    `dist_cutoff`: cutoff used to find change points between DMRs, used on euclidian distance between beta values
+    `seg_per_locus`: used if dist_cutoff is not set : defines what quartile should be used as a distance cut-off. Higher
+    values leads to more segments. Should be 0 < seg_per_locus < 1, default is 0.5
+    """
 
     # data init.
     betas = betas.reset_index().set_index('probe_id')
@@ -106,13 +128,16 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
 
     # determine cut-off if not provided
     if dist_cutoff is None:
+        if not 0 < seg_per_locus < 1:
+            LOGGER.warning(f'Invalid parameter `seg_per_locus` {seg_per_locus}, should be in ]0:1[. Setting it to 0.5')
+            seg_per_locus = 0.5
         # dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
         dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
+        LOGGER.info(f'Segments per locus : {seg_per_locus}')
 
     if dist_cutoff <= 0:
         LOGGER.warning(f'Euclidian distance cutoff for DMP should be > 0')
     LOGGER.info(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
-    LOGGER.info(f'Segments per locus : {seg_per_locus}')
 
     # find change points
     change_points = last_probe_in_chromosome | (beta_euclidian_dist > dist_cutoff)
@@ -135,22 +160,30 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
         segments.loc[na_segments_indexes, 'segment_id'] = [n for n in range(nb_na_segments)] + last_segment_id + 1
         segments.segment_id = segments.segment_id.astype(int)
 
-    # get each segment start and end
-    segments_grouped = segments.groupby('segment_id')
-    segments['segment_start'] = segments_grouped['Start'].transform('min')
-    segments['segment_end'] = segments_grouped['End'].transform('max')
+    # combine probes p-values with segments information
+    dmr = segments.join(dml)
 
-    # combine probes p values with segments
-    combined = segments.join(dml)
+    # group segments by ID to compute DMR values
+    segments_grouped = dmr.groupby('segment_id')
 
-    # compute values per segment
-    grouped_seg = combined.groupby('segment_id')
-    # todo fix factor en dur
-    seg_est = pd.DataFrame({'segment_estimate': grouped_seg['estimate_sample_group[T.Sain]'].mean(),
-                            'segment_p_value': grouped_seg['p_value'].apply(lambda p_values: combine_pvalues(p_values))})
+    # get each segment's start and end
+    dmr['segment_start'] = segments_grouped['Start'].transform('min')
+    dmr['segment_end'] = segments_grouped['End'].transform('max')
 
-    combined_values = combined.reset_index().set_index('segment_id').join(seg_est)
-    combined_values['segment_p_value_adjusted'] = multipletests(combined_values['p_value'], method='fdr_bh')[1]
-    combined_values = combined_values.reset_index().set_index('probe_id')
+    # calculate each segment's p-values
+    dmr['segment_p_value'] = segments_grouped['p_value'].transform(combine_p_values_stouffer)
+    nb_significant = len(dmr.loc[dmr.segment_p_value < 0.05, 'segment_id'].drop_duplicates())
+    LOGGER.info(f' - {nb_significant} significant segments (p-value < 0.05)')
 
-    return combined_values
+    # use Benjamini/Hochberg's method to adjust p-values
+    dmr['segment_p_value_adjusted'] = multipletests(dmr['segment_p_value'], method='fdr_bh')[1]
+    nb_significant = len(dmr.loc[dmr.segment_p_value_adjusted < 0.05, 'segment_id'].drop_duplicates())
+    LOGGER.info(f' - {nb_significant} significant segments after Benjamini/Hochberg\'s adjustment (p-value < 0.05)')
+
+    # calculate estimates' means for each factor
+    for c in dml.columns:
+        if c.startswith('estimate_'):
+            dmr[f'segment_{c}'] = segments_grouped[c].transform('mean')
+
+    # reset the index from segment_id to probe_id (while keeping 'segment_id' as a column)
+    return dmr.reset_index().set_index('probe_id')
