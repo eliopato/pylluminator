@@ -3,21 +3,23 @@ import logging
 import pandas as pd
 import numpy as np
 import re
+import os
 from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
+import sample_sheet
 from idat import IdatDataset
 from annotations import Annotations, Channel, ArrayType
 from stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, iqr
-from utils import get_column_as_flat_array, mask_dataframe, save_object, load_object
+from utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix
 
 LOGGER = logging.getLogger(__name__)
 
 
 class Samples:
 
-    def __init__(self, sample_sheet: pd.DataFrame):
+    def __init__(self, sample_sheet_df: pd.DataFrame | None):
         self.annotation = None
-        self.sample_sheet = sample_sheet
+        self.sample_sheet = sample_sheet_df
         self.samples = {}
 
     def read_samples(self, datadir: str, max_samples: int | None = None) -> None:
@@ -27,6 +29,10 @@ class Samples:
         `Red` or Grn`."""
 
         LOGGER.info(f'>> start reading sample files from {datadir}')
+
+        if self.sample_sheet is None:
+            LOGGER.info('No sample sheet provided, creating one')
+            self.sample_sheet, _ = sample_sheet.create_from_idats(datadir)
 
         for _, line in self.sample_sheet.iterrows():
             sample = Sample(line.sample_name)
@@ -56,6 +62,22 @@ class Samples:
         for sample in self.samples.values():
             sample.merge_annotation_info(self.annotation)
         LOGGER.info(f'done merging manifest and sample data frames\n')
+
+    @staticmethod
+    def from_sesame(datadir: str, annotation: Annotations):
+        """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
+        Return a Samples object"""
+        LOGGER.info(f'>> start reading sesame files')
+        samples = Samples(None)
+        samples.annotation = annotation
+        for file in os.listdir(datadir):
+            if file[-4:] == '.csv':
+                sample = Sample.from_sesame(f'{datadir}/{file}', annotation)
+                samples.samples[sample.name] = sample
+            else:
+                LOGGER.info(f'skipping non-csv file {file}')
+        LOGGER.info(f'done reading sesame files\n')
+        return samples
 
     def infer_type1_channel(self, switch_failed=False, mask_failed=False) -> None:
         LOGGER.info(f'>> start inferring probes')
@@ -122,7 +144,6 @@ class Sample:
         self.full_signal_df = None
         self.name = name
         self.annotation = None
-        self.which_index_channel = None
         self.masked_indexes = None
 
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
@@ -142,14 +163,12 @@ class Sample:
         channel_dfs = []
 
         if light_mode:
-            manifest = annotation.manifest.loc[:, ['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b']]
+            manifest = annotation.manifest.loc[:,
+                       ['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b']]
             mask = annotation.mask.loc[:, ['mask_info']] if annotation.mask is not None else None
         else:
             manifest = annotation.manifest
             mask = annotation.mask.drop(columns='probe_type') if annotation.mask is not None else None
-
-        for column in ['type', 'probe_type', 'channel']:
-            manifest[column] = manifest[column].astype('category')
 
         for channel, idata in self.idata.items():
 
@@ -171,20 +190,15 @@ class Sample:
             sample_df.loc[sample_df.type == 'II', 'methylation_state'] = 'M' if channel.is_green else 'U'
             sample_df.loc[(sample_df.type == 'I') & (sample_df.index == sample_df.address_b), 'methylation_state'] = 'M'
             sample_df.loc[(sample_df.type == 'I') & (sample_df.index == sample_df.address_a), 'methylation_state'] = 'U'
+            sample_df.methylation_state = sample_df.methylation_state.astype('category')
 
             # set the signal channel to 'R' or 'G' depending on the channel defined in the idat filename
-            sample_df['signal_channel'] = channel.value[0]
-
-            # to improve readability
-            sample_df['probe_type'] = sample_df.probe_type.cat.rename_categories({'rs': 'snp'})
+            sample_df['signal_channel'] = channel.value[0]  # first letter of the channel name
+            sample_df.signal_channel = sample_df.signal_channel.astype('category')
 
             channel_dfs.append(sample_df.drop(columns=['address_a', 'address_b']))
 
         self.full_signal_df = pd.concat(channel_dfs, ignore_index=True)
-
-        # make columns categories to fasten other functions
-        for column in ['methylation_state', 'signal_channel']:
-            self.full_signal_df[column] = self.full_signal_df[column].astype('category')
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
         # todo : optimize here (4s)
@@ -708,6 +722,54 @@ class Sample:
     def load(filepath: str):
         """Load a pickled Sample object from `filepath`"""
         return load_object(filepath, Sample)
+
+    @staticmethod
+    def from_sesame(filepath: str, annotation: Annotations, name: str | None = None):
+        """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object. """
+
+        LOGGER.info(f'read {filepath}')
+
+        if name is None:
+            name = filepath.split('/')[-1].replace('.csv', '')  # filename
+        sample = Sample(name)
+        sample.annotation = annotation
+
+        # read input file
+        sig_df = pd.read_csv(filepath, low_memory=False)
+        sig_df = sig_df.rename(columns={'col': 'channel', 'Probe_ID': 'probe_id'})
+
+        # prepare manifest for merge
+        manifest = annotation.manifest.loc[:, ['probe_id', 'type', 'probe_type', 'channel']]
+        manifest = manifest.rename(columns={'channel': 'manifest_channel'})
+        # remove probe suffix from manifest as they are not in SigDF files
+        manifest['probe_id_to_join'] = manifest.probe_id.apply(remove_probe_suffix)
+        manifest = manifest.set_index('probe_id_to_join')
+        sig_df = sig_df.set_index('probe_id')
+
+        # merge manifest and mask
+        sample_df = sig_df.join(manifest, how='inner').set_index('probe_id')
+        if annotation.mask is not None:
+            sample_df = sample_df.join(annotation.mask.loc[:, ['mask_info']], on='probe_id', how='left')
+
+        # move Green type II probes values to MG column
+        sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']
+        sample_df.loc[sample_df.type == 'II', 'UG'] = np.nan
+
+        # set signal channel for type II probes
+        sample_df.loc[(sample_df.type == 'II') & (sample_df.MG.isna()), 'channel'] = 'R'
+        sample_df.loc[(sample_df.type == 'II') & (sample_df.UR.isna()), 'channel'] = 'G'
+
+        # make multi-index for rows and columns
+        sample_df = sample_df.reset_index().set_index(['type', 'channel', 'probe_type', 'probe_id'])
+        sample_df = sample_df.loc[:, ['UR', 'MR', 'MG', 'UG', 'mask', 'manifest_channel', 'mask_info']]  # order columns
+        sample_df.columns = pd.MultiIndex.from_tuples([('R', 'U'), ('R', 'M'), ('G', 'M'), ('G', 'U'),
+                                                       ('mask', ''), ('manifest_channel', ''), ('mask_info', '')])
+
+        # set mask as specified in the input file, then drop the mask column
+        sample.mask_indexes(sample_df[sample_df['mask']].index)
+        sample.signal_df = sample_df.drop(columns=('mask', ''))
+
+        return sample
 
     def __str__(self):
         description = '\n=====================================================================\n'

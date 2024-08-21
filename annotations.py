@@ -177,13 +177,18 @@ class Annotations:
             # extract probe type from probe id (first letters, identifies control probes, snp...)
             df['probe_type'] = df['probe_id'].str.extract(r'^([a-zA-Z]+)')
 
-            # set dataframes index
+            # set dataframes index + specific processing for manifest file
             if kind == 'manifest':
                 # for type I probes that have both address A and address B set, split them in two rows
                 df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
                 df = df.explode('illumina_id', ignore_index=True)
                 df['illumina_id'] = df['illumina_id'].astype('int')
                 df.set_index('illumina_id', inplace=True)
+                # turn some columns into categories as it speeds up further processing
+                for column in ['type', 'probe_type', 'channel']:
+                    df[column] = df[column].astype('category')
+                # to improve readability
+                df['probe_type'] = df.probe_type.cat.rename_categories({'rs': 'snp'})
             elif kind == 'mask':
                 df = df.set_index('probe_id')
                 df = df.rename(columns={'mask': 'mask_info'})
