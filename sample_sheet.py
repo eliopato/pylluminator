@@ -80,7 +80,7 @@ def create_from_idats(idat_folder: str, output_filename='samplesheet.csv', sampl
 
         # file name formated as [GSM_id]_[sentrix id]_[sentrix_position]_[Grn|Red].idat
         if len(split_filename) == 4 and split_filename[0].startswith('GSM'):
-            samples_dict['GSM_id'].append(split_filename[0])
+            samples_dict['GSM_ID'].append(split_filename[0])
             samples_dict['sentrix_id'].append(split_filename[1])
             samples_dict['sentrix_position'].append(split_filename[2])
         # file name formated as [sentrix id]_[sentrix_position]_[Grn|Red].idat

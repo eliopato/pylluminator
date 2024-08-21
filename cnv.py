@@ -1,32 +1,63 @@
+import os.path
+
 from sklearn.linear_model import LinearRegression
 import logging
 import pandas as pd
 import pyranges as pr
 import numpy as np
 import linear_segment
+import urllib.request
 
 from sample import Samples, Sample
-from annotations import ArrayType
+from annotations import ArrayType, Annotations
 from sample_sheet import create_from_idats
 
 LOGGER = logging.getLogger(__name__)
 
 
+def get_normalization_samples(annotation: Annotations):
+    if annotation.array_type == ArrayType.HUMAN_EPIC_V2:
+        # Epicv2 : GM12878_206909630042_R08C01 and GM12878_206909630040_R03C01
+        idat_dir = 'data/arrays/epic_v2_normalization_data/'
+        # if not done yet, download the files
+        if not os.path.exists(idat_dir):
+            os.makedirs(idat_dir)
+            links = ['https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Grn.idat.gz',
+                     'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Red.idat.gz',
+                     'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Grn.idat.gz',
+                     'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Red.idat.gz']
+            for link in links:
+                LOGGER.info(f'Downloading {link}')
+                filename = link.split('/')[-1]
+                try:
+                    urllib.request.urlretrieve(link, f'{idat_dir}/{filename}')
+                except:
+                    LOGGER.info(f'downloading {filename} failed, try downloading it manually and add it to {idat_dir}')
+
+        # read downloaded idat files
+        normal_samples_sheet, _ = create_from_idats(idat_dir)
+        normal_samples = Samples(normal_samples_sheet)
+        normal_samples.read_samples(idat_dir)
+        normal_samples.merge_annotation_info(annotation)
+        return normal_samples
+
+    if annotation.array_type == ArrayType.HUMAN_EPIC:
+        # Epic  sesameDataGet("EPIC.5.SigDF.normal")
+        print('todo')  # todo
+        return None
+
+    LOGGER.error(f'No predefined normalization data for array {annotation.array_type}')
+    return None
+
+
 def copy_number_variation(sample: Sample, normal_samples: Samples | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
+    # normalization samples
     if normal_samples is None:
-        if sample.annotation.array_type == ArrayType.HUMAN_EPIC_V2:
-            # Epicv2 : sdfs.normal[c("GM12878_206909630042_R08C01","GM12878_206909630040_R03C01")]
-            idat_dir = '/home/elsa/Documents/data/methylation/EPIC/geo_idats/'
-            normal_samples_sheet, _ = create_from_idats(idat_dir)
-            normal_samples = Samples(normal_samples_sheet)
-            normal_samples.read_samples(idat_dir)
-            normal_samples.merge_annotation_info(sample.annotation)
-        elif sample.annotation.array_type == ArrayType.HUMAN_EPIC:
-            # Epic  sesameDataGet("EPIC.5.SigDF.normal")
-            print('todo')  # todo
-        else:
+        normal_samples = get_normalization_samples(sample.annotation)
+        if normal_samples is None:
             LOGGER.error('Please provide samples to use as normalization')
-    elif sample.annotation.array_type != normal_samples.annotation.array_type:
+            return
+    if sample.annotation.array_type != normal_samples.annotation.array_type:
         LOGGER.warning('Array types of input sample and normalization samples are different')
 
     genome_info = sample.annotation.genome_info

@@ -37,7 +37,7 @@ class Samples:
         for _, line in self.sample_sheet.iterrows():
             sample = Sample(line.sample_name)
             for channel in Channel:
-                pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat'
+                pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat*'
                 paths = [p.__str__() for p in Path(datadir).rglob(pattern)]
                 if len(paths) == 0:
                     LOGGER.error(f'no paths found matching {pattern}')
