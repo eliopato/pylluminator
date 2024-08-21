@@ -4,6 +4,7 @@ import pandas as pd
 import urllib.request
 import logging
 import pyranges as pr
+import zipfile
 
 from utils import column_names_to_snake_case, concatenate_non_na
 
@@ -59,22 +60,70 @@ class ArrayType(Enum):
 class GenomeInfo:
     """Additional genome information provided by external files"""
 
-    def __init__(self):
+    def __init__(self, genome_version: GenomeVersion):
+        """Given a genome version, load the files (cen_info.csv, cyto_band.csv, gap_info.csv, seq_length.csv and
+        txns.pkl) into a GenomeVersion object. If any file is missing, set the attribute to None."""
         self.seq_length = None
         self.cen_info = None
         self.txns = None
         self.gap_info = None
         self.cyto_band = None
 
+        if genome_version is None:
+            LOGGER.warning('You must set genome version to load genome information')
+            return
+
+        folder_genome = f'./data/genomes/{genome_version}/'
+
+        if not os.path.exists(folder_genome):
+            LOGGER.warning(f'No genome information found in {folder_genome}')
+            return
+
+        # read all the csv files
+        for info in ['cen_info', 'cyto_band', 'gap_info', 'seq_length', 'txns']:
+            filepath = f'{folder_genome}/{info}.csv'
+
+            # if the file is not found, check if its compressed version exists and if so, unzip it
+            if not os.path.exists(filepath):
+                zip_file = filepath.replace('.csv', '.zip')
+                if os.path.exists(zip_file):
+                    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                        zip_ref.extractall(folder_genome)
+                # check again, in case the unzipped file is not the right one \_o_/
+                if not os.path.exists(filepath):
+                    LOGGER.warning(f'Missing genome information file {filepath}.')
+                    continue
+
+            df = pd.read_csv(filepath)
+
+            if 'End' in df.columns and 'Start' in df.columns:
+                df.End = df.End.astype('int')
+                df.Start = df.Start.astype('int')
+
+            # assign the dataframe to the corresponding attribute
+            self.__setattr__(info, df)
+
+        # make gap info a pyranges object
+        self.gap_info = pr.PyRanges(self.gap_info)
+
+        # seq length is usually used as a dict
+        self.seq_length = dict(zip(self.seq_length.Chromosome, self.seq_length.SeqLength))
+
+        LOGGER.info('loading done\n')
+
 
 class Annotations:
+    """This class contains all the metadata associated with a certain genome version (HG39, MM10...) and array type
+    (EPICv2, 450K...). The metadata includes the manifest, the mask (if any exists), and the genome information (which
+    is itself a combination of several dataframes, see class GenomeInfo). Masks and Manifests are automatically
+    downloaded the first time the function is called, while GenomeInfo files are already stored in the repository."""
 
     def __init__(self, array_type: ArrayType, genome_version: GenomeVersion):
         self.array_type = array_type
         self.genome_version = genome_version
         self.mask = self.load_annotation('mask')
         self.manifest = self.load_annotation('manifest')
-        self.genome_info = self.load_annotation('genome_info')
+        self.genome_info = GenomeInfo(genome_version)
 
     def download_from_github(self, data_folder: str, tsv_filename: str) -> int:
         """Download a manifest or mask from Zhou lab github page, and returns it as a dataframe. Returns -1 if the
@@ -95,20 +144,20 @@ class Annotations:
 
         return 1
 
-    def load_annotation(self, name: str) -> pd.DataFrame | None:
-        """Download or read an annotation file. Name must be 'mask', 'manifest', or 'genome_info'"""
+    def load_annotation(self, kind: str) -> pd.DataFrame | None:
+        """Download or read an annotation file. Kind must be 'mask', 'manifest', or 'genome_info'"""
 
-        LOGGER.info(f'>> loading {name} for {self.array_type} {self.genome_version}')
+        LOGGER.info(f'>> loading {kind} for {self.array_type} {self.genome_version}')
 
-        if name == 'genome_info':
-            return self.load_genome_info()
+        if kind == 'genome_info':
+            return GenomeInfo(self.genome_version)
 
-        elif name not in ['mask', 'manifest']:
-            LOGGER.warning(f'Unknown annotation {name}, must be one of `mask`, `manifest`')
+        elif kind not in ['mask', 'manifest']:
+            LOGGER.warning(f'Unknown annotation {kind}, must be one of `mask`, `manifest`')
             return None
 
-        data_folder = f'./data/{name}s/'
-        tsv_filename = f'{self.array_type}.{self.genome_version}.{name}.tsv.gz'
+        data_folder = f'./data/{kind}s/'
+        tsv_filename = f'{self.array_type}.{self.genome_version}.{kind}.tsv.gz'
         pkl_filename = tsv_filename.replace('tsv.gz', 'pkl')
 
         # if the pickled file doesn't already exist, create it
@@ -129,13 +178,13 @@ class Annotations:
             df['probe_type'] = df['probe_id'].str.extract(r'^([a-zA-Z]+)')
 
             # set dataframes index
-            if name == 'manifest':
+            if kind == 'manifest':
                 # for type I probes that have both address A and address B set, split them in two rows
                 df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
                 df = df.explode('illumina_id', ignore_index=True)
                 df['illumina_id'] = df['illumina_id'].astype('int')
                 df.set_index('illumina_id', inplace=True)
-            elif name == 'mask':
+            elif kind == 'mask':
                 df = df.set_index('probe_id')
                 df = df.rename(columns={'mask': 'mask_info'})
 
@@ -147,42 +196,6 @@ class Annotations:
             LOGGER.info('loading from pickle file done\n')
 
         return df
-
-    def load_genome_info(self) -> GenomeInfo | None:
-        """Given a genome version, load the files (cen_info.csv, cyto_band.csv, gap_info.csv, seq_length.csv and
-        txns.csv) into a GenomeVersion object. If any file is missing, return None."""
-
-        if self.genome_version is None:
-            LOGGER.warning('You must set genome version to load genome information')
-            return None
-
-        genome_info = GenomeInfo()
-        folder_genome = f'./data/genomes/{self.genome_version}/'
-
-        if not os.path.exists(folder_genome):
-            LOGGER.warning(f'No genome information found in {folder_genome}')
-            return None
-
-        # read all the csv files
-        for info in ['cen_info', 'cyto_band', 'gap_info', 'seq_length', 'txns']:
-            filepath = f'{folder_genome}/{info}.csv'
-
-            if not os.path.exists(filepath):
-                LOGGER.warning(f'Missing genome information file {filepath}. Abort genome info loading.')
-                return None
-
-            df = pd.read_csv(filepath)
-            if 'End' in df.columns:
-                df.End = df.End.astype('int')
-                df.Start = df.Start.astype('int')
-            genome_info.__setattr__(info, df)
-
-        # make gap info a pyranges object
-        genome_info.gap_info = pr.PyRanges(genome_info.gap_info)
-        genome_info.seq_length = dict(zip(genome_info.seq_length.Chromosome, genome_info.seq_length.SeqLength))
-
-        LOGGER.info('loading done\n')
-        return genome_info
 
     @property
     def non_unique_mask_names(self) -> str:
