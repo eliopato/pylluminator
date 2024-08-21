@@ -209,9 +209,7 @@ class IdatDataset:
     """Validates and parses an Illumina IDAT file.
 
     Arguments:
-        filepath {file-like} -- the IDAT file to parse.
-        get_std_dev {bool} --
-        get_n_beads {bool} --
+        filepath {str} -- the IDAT file to parse.
 
     Keyword Arguments:
         bit {default 'float32'} -- 'float16' will pre-normalize intensities, capping max intensity at 32127. This cuts
@@ -352,6 +350,9 @@ class IdatDataset:
         if self.bit == 'float16':
             data_frame = data_frame.clip(upper=32127)
             data_frame = data_frame.astype('int16')
+        # elif self.bit == 'float32':
+        #     data_frame = data_frame.clip(upper=2147483647)
+        #     data_frame = data_frame.astype('int32')
 
         return data_frame
 
@@ -362,4 +363,7 @@ class IdatDataset:
         return True
 
     def __str__(self):
-        return f'{self.probe_means.head(3)}'
+        return f'IdatDataset object.\nHead of self.probe_means dataframe : \n{self.probe_means.head(3)}'
+
+    def __repr__(self):
+        return self.__str__()
