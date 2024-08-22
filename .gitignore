@@ -1,4 +1,11 @@
+# development
 .idea
-*.gz
 __pycache__
 drafts/
+
+# data
+*.gz
+
+# documentations
+_build/
+generated/

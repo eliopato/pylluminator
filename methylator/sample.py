@@ -16,8 +16,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Samples:
+    """Test doc"""
 
     def __init__(self, sample_sheet_df: pd.DataFrame | None):
+        """initialization"""
         self.annotation = None
         self.sample_sheet = sample_sheet_df
         self.samples = {}
