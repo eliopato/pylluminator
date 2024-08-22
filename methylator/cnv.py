@@ -13,7 +13,7 @@ from sklearn.linear_model import LinearRegression
 from methylator.sample import Samples, Sample
 from methylator.annotations import ArrayType, Annotations
 from methylator.sample_sheet import create_from_idats
-from methylator.utils import get_resource_folder, get_files_matching
+from methylator.utils import get_resource_folder, get_files_matching, download_from_geo
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,20 +24,8 @@ def get_normalization_samples(annotation: Annotations):
 
     if annotation.array_type == ArrayType.HUMAN_EPIC_V2:
         idat_dir = get_resource_folder('data.arrays.epic_v2_normalization_data')
-        # if not done yet, download the files
-        links = ['https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Grn.idat.gz',
-                 'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Red.idat.gz',
-                 'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Grn.idat.gz',
-                 'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Red.idat.gz']
-        for link in links:
-            filename = link.split('/')[-1]
-            filepath = idat_dir.joinpath(filename)
-            if not filepath.exists():
-                LOGGER.info(f'Downloading {filename}')
-                try:
-                    urllib.request.urlretrieve(link, filepath)
-                except:
-                    LOGGER.info(f'downloading {filename} failed, try downloading it manually and add it to {idat_dir}')
+        gsm_ids = ['GSM7139626', 'GSM7139627']
+        download_from_geo(gsm_ids, idat_dir)
 
         # read downloaded idat files
         normal_samples_sheet, _ = create_from_idats(idat_dir)

@@ -1,10 +1,14 @@
+import os
 import pickle
+import tarfile
 import logging
-import numpy as np
-import pandas as pd
+import urllib.request
+from pathlib import Path, PosixPath
 from importlib.resources import files
 from importlib.resources.readers import MultiplexedPath
-from pathlib import PosixPath, Path
+
+import numpy as np
+import pandas as pd
 
 LOGGER = logging.getLogger(__name__)
 
@@ -76,9 +80,8 @@ def load_object(filepath: str, object_type):
     return loaded_object
 
 
-def get_resource_folder(module_path: str, create_if_not_exist=True) -> PosixPath | None:
+def get_resource_folder(module_path: str, create_if_not_exist=True) -> MultiplexedPath | None:
     """Find the resource folder, and creates it if it doesn't exist and if the parameter is set to True (default)"""
-    LOGGER.info(module_path)
 
     # check that the input module path is OK
     if not (module_path == 'data' or (len(module_path) > 5 and module_path[:5] == 'data.')):
@@ -109,13 +112,49 @@ def get_resource_folder(module_path: str, create_if_not_exist=True) -> PosixPath
     return data_folder
 
 
-def get_files_matching(root_path: str | Path | MultiplexedPath, pattern: str) -> list[Path]:
+def convert_to_path(input_path: str | os.PathLike | MultiplexedPath) -> Path | PosixPath:
+    """Ensure the `input_path` is a PathLike format.
+    If it's a string or a MultiplexedPath, convert it to a PathLike object."""
+    if isinstance(input_path, MultiplexedPath):
+        return input_path.joinpath('*').parent  # convert MultiplexedPath into PosixPath
+    return Path(input_path)
+
+
+def get_files_matching(root_path: str | os.PathLike | MultiplexedPath, pattern: str) -> list[os.PathLike]:
     """ Equivalent to Path.rglob() for MultiplexedPath. Find all files in the subtree matching the pattern"""
-    if isinstance(root_path, str):
-        root_path = Path(root_path)
+    return [p for p in convert_to_path(root_path).rglob(pattern)]
 
-    if isinstance(root_path, MultiplexedPath):
-        root_path = root_path.joinpath('*').parent  # convert MultiplexedPath into PosixPath
 
-    return [p for p in root_path.rglob(pattern)]
+def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: str | os.PathLike | MultiplexedPath) -> None:
+    """Download idat files from GEO (Gene Expression Omnibus) given one or several GSM ids."""
 
+    # uniformization of the input parameter : if there is only one GSM id, make it a list anyway
+    if isinstance(gsm_ids_to_download, str):
+        gsm_ids_to_download = [gsm_ids_to_download]
+
+    # uniformization of the input parameter : make MultiplexedPath and strings a Path
+    target_directory = convert_to_path(target_directory)
+    # create the directory if it doesn't exist
+    os.makedirs(target_directory, exist_ok=True)
+
+    # download and un-tar GSM files one by one
+    for gsm_id in gsm_ids_to_download:
+        # check that it doesn't already exist :
+        matching_files = get_files_matching(target_directory, f'{gsm_id}*idat*')
+        if len(matching_files) >= 2:
+            LOGGER.info(f'idat files already exist for {gsm_id} in {target_directory}, skipping. ({matching_files}')
+            continue
+        # otherwise, start downloading
+        LOGGER.info(f'downloading {gsm_id}')
+        target_file = f'{target_directory}/{gsm_id}.tar'
+        dl_link = f'https://www.ncbi.nlm.nih.gov/geo/download/?acc={gsm_id}&format=file'
+        try:
+            urllib.request.urlretrieve(dl_link, target_file)
+        except:
+            LOGGER.error(f'download failed, download it from {dl_link} and add it to the {target_directory} folder')
+            continue
+        # if the download succeeded, untar the file
+        with tarfile.TarFile(target_file, 'r') as tar_ref:
+            tar_ref.extractall(target_directory, filter='data')
+        # delete the tar file
+        os.remove(target_file)

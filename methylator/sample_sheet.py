@@ -1,10 +1,9 @@
 import os.path
 import pandas as pd
 import logging
-from pathlib import Path
 from importlib.resources.readers import MultiplexedPath
 
-from methylator.utils import column_names_to_snake_case, get_files_matching
+from methylator.utils import column_names_to_snake_case, get_files_matching, convert_to_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,17 +60,17 @@ def read_from_file(filepath: str = '', delimiter: str = ',') -> pd.DataFrame | N
     return df
 
 
-def create_from_idats(idat_folder: str | MultiplexedPath, output_filename='samplesheet.csv', sample_type: str = '') -> (pd.DataFrame, str):
+def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
+                      output_filename='samplesheet.csv', sample_type: str = '') -> (pd.DataFrame, str):
     """Creates a samplesheet.csv file from a folder containing .IDAT files. Files need to follow a format :
     either [GSM_id]_[sentrix id]_[sentrix_position]_[Grn|Red].idat
     or [sentrix id]_[sentrix_position]_[Grn|Red].idat"""
 
     samples_dict = {'GSM_ID': [], 'sample_name': [], 'sentrix_id': [], 'sentrix_position': [], 'sample_type': []}
 
-    if isinstance(idat_folder, str):
-        idat_folder = Path(idat_folder)
-        if not idat_folder.exists():
-            raise FileNotFoundError(f'{idat_folder} is not a valid directory path')
+    idat_folder = convert_to_path(idat_folder)
+    if not idat_folder.exists():
+        raise FileNotFoundError(f'{idat_folder} is not a valid directory path')
 
     idat_files = get_files_matching(idat_folder, '*Grn.idat*')  # .gz OK
 

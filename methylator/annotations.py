@@ -5,7 +5,6 @@ import urllib.request
 import logging
 import pyranges as pr
 import zipfile
-from importlib.resources import files
 from pathlib import PosixPath
 
 from methylator.utils import column_names_to_snake_case, concatenate_non_na, get_resource_folder
@@ -124,7 +123,7 @@ class Annotations:
         self.genome_version = genome_version
         self.mask = self.load_annotation('mask')
         self.manifest = self.load_annotation('manifest')
-        self.genome_info = GenomeInfo(genome_version)
+        self.genome_info = self.load_annotation('genome_info')
 
     def download_from_github(self, tsv_filepath: PosixPath) -> int:
         """Download a manifest or mask from Zhou lab github page, and returns it as a dataframe. Returns -1 if the

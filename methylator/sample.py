@@ -26,7 +26,7 @@ class Samples:
         self.sample_sheet = sample_sheet_df
         self.samples = {}
 
-    def read_samples(self, datadir: str | Path | MultiplexedPath, max_samples: int | None = None) -> None:
+    def read_samples(self, datadir: str | os.PathLike | MultiplexedPath, max_samples: int | None = None) -> None:
         """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
         information from the sample sheet and follow this naming convention:
         `[sentrix ID]*[sentrix position]*[channel].idat` where the `*` can be any characters.
@@ -77,7 +77,7 @@ class Samples:
         LOGGER.info(f'done merging manifest and sample data frames\n')
 
     @staticmethod
-    def from_sesame(datadir: str | MultiplexedPath, annotation: Annotations):
+    def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations):
         """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
         Return a Samples object"""
         LOGGER.info(f'>> start reading sesame files')
@@ -85,13 +85,7 @@ class Samples:
         samples.annotation = annotation
 
         # fin all .csv files in the subtree depending on datadir type
-        if isinstance(datadir, str):
-            file_list = [f'{datadir}/{f}' for f in os.listdir(datadir) if f[-4:] == '.csv']
-        elif isinstance(datadir, MultiplexedPath):
-            file_list = get_files_matching(datadir, '*.csv')
-        else:
-            LOGGER.error('Unsupported datadir type {type(datadir)}')
-            return
+        file_list = get_files_matching(datadir, '*.csv')
 
         # load all samples
         for csv_file in file_list:
@@ -746,7 +740,7 @@ class Sample:
         return load_object(filepath, Sample)
 
     @staticmethod
-    def from_sesame(filepath: str | Path, annotation: Annotations, name: str | None = None):
+    def from_sesame(filepath: str | os.PathLike, annotation: Annotations, name: str | None = None):
         """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object. """
 
         LOGGER.info(f'read {filepath}')
