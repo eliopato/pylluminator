@@ -5,8 +5,10 @@ import urllib.request
 import logging
 import pyranges as pr
 import zipfile
+from importlib.resources import files
+from pathlib import PosixPath
 
-from utils import column_names_to_snake_case, concatenate_non_na
+from methylator.utils import column_names_to_snake_case, concatenate_non_na, get_resource_folder
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,15 +75,14 @@ class GenomeInfo:
             LOGGER.warning('You must set genome version to load genome information')
             return
 
-        folder_genome = f'./data/genomes/{genome_version}/'
-
-        if not os.path.exists(folder_genome):
-            LOGGER.warning(f'No genome information found in {folder_genome}')
+        folder_genome = get_resource_folder(f'data.genomes.{genome_version}', create_if_not_exist=False)
+        if folder_genome is None:
+            LOGGER.warning(f'No genome information found in {get_resource_folder('data.genomes')} for {genome_version}')
             return
 
         # read all the csv files
         for info in ['cen_info', 'cyto_band', 'gap_info', 'seq_length', 'txns']:
-            filepath = f'{folder_genome}/{info}.csv'
+            filepath = str(folder_genome.joinpath(f'{info}.csv'))
 
             # if the file is not found, check if its compressed version exists and if so, unzip it
             if not os.path.exists(filepath):
@@ -125,9 +126,11 @@ class Annotations:
         self.manifest = self.load_annotation('manifest')
         self.genome_info = GenomeInfo(genome_version)
 
-    def download_from_github(self, data_folder: str, tsv_filename: str) -> int:
+    def download_from_github(self, tsv_filepath: PosixPath) -> int:
         """Download a manifest or mask from Zhou lab github page, and returns it as a dataframe. Returns -1 if the
         file could not be downloaded"""
+        data_folder = tsv_filepath.parent
+        tsv_filename = tsv_filepath.name
 
         dl_link = f'https://github.com/zhou-lab/InfiniumAnnotationV1/raw/main/Anno/{self.array_type}/{tsv_filename}'
         LOGGER.info(f'file {tsv_filename} not found in {data_folder}, trying to download it from {dl_link}')
@@ -135,7 +138,7 @@ class Annotations:
         os.makedirs(data_folder, exist_ok=True)  # create destination directory
 
         try:
-            urllib.request.urlretrieve(dl_link, f'{data_folder}{tsv_filename}')
+            urllib.request.urlretrieve(dl_link, tsv_filepath)
             LOGGER.info(f'download successful')
         except:
             link = 'https://zwdzwd.github.io/InfiniumAnnotation'
@@ -149,27 +152,38 @@ class Annotations:
 
         LOGGER.info(f'>> loading {kind} for {self.array_type} {self.genome_version}')
 
+        # genome info files are handled separately
         if kind == 'genome_info':
             return GenomeInfo(self.genome_version)
 
-        elif kind not in ['mask', 'manifest']:
+        # now we can handle mask and manifest files, check that the parameter is not something else
+        if kind not in ['mask', 'manifest']:
             LOGGER.warning(f'Unknown annotation {kind}, must be one of `mask`, `manifest`')
             return None
 
-        data_folder = f'./data/{kind}s/'
-        tsv_filename = f'{self.array_type}.{self.genome_version}.{kind}.tsv.gz'
-        pkl_filename = tsv_filename.replace('tsv.gz', 'pkl')
+        # get the annotation resource folder
+        data_folder = get_resource_folder(f'data.{kind}s')
 
-        # if the pickled file doesn't already exist, create it
-        if not os.path.exists(f'{data_folder}{pkl_filename}'):
+        # build the filenames depending on the array type and genome version
+        pkl_filename = f'{self.array_type}.{self.genome_version}.{kind}.pkl'
+        pkl_filepath = data_folder.joinpath(pkl_filename)
+
+        # if the pickle file already exists, simply load it
+        if pkl_filepath.exists():
+            df = pd.read_pickle(pkl_filepath)
+            LOGGER.info('loading from pickle file done\n')
+
+        # otherwise build the pickle file from the tsv archive
+        else:
+            tsv_filepath = data_folder.joinpath(pkl_filename.replace('pkl', 'tsv.gz'))
 
             # if the csv manifest file doesn't exist, download it
-            if not os.path.exists(f'{data_folder}{tsv_filename}'):
-                if self.download_from_github(data_folder, tsv_filename) == -1:
+            if not tsv_filepath.exists():
+                if self.download_from_github(tsv_filepath) == -1:
                     return None
 
             # now read the downloaded manifest file
-            df = pd.read_csv(f'{data_folder}{tsv_filename}', delimiter='\t')
+            df = pd.read_csv(str(tsv_filepath), delimiter='\t')
 
             # uniformization - who likes camel case ?
             df = column_names_to_snake_case(df)
@@ -193,12 +207,7 @@ class Annotations:
                 df = df.set_index('probe_id')
                 df = df.rename(columns={'mask': 'mask_info'})
 
-            pd.to_pickle(df, f'{data_folder}{pkl_filename}')
-
-        else:
-
-            df = pd.read_pickle(f'{data_folder}{pkl_filename}')
-            LOGGER.info('loading from pickle file done\n')
+            pd.to_pickle(df, pkl_filepath)
 
         return df
 

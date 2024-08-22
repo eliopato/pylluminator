@@ -1,36 +1,41 @@
 import os.path
-
-from sklearn.linear_model import LinearRegression
 import logging
+import urllib.request
+import zipfile
+from importlib.resources import files
+
 import pandas as pd
 import pyranges as pr
 import numpy as np
 import linear_segment
-import urllib.request
+from sklearn.linear_model import LinearRegression
 
-from sample import Samples, Sample
-from annotations import ArrayType, Annotations
-from sample_sheet import create_from_idats
+from methylator.sample import Samples, Sample
+from methylator.annotations import ArrayType, Annotations
+from methylator.sample_sheet import create_from_idats
+from methylator.utils import get_resource_folder, get_files_matching
 
 LOGGER = logging.getLogger(__name__)
 
 
 def get_normalization_samples(annotation: Annotations):
+    """Read from the package's data normalization samples data, depending on the array type.
+    Only EPIC v2 and EPIC are supported for now"""
+
     if annotation.array_type == ArrayType.HUMAN_EPIC_V2:
-        # Epicv2 : GM12878_206909630042_R08C01 and GM12878_206909630040_R03C01
-        idat_dir = 'data/arrays/epic_v2_normalization_data/'
+        idat_dir = get_resource_folder('data.arrays.epic_v2_normalization_data')
         # if not done yet, download the files
-        if not os.path.exists(idat_dir):
-            os.makedirs(idat_dir)
-            links = ['https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Grn.idat.gz',
-                     'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Red.idat.gz',
-                     'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Grn.idat.gz',
-                     'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Red.idat.gz']
-            for link in links:
-                LOGGER.info(f'Downloading {link}')
-                filename = link.split('/')[-1]
+        links = ['https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Grn.idat.gz',
+                 'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139626/suppl/GSM7139626_206909630042_R08C01_Red.idat.gz',
+                 'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Grn.idat.gz',
+                 'https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7139nnn/GSM7139627/suppl/GSM7139627_206909630040_R03C01_Red.idat.gz']
+        for link in links:
+            filename = link.split('/')[-1]
+            filepath = idat_dir.joinpath(filename)
+            if not filepath.exists():
+                LOGGER.info(f'Downloading {filename}')
                 try:
-                    urllib.request.urlretrieve(link, f'{idat_dir}/{filename}')
+                    urllib.request.urlretrieve(link, filepath)
                 except:
                     LOGGER.info(f'downloading {filename} failed, try downloading it manually and add it to {idat_dir}')
 
@@ -42,9 +47,20 @@ def get_normalization_samples(annotation: Annotations):
         return normal_samples
 
     if annotation.array_type == ArrayType.HUMAN_EPIC:
-        # Epic  sesameDataGet("EPIC.5.SigDF.normal")
-        print('todo')  # todo
-        return None
+
+        datadir = files('data.arrays.epic_normalization_data')
+
+        datafiles_csv = get_files_matching(datadir, '*.csv')
+        datafiles_zip = get_files_matching(datadir, '*.zip')
+
+        # if there are less .csv files than .zip files, unzip them
+        if len(datafiles_csv) < len(datafiles_zip):
+            datadir_str = datadir.joinpath('*').parent
+            for zip_file in datafiles_zip:
+                with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                    zip_ref.extractall(datadir_str)
+
+        return Samples.from_sesame(datadir, annotation)
 
     LOGGER.error(f'No predefined normalization data for array {annotation.array_type}')
     return None

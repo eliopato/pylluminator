@@ -2,8 +2,12 @@ import pickle
 import logging
 import numpy as np
 import pandas as pd
+from importlib.resources import files
+from importlib.resources.readers import MultiplexedPath
+from pathlib import PosixPath, Path
 
 LOGGER = logging.getLogger(__name__)
+
 
 def column_names_to_snake_case(df: pd.DataFrame) -> pd.DataFrame:
     """converts the dataframe's column names from camel case to snake case, and replace spaces by underscores"""
@@ -70,3 +74,48 @@ def load_object(filepath: str, object_type):
         LOGGER.error(f'The saved object type {type(loaded_object)} doesnt match the requested type ({object_type})')
 
     return loaded_object
+
+
+def get_resource_folder(module_path: str, create_if_not_exist=True) -> PosixPath | None:
+    """Find the resource folder, and creates it if it doesn't exist and if the parameter is set to True (default)"""
+    LOGGER.info(module_path)
+
+    # check that the input module path is OK
+    if not (module_path == 'data' or (len(module_path) > 5 and module_path[:5] == 'data.')):
+        LOGGER.error(f'The module path to get data should start with `data`, given module path is {module_path}')
+        return None
+
+    # find the data folder in the package
+    try:
+        data_folder = files(module_path)
+    except (ModuleNotFoundError, NotADirectoryError):
+        # the directory doesn't exist and shouldn't be created, return None
+        if not create_if_not_exist:
+            return None
+        modules = module_path.split('.')
+        if len(modules) < 2:
+            LOGGER.error(f'Unable to find {module_path} data, nor create missing folders')
+            return None
+        parent_module = '.'.join(modules[:-1])
+        child_module = modules[-1]
+        LOGGER.info(f'parent {parent_module} child {child_module}')
+        # recursively check that parent directories exist
+        parent_posix = get_resource_folder(parent_module)
+        # once the parents exist, create the child
+        parent_posix.joinpath(child_module).mkdir()
+        # now the folder should exist!
+        data_folder = files(module_path)
+
+    return data_folder
+
+
+def get_files_matching(root_path: str | Path | MultiplexedPath, pattern: str) -> list[Path]:
+    """ Equivalent to Path.rglob() for MultiplexedPath. Find all files in the subtree matching the pattern"""
+    if isinstance(root_path, str):
+        root_path = Path(root_path)
+
+    if isinstance(root_path, MultiplexedPath):
+        root_path = root_path.joinpath('*').parent  # convert MultiplexedPath into PosixPath
+
+    return [p for p in root_path.rglob(pattern)]
+

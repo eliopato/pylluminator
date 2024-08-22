@@ -1,6 +1,3 @@
-from annotations import Annotations
-from utils import remove_probe_suffix
-
 import numpy as np
 import logging
 import pandas as pd
@@ -12,7 +9,9 @@ import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+from methylator.annotations import Annotations
+from methylator.utils import remove_probe_suffix
+
 LOGGER = logging.getLogger(__name__)
 
 

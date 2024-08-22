@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from sample import Sample
+from methylator.sample import Sample as Sample
 
 
 def print_header(title: str, mask=False) -> None:

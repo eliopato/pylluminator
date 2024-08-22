@@ -2,6 +2,7 @@
 .idea
 __pycache__
 drafts/
+stub.py
 
 # data
 *.gz
