@@ -2,16 +2,14 @@
 requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = ["data"]
+[tool.setuptools]
+packages = ["illuminator"]
 
 [project]
 name = "illuminator"
-version = "0.1"
+version = "0.2"
 authors = [{name = "Elio", email = "eliof@posteo.net"}]
 maintainers = [{name = "Elio", email = "eliof@posteo.net"}]
-repository = "https://github.com/eliopato/illuminator"
-# documentation = ""
 requires-python = ">= 3.12"
 dependencies = ['pandas', 'numpy', 'scikit-learn', 'statsmodels', 'scipy', 'pyranges1', 'linear_segment', 'patsy', 'ailist', 'notebook']
 description = 'Tools to analyze DNA methylation data from Illumina micro-arrays'
@@ -27,3 +25,10 @@ classifiers = [
   "Topic :: Scientific/Engineering",
   "Topic :: Scientific/Engineering :: Bio-Informatics"
 ]
+
+[project.urls]
+#Homepage = "https://example.com"
+#Documentation = "https://readthedocs.org"
+Repository = "https://github.com/eliopato/illuminator"
+Issues = "https://github.com/eliopato/illuminator/issues"
+#Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"

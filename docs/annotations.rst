@@ -30,7 +30,7 @@ Manifest columns meaning
   * ``mapAS`` : alignment score
   * ``mapYD`` : bisulfite strand (``f/r/n``)
 
-Mask columns meaning :
+Mask columns meaning
 ----------------------
 
 * ``Probe_ID``: Probe ID
@@ -41,14 +41,14 @@ Mask columns meaning :
   * human: ``M_mapping+M_nonuniq+M_SNPcommon_5pt+M_1baseSwitchSNPcommon_5pt+M_2extBase_SNPcommon_5pt``
   * mouse: ``M_mapping+M_nonuniq``
 
-Common masks:
+Common masks
 ~~~~~~~~~~~~~
 
 * ``M_mapping``: unmapped probes, or probes having too low mapping quality (alignment score under 35, either probe for Infinium-I) or Infinium-I probe allele A and B mapped to different locations
 * ``M_nonuniq``: mapped probes but with mapping quality smaller than 10, either probe for Infinium-I
 * ``M_uncorr_titration``: CpGs with titration correlation under 0.9. Functioning probes should have very high correlation with titrated methylation fraction.
 
-Human masks (general and population-specific):
+Human masks (general and population-specific)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``M_commonSNP5_5pt``: mapped probes having at least a common SNP with MAF>=5% within 5bp from 3'-extension
@@ -60,7 +60,7 @@ Human masks (general and population-specific):
 * ``M_2extBase_SNP_EAS_1pt``: EAS population-specific mask (MAF>=1%).
 * ... more populations, e.g., ``EAS``, ``EUR``, ``AFR``, ``AMR``, ``SAS``.
 
-Mouse masks (general and strain-specific):
+Mouse masks (general and strain-specific)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``M_PWK_PhJ``: mapped probes having at least a PWK_PhJ strain-specific SNP within 5bp from 3'-extension

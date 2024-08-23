@@ -84,9 +84,8 @@ def get_resource_folder(module_path: str, create_if_not_exist=True) -> Multiplex
     """Find the resource folder, and creates it if it doesn't exist and if the parameter is set to True (default)"""
 
     # check that the input module path is OK
-    if not (module_path == 'data' or (len(module_path) > 5 and module_path[:5] == 'data.')):
-        LOGGER.error(f'The module path to get data should start with `data`, given module path is {module_path}')
-        return None
+    if not module_path.startswith('illuminator.data'):
+        module_path = 'illuminator.data.' + module_path
 
     # find the data folder in the package
     try:

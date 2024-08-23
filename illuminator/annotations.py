@@ -7,7 +7,7 @@ import pyranges as pr
 import zipfile
 from pathlib import PosixPath
 
-from illuminator.utils import column_names_to_snake_case, concatenate_non_na, get_resource_folder
+from illuminator.utils import column_names_to_snake_case, concatenate_non_na, get_resource_folder, convert_to_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -74,9 +74,9 @@ class GenomeInfo:
             LOGGER.warning('You must set genome version to load genome information')
             return
 
-        folder_genome = get_resource_folder(f'data.genomes.{genome_version}', create_if_not_exist=False)
+        folder_genome = get_resource_folder(f'genomes.{genome_version}', create_if_not_exist=False)
         if folder_genome is None:
-            LOGGER.warning(f'No genome information found in {get_resource_folder('data.genomes')} for {genome_version}')
+            LOGGER.warning(f'No genome information found in {get_resource_folder("genomes")} for {genome_version}')
             return
 
         # read all the csv files
@@ -88,7 +88,7 @@ class GenomeInfo:
                 zip_file = filepath.replace('.csv', '.zip')
                 if os.path.exists(zip_file):
                     with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-                        zip_ref.extractall(folder_genome)
+                        zip_ref.extractall(convert_to_path(folder_genome))
                 # check again, in case the unzipped file is not the right one \_o_/
                 if not os.path.exists(filepath):
                     LOGGER.warning(f'Missing genome information file {filepath}.')
@@ -161,7 +161,7 @@ class Annotations:
             return None
 
         # get the annotation resource folder
-        data_folder = get_resource_folder(f'data.{kind}s')
+        data_folder = get_resource_folder(f'{kind}s')
 
         # build the filenames depending on the array type and genome version
         pkl_filename = f'{self.array_type}.{self.genome_version}.{kind}.pkl'
@@ -170,7 +170,6 @@ class Annotations:
         # if the pickle file already exists, simply load it
         if pkl_filepath.exists():
             df = pd.read_pickle(pkl_filepath)
-            LOGGER.info('loading from pickle file done\n')
 
         # otherwise build the pickle file from the tsv archive
         else:
@@ -208,6 +207,7 @@ class Annotations:
 
             pd.to_pickle(df, pkl_filepath)
 
+        LOGGER.info('loading done\n')
         return df
 
     @property

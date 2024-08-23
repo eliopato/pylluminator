@@ -70,7 +70,8 @@ def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
 
     idat_folder = convert_to_path(idat_folder)
     if not idat_folder.exists():
-        raise FileNotFoundError(f'{idat_folder} is not a valid directory path')
+        LOGGER.error(f'{idat_folder} is not a valid directory path')
+        return None, None
 
     idat_files = get_files_matching(idat_folder, '*Grn.idat*')  # .gz OK
 

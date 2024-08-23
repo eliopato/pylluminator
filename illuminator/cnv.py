@@ -23,7 +23,7 @@ def get_normalization_samples(annotation: Annotations):
     Only EPIC v2 and EPIC are supported for now"""
 
     if annotation.array_type == ArrayType.HUMAN_EPIC_V2:
-        idat_dir = get_resource_folder('data.arrays.epic_v2_normalization_data')
+        idat_dir = get_resource_folder('arrays.epic_v2_normalization_data')
         gsm_ids = ['GSM7139626', 'GSM7139627']
         download_from_geo(gsm_ids, idat_dir)
 
@@ -36,7 +36,7 @@ def get_normalization_samples(annotation: Annotations):
 
     if annotation.array_type == ArrayType.HUMAN_EPIC:
 
-        datadir = files('data.arrays.epic_normalization_data')
+        datadir = get_resource_folder('arrays.epic_normalization_data')
 
         datafiles_csv = get_files_matching(datadir, '*.csv')
         datafiles_zip = get_files_matching(datadir, '*.zip')

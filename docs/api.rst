@@ -5,11 +5,11 @@ API
     :toctree: generated 
     :recursive:
 
-    idat
-    sample
-    	sample.Samples
-    sample_sheet
-    annotations
-    quality_control
-    cnv
-    dm
+    illuminator.read_idat
+    illuminator.sample
+    	illuminator.sample.Samples
+    illuminator.sample_sheet
+    illuminator.annotations
+    illuminator.quality_control
+    illuminator.cnv
+    illuminator.dm

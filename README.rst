@@ -25,10 +25,12 @@ Now it's time to install illuminator! ::
 And that's it :)
 
 **Troubleshooting**
-If you enconter any issue, you might want to update pip and setuptools ::
+If you enconter any issue, you might want to update conda, pip and setuptools ::
 
+    conda update --all
     pip install --upgrade pip
     pip install --upgrade setuptools
 
 Usage
 ------------
+todo :)

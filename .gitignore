@@ -3,6 +3,7 @@
 __pycache__
 drafts/
 stub.py
+data/
 
 # data
 *.gz
