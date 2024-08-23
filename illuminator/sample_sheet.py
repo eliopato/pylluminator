@@ -3,7 +3,7 @@ import pandas as pd
 import logging
 from importlib.resources.readers import MultiplexedPath
 
-from methylator.utils import column_names_to_snake_case, get_files_matching, convert_to_path
+from illuminator.utils import column_names_to_snake_case, get_files_matching, convert_to_path
 
 LOGGER = logging.getLogger(__name__)
 

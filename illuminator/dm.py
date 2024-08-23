@@ -9,8 +9,8 @@ import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
-from methylator.annotations import Annotations
-from methylator.utils import remove_probe_suffix
+from illuminator.annotations import Annotations
+from illuminator.utils import remove_probe_suffix
 
 LOGGER = logging.getLogger(__name__)
 

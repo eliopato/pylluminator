@@ -7,7 +7,7 @@ import pyranges as pr
 import zipfile
 from pathlib import PosixPath
 
-from methylator.utils import column_names_to_snake_case, concatenate_non_na, get_resource_folder
+from illuminator.utils import column_names_to_snake_case, concatenate_non_na, get_resource_folder
 
 LOGGER = logging.getLogger(__name__)
 

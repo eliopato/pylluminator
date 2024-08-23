@@ -10,3 +10,12 @@ stub.py
 # documentations
 _build/
 generated/
+
+# packaging
+*.egg
+eggs/
+.eggs
+*.egg-info/
+wheels/
+dist/
+build/

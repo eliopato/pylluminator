@@ -10,7 +10,7 @@ To use
 
 .. code-block:: console
 
-   (.venv) $ pip install methylator
+   (.venv) $ pip install illuminator
 
 Import .idat files
 --------------------

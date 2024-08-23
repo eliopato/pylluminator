@@ -12,12 +12,12 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../methylator'))
+sys.path.insert(0, os.path.abspath('../illuminator'))
 
 
 # -- Project information -----------------------------------------------------
 
-project = "Methylator"
+project = "illuminator"
 copyright = "2024"
 author = "MMG"
 

@@ -8,11 +8,11 @@ import pandas as pd
 import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
-import methylator.sample_sheet as sample_sheet
-from methylator.read_idat import IdatDataset
-from methylator.annotations import Annotations, Channel, ArrayType
-from methylator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, iqr
-from methylator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix, get_files_matching
+import illuminator.sample_sheet as sample_sheet
+from illuminator.read_idat import IdatDataset
+from illuminator.annotations import Annotations, Channel, ArrayType
+from illuminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, iqr
+from illuminator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix, get_files_matching
 
 LOGGER = logging.getLogger(__name__)
 
