@@ -9,14 +9,21 @@ where = ["data"]
 name = "illuminator"
 version = "0.1"
 authors = [{name = "Elio", email = "eliof@posteo.net"}]
+maintainers = [{name = "Elio", email = "eliof@posteo.net"}]
+repository = "https://github.com/eliopato/illuminator"
+# documentation = ""
 requires-python = ">= 3.12"
-dependencies = ['pandas', 'numpy', 'scikit-learn', 'statsmodels', 'scipy', 'pyranges1', 'linear_segment', 'patsy', 'ailist']
+dependencies = ['pandas', 'numpy', 'scikit-learn', 'statsmodels', 'scipy', 'pyranges1', 'linear_segment', 'patsy', 'ailist', 'notebook']
 description = 'Tools to analyze DNA methylation data from Illumina micro-arrays'
 readme = 'README.rst'
-license = {file = "LICENSE"}
+license = {text = "MIT"}
 keywords = ["dna-methylation", "epigenetics", "illumina", "methylation", "DMR", "sesame"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3.12",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Bio-Informatics"
 ]
