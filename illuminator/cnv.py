@@ -1,8 +1,5 @@
-import os.path
 import logging
-import urllib.request
 import zipfile
-from importlib.resources import files
 
 import pandas as pd
 import pyranges as pr
@@ -10,7 +7,8 @@ import numpy as np
 import linear_segment
 from sklearn.linear_model import LinearRegression
 
-from illuminator.sample import Samples, Sample
+from illuminator.sample import Sample
+from illuminator.samples import Samples
 from illuminator.annotations import ArrayType, Annotations
 from illuminator.sample_sheet import create_from_idats
 from illuminator.utils import get_resource_folder, get_files_matching, download_from_geo
