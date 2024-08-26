@@ -2,14 +2,8 @@ API
 ===
 
 .. autosummary::
-    :toctree: generated 
-    :recursive:
+    :toctree: _autosummary 
+    :template: custom-module-template.rst
+    :recursive: 
 
-    illuminator.read_idat
-    illuminator.sample
-    	illuminator.sample.Samples
-    illuminator.sample_sheet
-    illuminator.annotations
-    illuminator.quality_control
-    illuminator.cnv
-    illuminator.dm
+    illuminator

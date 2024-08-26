@@ -11,6 +11,7 @@ data/
 # documentations
 _build/
 generated/
+_autosummary/
 
 # packaging
 *.egg

@@ -10,10 +10,6 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../illuminator'))
-
 # -- Project information -----------------------------------------------------
 
 project = "illuminator"
@@ -31,6 +27,8 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx"
 ]
+
+autosummary_generate = True
 
 intersphinx_mapping = {
     "rtd": ("https://docs.readthedocs.io/en/stable/", None),

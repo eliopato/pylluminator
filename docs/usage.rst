@@ -16,9 +16,9 @@ Import .idat files
 --------------------
 
 To read idat files
-you can use the ``sample.Samples.read_samples()`` function:
+you can use the ``samples.Samples.read_samples()`` function:
 
-.. autofunction:: illuminator.sample.Samples.read_samples()
+.. autofunction:: illuminator.samples.Samples.read_samples()
 
 The ``datadir`` parameter should a string
 
