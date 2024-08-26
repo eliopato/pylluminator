@@ -23,9 +23,10 @@ class Samples:
         self.annotation = None
         self.sample_sheet = sample_sheet_df
         self.samples = {}
-        self.__attach_methods__()
-        self.__callable_methods__ = ['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
-                                     'scrub_background_correction', 'poobah', 'infer_type1_channel']
+        # attach methods of Sample object that can be directly applied to the list of samples in self.samples
+        self.__attach_methods__(['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
+                                 'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
+                                 'apply_non_unique_mask'])
 
     def read_samples(self, datadir: str | os.PathLike | MultiplexedPath, max_samples: int | None = None) -> None:
         """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
@@ -103,10 +104,6 @@ class Samples:
     def __getattr__(self, method_name):
         """Wrapper for Sample preprocessing methods that can directly be applied to every sample"""
 
-        if method_name not in self.__callable_methods__:
-            LOGGER.error(f'method {method_name} cant be applied to Samples object')
-            return
-
         def method(*args, **kwargs):
             LOGGER.info(f'>> start {method_name}')
             for sample in self.samples.values():
@@ -115,16 +112,17 @@ class Samples:
 
         return method
 
-    def __attach_methods__(self):
+    def __attach_methods__(self, method_names):
         """Attach callable methods from Sample object to Samples."""
-        for method_name in dir(Sample):
-            if callable(getattr(Sample, method_name)) and method_name in self.callable_methods:
+        for method_name in method_names:
+
+            if callable(getattr(Sample, method_name)):
                 method = self.__getattr__(method_name)
                 method.__name__ = method_name
                 method.__doc__ = getattr(Sample, method_name).__doc__
                 setattr(self, method_name, method)
 
-    def get_betas(self, mask: bool = False, include_out_of_band: bool = False) -> pd.DataFrame:
+    def get_betas(self, mask: bool = True, include_out_of_band: bool = False) -> pd.DataFrame:
         """Compute beta values for all samples.
         Set `mask` to True to apply current mask to each sample.
         Set `include_out_of_band` to true to include Out-of-band signal of Type I probes in the Beta values

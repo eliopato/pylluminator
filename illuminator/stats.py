@@ -81,18 +81,15 @@ def background_correction_noob_fit(in_band_signal: np.array, out_of_band_signal:
 
 
 def norm_exp_convolution(mu: float, sigma: float, alpha: float, signal_values: np.array, offset: int | float) -> np.array:
-    """
-    Perform normalization and background correction on signal values using a normal-exponential convolution model.
+    """Perform normalization and background correction on signal values using a normal-exponential convolution model.
 
-    Parameters:
-    - mu (float): The mean (mu) of the background signal.
-    - sigma (float): The standard deviation (sigma) of the background signal.
-    - alpha (float): The correction factor, representing the shift in signal.
-    - signal_values (np.array): Array of observed signal values to be corrected.
-    - offset (int | float): A constant value to add to the corrected signal for padding.
+    :param mu: (float) The mean (mu) of the background signal.
+    :param sigma: (float) The standard deviation (sigma) of the background signal.
+    :param alpha: (float) The correction factor, representing the shift in signal.
+    :param signal_values: (np.array) Array of observed signal values to be corrected.
+    :param offset: (int | float) A constant value to add to the corrected signal for padding.
 
-    Returns:
-    - np.array: The background-corrected and normalized signal values.
+    :return: np.array: The background-corrected and normalized signal values.
     """
     # Validate parameters
     if any(param is None for param in (alpha, sigma, mu)):
@@ -124,7 +121,7 @@ def norm_exp_convolution(mu: float, sigma: float, alpha: float, signal_values: n
         adjusted_signal = np.clip(adjusted_signal, a_min=1e-06, a_max=None)
 
     # Add the offset to the corrected signal
-    return adjusted_signal + offset
+    return (adjusted_signal + offset).astype(np.float32)
 
 
 def quantile_normalization_using_target(source_array: np.array, target_array: np.array) -> np.array:

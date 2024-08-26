@@ -9,7 +9,8 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
 from illuminator.read_idat import IdatDataset
 from illuminator.annotations import Annotations, Channel, ArrayType
-from illuminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, iqr
+from illuminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, \
+    iqr
 from illuminator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix
 
 LOGGER = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ class Sample:
         else:
             self.idata[channel] = dataset
 
-    def merge_annotation_info(self, annotation: Annotations, light_mode=True) -> None:
+    def merge_annotation_info(self, annotation: Annotations, min_beads=1, light_mode=True) -> None:
         """Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
         channel information, methylation state and mask names for each probe. For manifest file, merging is done on
         `Illumina ID`, contained in columns `address_a` and `address_b` of the manifest file. For the mask file, we use
@@ -48,8 +49,8 @@ class Sample:
         channel_dfs = []
 
         if light_mode:
-            manifest = annotation.manifest.loc[:,
-                       ['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b']]
+            required_columns = ['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b']
+            manifest = annotation.manifest.loc[:, required_columns]
             mask = annotation.mask.loc[:, ['mask_info']] if annotation.mask is not None else None
         else:
             manifest = annotation.manifest
@@ -57,11 +58,15 @@ class Sample:
 
         for channel, idata in self.idata.items():
 
-            idata_df = idata.probe_means[['mean_value']] if light_mode else idata.probe_means
+            # filter out probes with too few beads
+            indexes_low_nb_beads = idata.probe_means.n_beads >= min_beads
+            idata_df = idata.probe_means[indexes_low_nb_beads]
+            LOGGER.debug(f'{len(indexes_low_nb_beads)} probes were deleted from {channel} channel for having less than '
+                         f'{min_beads} beads')
+            idata_df = idata_df[['mean_value']] if light_mode else idata_df
 
-            # merge manifest and mask
+            # merge manifest and mask information
             sample_df = idata_df.join(manifest, how='inner')
-
             if mask is not None:
                 sample_df = sample_df.join(mask, on='probe_id', how='left')
 
@@ -99,75 +104,79 @@ class Sample:
         self.signal_df['mask_info'] = self.signal_df.index.get_level_values('mask_info').fillna('').values
         self.signal_df = self.signal_df.reset_index(level='mask_info', drop=True)
 
+        # mask type I probes that have missing values (because they don't have enough beads).
+        # type II probes with too few beads are automatically filtered out at the beginning as they have no signal value
+        self.masked_indexes = self.type1()[np.any(self.type1().isna(), axis=1)].index
+
     ####################################################################################################################
     # Properties & getters
     ####################################################################################################################
 
-    def get_signal_df(self, mask: bool):
+    def get_signal_df(self, mask: bool = True):
         """Get the methylation signal dataframe, and apply the mask if `mask` is True"""
         if mask:
             return mask_dataframe(self.signal_df, self.masked_indexes)
         else:
             return self.signal_df
 
-    def type1(self, mask: bool) -> pd.DataFrame:
+    def type1(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of Infinium type I probes, and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs('I', level='type', drop_level=False)
 
-    def type2(self, mask: bool) -> pd.DataFrame:
+    def type2(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of Infinium type II probes, and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs('II', level='type', drop_level=False)[[['R', 'U'], ['G', 'M']]]
 
-    def oob_red(self, mask: bool) -> pd.DataFrame:
+    def oob_red(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of out-of-band red probes (for type I probes only), and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs(('I', 'G'), level=['type', 'channel'], drop_level=False)[['R']]
 
-    def oob_green(self, mask: bool) -> pd.DataFrame:
+    def oob_green(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of out-of-band green probes (for type I probes only), and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs(('I', 'R'), level=['type', 'channel'], drop_level=False)[['G']]
 
-    def ib_red(self, mask: bool) -> pd.DataFrame:
+    def ib_red(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of in-band red probes (for type I probes only), and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs('G', level='channel', drop_level=False)[['G']]
 
-    def ib_green(self, mask: bool) -> pd.DataFrame:
+    def ib_green(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of in-band green probes (for type I probes only), and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs('R', level='channel', drop_level=False)[['R']]
 
-    def ib(self, mask: bool) -> pd.DataFrame:
+    def ib(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of in-band probes (for type I probes only), and apply the mask if `mask` is True"""
         return pd.concat([self.ib_red(mask), self.ib_green(mask)])
 
-    def type1_green(self, mask: bool) -> pd.DataFrame:
+    def type1_green(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of type I green probes, and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs(('I', 'G'), level=['type', 'channel'], drop_level=False)
 
-    def type1_red(self, mask: bool) -> pd.DataFrame:
+    def type1_red(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of type I red probes, and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs(('I', 'R'), level=['type', 'channel'], drop_level=False)
 
-    def meth(self, mask: bool) -> pd.DataFrame:
+    def meth(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of methylated probes, and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs('M', level='methylation_state', drop_level=False, axis=1)
 
-    def unmeth(self, mask: bool) -> pd.DataFrame:
+    def unmeth(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of unmethylated probes, and apply the mask if `mask` is True"""
         return self.get_signal_df(mask).xs('U', level='methylation_state', drop_level=False, axis=1)
 
-    def cg_probes(self, mask: bool) -> pd.DataFrame:
+    def cg_probes(self, mask: bool = True) -> pd.DataFrame:
         """Get CG (CpG) type probes, and apply the mask if `mask` is True"""
-        return self.get_probes_with_probe_type(mask, 'cg')
+        return self.get_probes_with_probe_type('cg', mask)
 
-    def ch_probes(self, mask: bool) -> pd.DataFrame:
+    def ch_probes(self, mask: bool = True) -> pd.DataFrame:
         """Get CH (CpH) type probes, and apply the mask if `mask` is True"""
-        return self.get_probes_with_probe_type(mask, 'ch')
+        return self.get_probes_with_probe_type('ch', mask)
 
-    def snp_probes(self, mask: bool) -> pd.DataFrame:
+    def snp_probes(self, mask: bool = True) -> pd.DataFrame:
         """Get SNP type probes ('rs' probes in manifest, but replaced by 'snp' when loaded), and apply the mask if
         `mask` is True"""
-        return self.get_probes_with_probe_type(mask, 'snp')
+        return self.get_probes_with_probe_type('snp', mask)
 
-    def get_probes_with_probe_type(self, mask: bool, probe_type: str) -> pd.DataFrame:
+    def get_probes_with_probe_type(self, probe_type: str, mask: bool = True) -> pd.DataFrame:
         """Select probes by probe type, meaning e.g. CG, Control, SNP... (not infinium type I/II type), and apply the
         mask if `mask` is True"""
         if probe_type not in self.get_signal_df(mask).index.get_level_values('probe_type'):
@@ -176,7 +185,7 @@ class Sample:
 
         return self.get_signal_df(mask).xs(probe_type, level='probe_type', drop_level=False)[['R', 'G']]
 
-    def get_probes_with_probe_ids(self, mask: bool, probe_ids: list[str]) -> pd.DataFrame | None:
+    def get_probes_with_probe_ids(self, probe_ids: list[str], mask: bool = True) -> pd.DataFrame | None:
         """Returns the probes dataframe filtered on a list of probe IDs"""
         if probe_ids is None or len(probe_ids) == 0:
             return None
@@ -184,7 +193,7 @@ class Sample:
         idx = pd.IndexSlice
         return self.get_signal_df(mask).loc[idx[:, :, :, probe_ids], :]
 
-    def oob(self, mask: bool, channel=None) -> pd.DataFrame | None:
+    def oob(self, mask: bool = True, channel=None) -> pd.DataFrame | None:
         """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `mask` is True"""
         if channel is None:
             return pd.concat([self.oob_green(mask), self.oob_red(mask)])
@@ -214,7 +223,7 @@ class Sample:
         if names_to_mask is not None:
             self.mask_names(names_to_mask)
 
-    def mask_names(self, names_to_mask: str) -> None:
+    def mask_names(self, names_to_mask: str, quiet=False) -> None:
         """Match the names provided in `names_to_mask` with the probes mask info and mask these probes, adding them to
         the current mask if there is any.
         `names_to_mask` can be a regex"""
@@ -228,32 +237,42 @@ class Sample:
         to_mask = masked_signal_df.mask_info.str.contains(names_to_mask)
 
         if len(to_mask) == 0:
-            LOGGER.info(f'No new probes masked, {nb_masked_before_add} are already masked')
+            if not quiet:
+                LOGGER.info(f'No new probes masked, {nb_masked_before_add} are already masked')
             return
 
-        self.mask_indexes(to_mask[to_mask].index)
+        self.mask_indexes(to_mask[to_mask].index, quiet)
 
-        LOGGER.info(f'Adding mask, now {self.nb_probes_masked} probes are masked ({nb_masked_before_add} previously)')
-
-    def mask_indexes(self, indexes_to_mask: pd.MultiIndex) -> None:
+    def mask_indexes(self, indexes_to_mask: pd.MultiIndex, quiet=False) -> None:
         """Add a list of indexes to the current mask"""
+        nb_masked_before_add = self.nb_probes_masked
         # no indexes to mask, nothing to do
         if indexes_to_mask is None or len(indexes_to_mask) == 0:
             return
         # no previously masked indexes, just set the property
-        elif self.masked_indexes is None or len(self.masked_indexes) == 0:
+        elif self.masked_indexes is None or nb_masked_before_add == 0:
             self.masked_indexes = indexes_to_mask
         # previously existing masked indexes, append the new ones
         else:
             self.masked_indexes = self.masked_indexes.append(indexes_to_mask).drop_duplicates()
+        if not quiet:
+            LOGGER.info(f'Mask added, {self.nb_probes_masked} probes are masked ({nb_masked_before_add} previously)')
+
+    def apply_quality_mask(self):
+        """Shortcut to apply quality mask on this sample"""
+        self.mask_names(self.annotation.quality_mask_names)
+
+    def apply_non_unique_mask(self):
+        """Shortcut to apply non unique probes mask on this sample"""
+        self.mask_names(self.annotation.non_unique_mask_names)
 
     ####################################################################################################################
     # Control functions
     ####################################################################################################################
 
-    def controls(self, mask: bool, pattern: str | None = None) -> pd.DataFrame | None:
+    def controls(self, mask: bool = True, pattern: str | None = None) -> pd.DataFrame | None:
         """Get the subset of control probes. Match the pattern with the probe_ids if a pattern is provided"""
-        control_df = self.get_probes_with_probe_type(mask, 'ctl')
+        control_df = self.get_probes_with_probe_type('ctl', mask)
 
         if control_df is None or len(control_df) == 0:
             LOGGER.info('No control probes found')
@@ -266,7 +285,7 @@ class Sample:
         matched_ids = probe_ids.str.contains(pattern, flags=re.IGNORECASE)
         return control_df[matched_ids][['R', 'G']]
 
-    def get_normalization_controls(self, mask: bool, average=False) -> dict | pd.DataFrame | None:
+    def get_normalization_controls(self, mask: bool = True, average=False) -> dict | pd.DataFrame | None:
         """Returns the control values to normalize green and red probes. If `average=True`, returns a dict with keys 'G'
         and 'R' containing the average of the control probes. Otherwise, returns a dataframe with selected probes."""
         if self.controls(mask) is None:
@@ -305,7 +324,7 @@ class Sample:
 
         return norm_controls
 
-    def get_negative_controls(self, mask: bool) -> pd.DataFrame | None:
+    def get_negative_controls(self, mask: bool = True) -> pd.DataFrame | None:
         """Get negative control signal"""
         return self.controls(mask, 'negative')
 
@@ -336,19 +355,24 @@ class Sample:
         self.signal_df = self.signal_df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order)
 
     def reset_channel_index(self) -> None:
-        """Set the channel index as the manifest channel"""
+        """Set the channel index as the manifest channel.
+
+        :return None"""
         self.set_channel_index_as('manifest_channel', False)
 
     def infer_type1_channel(self, switch_failed=False, mask_failed=False, summary_only=False) -> None | pd.DataFrame:
         """For Infinium type I probes, infer the channel from the signal values, setting it to the channel with the max
         signal. If max values are equals, the channel is set to R (as opposed to G in sesame).
 
-        `switch_failed`: if set to True, probes with NA values or whose max values are under a threshold (the 95th
-        percentile of the background signals) will be switched back to their original value
+        :param switch_failed: if set to True, probes with NA values or whose max values are under a threshold (the 95th
+        percentile of the background signals) will be switched back to their original value. Default to False.
 
-        `mask_failed`: mask failed probes (same probes as switch_failed)
+        :param mask_failed: mask failed probes (same probes as switch_failed). Default to False.
 
-        `summary_only`: does not replace the sample dataframe, only return the summary (useful for QC)"""
+        :param summary_only: does not replace the sample dataframe, only return the summary (useful for QC). Default to
+        False
+
+        :return None"""
 
         # subset to use
         type1_df = self.signal_df.loc['I'].droplevel('methylation_state', axis=1).copy()
@@ -363,7 +387,9 @@ class Sample:
                                                type1_df.loc[type1_df.inferred_channel == 'G', 'R']])
             bg_max = np.percentile(bg_signal_values, 95)
             failed_idxs = (type1_df.max(axis=1, numeric_only=True) < bg_max) | (type1_df.isna().any(axis=1))
-            LOGGER.info(f'number of failed probes switched back: \n{failed_idxs.groupby("channel").sum()}')
+            nb_failed_idxs = failed_idxs.groupby("channel", observed=True).sum()
+            LOGGER.info(
+                f'number of failed probes switched back: Green {nb_failed_idxs["G"]} - Red {nb_failed_idxs["R"]}')
 
             if not switch_failed:
                 # reset color channel to the value of 'manifest_channel' for failed indexes of type I probes
@@ -371,16 +397,18 @@ class Sample:
                 type1_df.loc[failed_idxs, 'inferred_channel'] = failed_idxs_manifest_values
 
             if mask_failed:
+                LOGGER.info('Masking failed probes')
                 self.mask_indexes(failed_idxs)
 
-        summary = type1_df.groupby(['manifest_channel', 'inferred_channel']).count().max(axis=1)
+        summary = type1_df.groupby(['manifest_channel', 'inferred_channel'], observed=False).count().max(axis=1)
 
         # set the inferred channel as the new 'channel' index
         if not summary_only:
             self.signal_df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
             # make the inferred channel the new channel index
             self.set_channel_index_as('inferred_channel', drop=True)
-            LOGGER.info(f"Type 1 channel inference summary: \n{summary}")
+            LOGGER.info(f"Type 1 channel inference summary: R -> R: {summary['R']['R']} - R -> G: {summary['R']['G']} "
+                        f"- G -> G: {summary['G']['G']} - G -> R: {summary['G']['R']}")
 
         return summary
 
@@ -391,22 +419,31 @@ class Sample:
     def get_mean_ib_intensity(self, mask=True) -> float:
         """Computes the mean intensity of all the in-band measurements. This includes all Type-I in-band measurements
         and all Type-II probe measurements. Both methylated and unmethylated alleles are considered.
-        Switch `mask` to False if you don't want any mask to be applied (default is True)"""
+
+        :param mask : set to False if you don't want any mask to be applied (default is True)
+
+        :return float """
 
         return np.nanmean(np.concatenate([self.ib_red(mask), self.ib_green(mask), self.type2(mask)]))
 
-    def get_total_ib_intensity(self, mask=False) -> pd.DataFrame:
+    def get_total_ib_intensity(self, mask: bool = True) -> pd.DataFrame:
         """Computes the total intensity of all the in-band measurements. This includes all Type-I in-band measurements
         and all Type-II probe measurements. Both methylated and unmethylated alleles are considered.
         Switch `mask` to True if you want the mask to be applied (default is False)"""
 
         return pd.concat([self.ib_red(mask).sum(axis=1), self.ib_green(mask).sum(axis=1), self.type2(mask).sum(axis=1)])
 
-    def get_betas(self, mask: bool, include_out_of_band=False) -> pd.Series:
-        """Calculate beta values for all probes (if mask=false) or unmasked probes (if mask=true).
-        If `include_out_of_band` is set to true, the Type 1 probes Beta values will be calculated on in-band AND
-        out-of-band signal values. If set to false (default), they will be calculated on in-band values only."""
-        df = self.get_signal_df(mask).copy()  # work on a copy, as we don't want these changes to propagate
+    def get_betas(self, mask: bool = True, include_out_of_band=False) -> pd.Series:
+        """Calculate beta values for all probes (if mask is False) or unmasked probes (if mask is True).
+
+        :param mask: If True, apply mask (only get beta values on non-masked probes). If False, return beta values of
+        all probes.
+
+        :param include_out_of_band : is set to true, the Type 1 probes Beta values will be calculated on in-band AND
+        out-of-band signal values. If set to false (default), they will be calculated on in-band values only.
+
+        :return pd.Series"""
+        df = self.get_signal_df(mask).copy().sort_index()  # work on a copy, as we don't want these changes to propagate
         # set NAs for Type II probes to 0, only where no methylation signal is expected
         df.loc['II', [['R', 'M']]] = 0
         df.loc['II', [['G', 'U']]] = 0
@@ -421,7 +458,7 @@ class Sample:
         # use clip function to set minimum values for each term as set in sesame
         return methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
 
-    def dye_bias_correction(self, mask: bool, reference: float | None = None) -> None:
+    def dye_bias_correction(self, mask: bool = True, reference: float | None = None) -> None:
         """ Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If
         the reference level is not given, it is set to the mean intensity of all the in-band signals."""
 
@@ -437,17 +474,18 @@ class Sample:
             factor = reference / norm_values_dict[channel]
             self.signal_df[channel] = self.signal_df[channel] * factor
 
-    def dye_bias_correction_nl(self, mask=False) -> None:
+    def dye_bias_correction_nl(self, mask: bool = True) -> None:
         """Dye bias correction by matching green and red to mid-point.
 
-        This function compares the Type-I Red probes and Type-I Grn probes and generates and mapping to correct signal of
-        the two channels to the middle.
+        This function compares the Type-I Red probes and Type-I Grn probes and generates and mapping to correct signal
+        of the two channels to the middle.
 
-        `mask` : if True include masked probes in Infinium-I probes. No big difference is noted in practice. More probes are
-        generally better.
+        `mask` : if True include masked probes in Infinium-I probes. No big difference is noted in practice. More probes
+        are generally better.
         """
-        LOGGER.info('>>> starting non linear dye bias correction')
         total_intensity_type1 = self.get_total_ib_intensity(False).loc['I']
+
+        # check that there is not too much distortion between the two channels
 
         median_red = np.median(total_intensity_type1.loc['R'])
         median_green = np.median(total_intensity_type1.loc['G'])
@@ -462,9 +500,12 @@ class Sample:
             self.mask_indexes(self.type1_green(True).index)
             return
 
+        # all good, we can apply dye bias correction...
+
         sorted_intensities = {'G': np.sort(get_column_as_flat_array(self.type1_green(mask), 'G')),
                               'R': np.sort(get_column_as_flat_array(self.type1_red(mask), 'R'))}
 
+        # ... if red or green channel intensities are not all 0
         if np.max(sorted_intensities['G']) <= 0 or np.max(sorted_intensities['R']) <= 0:
             LOGGER.warning('Max green or red intensities is <= 0. Aborting dye bias correction.')
             return
@@ -487,15 +528,16 @@ class Sample:
                 below_range = (data < min_intensity) & (~np.isnan(data))
                 data[within_range] = np.interp(x=data[within_range], xp=channel_intensities, fp=midpoint_intensities)
                 data[above_range] = data[above_range] - max_intensity + max_midpoint_intensity
-                data[below_range] = data[below_range] * (min_midpoint_intensity / min_intensity)
+                if min_intensity == 0:
+                    data[below_range] = np.nan
+                else:
+                    data[below_range] = data[below_range] * (min_midpoint_intensity / min_intensity)
                 return data
 
             self.signal_df.loc[:, [[channel, 'M']]] = fit_function(self.signal_df[[[channel, 'M']]].values)
             self.signal_df.loc[:, [[channel, 'U']]] = fit_function(self.signal_df[[[channel, 'U']]].values)
 
-        LOGGER.info('non linear dye bias correction done\n')
-
-    def noob_background_correction(self, mask: bool, use_negative_controls=True, offset=15) -> None:
+    def noob_background_correction(self, mask: bool = True, use_negative_controls=True, offset=15) -> None:
         """
         Subtract the background. Background was modelled in a normal distribution and true signal in an exponential
         distribution. The Norm-Exp deconvolution is parameterized using Out-Of-Band (oob) probes. Multi-mapping probes
@@ -503,10 +545,10 @@ class Sample:
         If `use_negative_controls=True`, background will be calculated with both negative control and out-of-band probes
         """
         # mask non unique probes - saves previous mask to reset it afterwards
-        previous_masked_indexes = self.masked_indexes
+        previous_masked_indexes = self.masked_indexes.copy()
         if not mask:
             self.reset_mask()
-        self.mask_names(self.annotation.non_unique_mask_names)
+        self.mask_names(self.annotation.non_unique_mask_names, quiet=True)
 
         # Background = out-of-band type 1 probes + (optionally) negative controls
         background_df = self.oob(True)
@@ -545,7 +587,7 @@ class Sample:
             self.signal_df.loc[:, [[channel, 'M']]] = meth_corrected_signal
             self.signal_df.loc[:, [[channel, 'U']]] = unmeth_corrected_signal
 
-    def scrub_background_correction(self, mask: bool) -> None:
+    def scrub_background_correction(self, mask: bool = True) -> None:
         """Subtract residual background using background median.
         This function is meant to be used after noob."""
 
@@ -557,17 +599,19 @@ class Sample:
                 idx = [[channel, methylation_state]]
                 self.signal_df.loc[:, idx] = np.clip(self.signal_df[idx] - median_bg[channel], a_min=1, a_max=None)
 
-    def poobah(self, mask: bool, use_negative_controls=True, threshold=0.05) -> None:
+    def poobah(self, mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
         """Detection P-value based on empirical cumulative distribution function (ECDF) of out-of-band signal
         aka pOOBAH (p-vals by Out-Of-Band Array Hybridization).
         Parameter `threshold` is used to output a mask based on the p_values.
         Return a dataframe with columns `p_value` and `mask`."""
 
         # mask non-unique probes - but first save previous mask to reset it afterward
-        previous_masked_indexes = self.masked_indexes
+        previous_masked_indexes = self.masked_indexes.copy()
         if not mask:
             self.reset_mask()
-        self.mask_names(self.annotation.non_unique_mask_names)
+
+        # quiet = true because we don't want to log the mask change as it will be reset at the end
+        self.mask_names(self.annotation.non_unique_mask_names, quiet=True)
 
         # Background = out-of-band type 1 probes + (optionally) negative controls
         background_df = self.oob(True)
