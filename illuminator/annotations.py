@@ -132,16 +132,16 @@ class Annotations:
         tsv_filename = tsv_filepath.name
 
         dl_link = f'https://github.com/zhou-lab/InfiniumAnnotationV1/raw/main/Anno/{self.array_type}/{tsv_filename}'
-        LOGGER.info(f'file {tsv_filename} not found in {data_folder}, trying to download it from {dl_link}')
+        LOGGER.debug(f'file {tsv_filename} not found in {data_folder}, trying to download it from {dl_link}')
 
         os.makedirs(data_folder, exist_ok=True)  # create destination directory
 
         try:
             urllib.request.urlretrieve(dl_link, tsv_filepath)
-            LOGGER.info(f'download successful')
+            LOGGER.debug(f'download successful')
         except:
             link = 'https://zwdzwd.github.io/InfiniumAnnotation'
-            LOGGER.info(f'download failed, download it from {link} and add it to the {data_folder} folder')
+            LOGGER.info(f'download failed, download {tsv_filename} from {link} and add it to the {data_folder} folder')
             return -1
 
         return 1

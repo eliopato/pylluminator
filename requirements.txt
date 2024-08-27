@@ -2,6 +2,7 @@ ailist==2.1.3
 Cython==3.0.11
 joblib==1.4.2
 linear_segment==1.2.0
+matplotlib==3.9.2
 natsort==8.4.0
 ncls==0.0.68
 notebook==7.2.1

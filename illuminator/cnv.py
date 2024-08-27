@@ -77,7 +77,7 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
     # keep only probes that are in all 3 files (target methylation, normalization methylation and genome ranges)
     overlapping_probes = [p for p in target_intensity.index if
                           p in norm_intensities.index and p in probe_coords_df.index]
-    LOGGER.info(f'Keeping {len(overlapping_probes)} overlapping probes')
+    LOGGER.debug(f'Keeping {len(overlapping_probes)} overlapping probes')
     target_intensity = target_intensity.loc[overlapping_probes]
     norm_intensities = norm_intensities.loc[overlapping_probes]
     probe_coords_df = probe_coords_df.loc[overlapping_probes]

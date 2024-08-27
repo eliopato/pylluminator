@@ -32,12 +32,18 @@ class Samples:
         """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
         information from the sample sheet and follow this naming convention:
         `[sentrix ID]*[sentrix position]*[channel].idat` where the `*` can be any characters.
-        `channel` must be spelled `Red` or Grn`."""
+        `channel` must be spelled `Red` or Grn`.
+
+        :param datadir: string or path-like pointing to the directory where sesame files are
+        :param max_samples: (optional, int or None, default to None) to only load N samples to speed up the process
+            (useful for testing purposes)
+
+        :return: None"""
 
         LOGGER.info(f'>> start reading sample files from {datadir}')
 
         if self.sample_sheet is None:
-            LOGGER.info('No sample sheet provided, creating one')
+            LOGGER.debug('No sample sheet provided, creating one')
             self.sample_sheet, _ = sample_sheet.create_from_idats(datadir)
 
         # for each sample
@@ -55,7 +61,7 @@ class Samples:
                 if len(paths) > 1:
                     LOGGER.error(f'Too many files found matching {pattern} : {paths}')
                     continue
-                LOGGER.info(f'reading file {paths[0]}')
+                LOGGER.debug(f'reading file {paths[0]}')
                 # set the sample's idata for this channel
                 sample.set_idata(channel, IdatDataset(paths[0]))
 
@@ -68,20 +74,30 @@ class Samples:
 
         LOGGER.info(f'reading sample files done\n')
 
-    def merge_annotation_info(self, annotation: Annotations) -> None:
+    def merge_annotation_info(self, annotation: Annotations, light_mode=True) -> None:
         """For all samples, call the function to merge manifest and mask information to the methylation signal data
-        read from idat files."""
+        read from idat files.
+
+        :param annotation: Annotations object with genome version and array type corresponding to the data stored
+        :param light_mode: (optional, default True) if True, load only the required columns to speed up the process
+
+        :return: None
+        """
 
         self.annotation = annotation
         LOGGER.info(f'>> start merging manifest and sample data frames')
         for sample in self.samples.values():
-            sample.merge_annotation_info(self.annotation)
+            sample.merge_annotation_info(self.annotation, light_mode)
         LOGGER.info(f'done merging manifest and sample data frames\n')
 
     @staticmethod
     def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations):
         """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
-        Return a Samples object"""
+
+        :param datadir: string or path-like pointing to the directory where sesame files are
+        :param annotation: Annotations object with genome version and array type corresponding to the data stored
+
+        :return: a Samples object"""
         LOGGER.info(f'>> start reading sesame files')
         samples = Samples(None)
         samples.annotation = annotation
@@ -97,12 +113,8 @@ class Samples:
         LOGGER.info(f'done reading sesame files\n')
         return samples
 
-    ####################################################################################################################
-    # Processing methods
-    ####################################################################################################################
-
     def __getattr__(self, method_name):
-        """Wrapper for Sample preprocessing methods that can directly be applied to every sample"""
+        """Wrapper for Sample methods that can directly be applied to every sample"""
 
         def method(*args, **kwargs):
             LOGGER.info(f'>> start {method_name}')
@@ -122,17 +134,22 @@ class Samples:
                 method.__doc__ = getattr(Sample, method_name).__doc__
                 setattr(self, method_name, method)
 
-    def get_betas(self, mask: bool = True, include_out_of_band: bool = False) -> pd.DataFrame:
+    ####################################################################################################################
+    # Processing methods
+    ####################################################################################################################
+
+    def get_betas(self, mask: bool = True, include_out_of_band: bool = True) -> pd.DataFrame:
         """Compute beta values for all samples.
-        Set `mask` to True to apply current mask to each sample.
-        Set `include_out_of_band` to true to include Out-of-band signal of Type I probes in the Beta values
-        Return a dataframe with samples as column, and probes (multi-indexed) as rows """
-        betas_dict = {}
+        :param mask: set to True to apply current mask to each sample.
+        :param include_out_of_band: set to true to include Out-of-band signal of Type I probes in the Beta values
+        :return: a dataframe with samples as column, and probes (multi-indexed) as rows """
         LOGGER.info(f'>> start calculating betas')
-        for name, sample in self.samples.items():
-            betas_dict[name] = sample.get_betas(mask, include_out_of_band)
+        betas_list = []
+        for sample in self.samples.values():
+            betas_list.append(sample.get_betas(mask, include_out_of_band))
+        betas_df = pd.concat(betas_list, axis=1)
         LOGGER.info(f'done calculating betas\n')
-        return pd.DataFrame(betas_dict)
+        return betas_df
 
     ####################################################################################################################
     # Properties
@@ -140,7 +157,8 @@ class Samples:
 
     @property
     def nb_samples(self) -> int:
-        """Count the number of samples contained in the object"""
+        """Count the number of samples contained in the object
+        :return: int"""
         return len(self.samples)
 
     ####################################################################################################################
@@ -167,11 +185,15 @@ class Samples:
         description += '\n=====================================================================\n'
         return description
 
-    def save(self, filepath: str):
-        """Save the current Samples object to `filepath`, as a pickle file"""
+    def save(self, filepath: str) -> None:
+        """Save the current Samples object to `filepath`, as a pickle file
+
+        :return: None"""
         save_object(self, filepath)
 
     @staticmethod
     def load(filepath: str):
-        """Load a pickled Samples object from `filepath`"""
+        """Load a pickled Samples object from `filepath`
+
+        :return: the loaded object"""
         return load_object(filepath, Samples)

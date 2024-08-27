@@ -100,7 +100,6 @@ def get_resource_folder(module_path: str, create_if_not_exist=True) -> Multiplex
             return None
         parent_module = '.'.join(modules[:-1])
         child_module = modules[-1]
-        LOGGER.info(f'parent {parent_module} child {child_module}')
         # recursively check that parent directories exist
         parent_posix = get_resource_folder(parent_module)
         # once the parents exist, create the child
@@ -141,10 +140,10 @@ def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: st
         # check that it doesn't already exist :
         matching_files = get_files_matching(target_directory, f'{gsm_id}*idat*')
         if len(matching_files) >= 2:
-            LOGGER.info(f'idat files already exist for {gsm_id} in {target_directory}, skipping. ({matching_files}')
+            LOGGER.debug(f'idat files already exist for {gsm_id} in {target_directory}, skipping. ({matching_files}')
             continue
         # otherwise, start downloading
-        LOGGER.info(f'downloading {gsm_id}')
+        LOGGER.debug(f'downloading {gsm_id}')
         target_file = f'{target_directory}/{gsm_id}.tar'
         dl_link = f'https://www.ncbi.nlm.nih.gov/geo/download/?acc={gsm_id}&format=file'
         try:
@@ -157,3 +156,19 @@ def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: st
             tar_ref.extractall(target_directory, filter='data')
         # delete the tar file
         os.remove(target_file)
+
+
+def get_chromosome_number(chromosome_id: str | list[str]) -> list[int] | int | None:
+    """From a string representing the chromosome ID, get the chromosome number. E.g. 'chr22' -> 22. If the input
+    is not a numbered chromosome, return np.nan. The string part has to be only 'chr', not case-sensitive
+    :param chromosome_id : input string or list of strings
+    :return: the chromosome number as an integer, or np.nan if not applicable"""
+
+    if isinstance(chromosome_id, list):
+        return [get_chromosome_number(chr_id) for chr_id in chromosome_id]
+
+    trimmed_str = chromosome_id.lower().replace('chr', '')
+    if trimmed_str.isdigit():
+        return int(trimmed_str)
+
+    return None

@@ -141,20 +141,20 @@ def betas_stats(sample: Sample, mask=False):
     sample.dye_bias_correction_nl(mask)
     sample.noob_background_correction(mask)
     sample.poobah(mask)
-    betas_df = sample.get_betas(mask)
+    betas = sample.get_betas(mask)[sample.name]  # get betas as a pd.Series
 
-    print_value('Mean', betas_df.mean())
-    print_value('Median', betas_df.median())
-    nb_non_na = len(betas_df.dropna())
-    print_pct('Unmethylated fraction (beta < 0.3)', len(betas_df[betas_df < 0.3])/nb_non_na)
-    print_pct('Methylated fraction (beta > 0.7)', len(betas_df[betas_df > 0.7])/nb_non_na)
-    nb_na = len(betas_df) - nb_non_na
+    print_value('Mean', betas.mean())
+    print_value('Median', betas.median())
+    nb_non_na = len(betas.dropna())
+    print_pct('Unmethylated fraction (beta < 0.3)', len(betas[betas < 0.3])/nb_non_na)
+    print_pct('Methylated fraction (beta > 0.7)', len(betas[betas > 0.7])/nb_non_na)
+    nb_na = len(betas) - nb_non_na
     print_value('Number of NAs', nb_na)
-    print_pct('Fraction of NAs', nb_na / len(betas_df))
+    print_pct('Fraction of NAs', nb_na / len(betas))
 
     for probe_type in 'cg', 'ch', 'snp':
         print(f'------ {probe_type} probes ------')
-        subset_df = betas_df.xs(probe_type, level='probe_type')
+        subset_df = betas.xs(probe_type, level='probe_type')
         print_value('Mean', subset_df.mean())
         print_value('Median', subset_df.median())
         nb_non_na = len(subset_df.dropna())

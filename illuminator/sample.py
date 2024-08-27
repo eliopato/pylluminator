@@ -31,6 +31,7 @@ class Sample:
         self.name = name
         self.annotation = None
         self.masked_indexes = None
+        self.forever_masked = None
 
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
         """Add idata dataset to the sample idat dictionary, for the channel key passed in the argument"""
@@ -107,6 +108,8 @@ class Sample:
         # mask type I probes that have missing values (because they don't have enough beads).
         # type II probes with too few beads are automatically filtered out at the beginning as they have no signal value
         self.masked_indexes = self.type1()[np.any(self.type1().isna(), axis=1)].index
+        # these probes should stay masked no matter what
+        self.forever_masked = self.masked_indexes
 
     ####################################################################################################################
     # Properties & getters
@@ -216,10 +219,11 @@ class Sample:
             return 0
         return len(self.masked_indexes)
 
-    def reset_mask(self, names_to_mask: str | None = None):
+    def reset_mask(self, names_to_mask: str | None = None, quiet=False):
         """Reset the mask to None (=no probe masked) and optionally set it to a new mask if `names_to_mask` is set"""
-        LOGGER.info('Resetting mask')
-        self.masked_indexes = None
+        if not quiet:
+            LOGGER.debug('Resetting mask')
+        self.masked_indexes = self.forever_masked
         if names_to_mask is not None:
             self.mask_names(names_to_mask)
 
@@ -256,7 +260,7 @@ class Sample:
         else:
             self.masked_indexes = self.masked_indexes.append(indexes_to_mask).drop_duplicates()
         if not quiet:
-            LOGGER.info(f'Mask added, {self.nb_probes_masked} probes are masked ({nb_masked_before_add} previously)')
+            LOGGER.debug(f'Mask added, {self.nb_probes_masked} probes are masked ({nb_masked_before_add} previously)')
 
     def apply_quality_mask(self):
         """Shortcut to apply quality mask on this sample"""
@@ -357,7 +361,7 @@ class Sample:
     def reset_channel_index(self) -> None:
         """Set the channel index as the manifest channel.
 
-        :return None"""
+        :return: None"""
         self.set_channel_index_as('manifest_channel', False)
 
     def infer_type1_channel(self, switch_failed=False, mask_failed=False, summary_only=False) -> None | pd.DataFrame:
@@ -372,7 +376,7 @@ class Sample:
         :param summary_only: does not replace the sample dataframe, only return the summary (useful for QC). Default to
         False
 
-        :return None"""
+        :return: None"""
 
         # subset to use
         type1_df = self.signal_df.loc['I'].droplevel('methylation_state', axis=1).copy()
@@ -388,7 +392,7 @@ class Sample:
             bg_max = np.percentile(bg_signal_values, 95)
             failed_idxs = (type1_df.max(axis=1, numeric_only=True) < bg_max) | (type1_df.isna().any(axis=1))
             nb_failed_idxs = failed_idxs.groupby("channel", observed=True).sum()
-            LOGGER.info(
+            LOGGER.debug(
                 f'number of failed probes switched back: Green {nb_failed_idxs["G"]} - Red {nb_failed_idxs["R"]}')
 
             if not switch_failed:
@@ -397,7 +401,7 @@ class Sample:
                 type1_df.loc[failed_idxs, 'inferred_channel'] = failed_idxs_manifest_values
 
             if mask_failed:
-                LOGGER.info('Masking failed probes')
+                LOGGER.debug('Masking failed probes')
                 self.mask_indexes(failed_idxs)
 
         summary = type1_df.groupby(['manifest_channel', 'inferred_channel'], observed=False).count().max(axis=1)
@@ -407,8 +411,8 @@ class Sample:
             self.signal_df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
             # make the inferred channel the new channel index
             self.set_channel_index_as('inferred_channel', drop=True)
-            LOGGER.info(f"Type 1 channel inference summary: R -> R: {summary['R']['R']} - R -> G: {summary['R']['G']} "
-                        f"- G -> G: {summary['G']['G']} - G -> R: {summary['G']['R']}")
+            LOGGER.debug(f"type 1 channel inference summary: R -> R: {summary['R']['R']} - R -> G: {summary['R']['G']} "
+                         f"- G -> G: {summary['G']['G']} - G -> R: {summary['G']['R']}")
 
         return summary
 
@@ -422,7 +426,7 @@ class Sample:
 
         :param mask : set to False if you don't want any mask to be applied (default is True)
 
-        :return float """
+        :return: float """
 
         return np.nanmean(np.concatenate([self.ib_red(mask), self.ib_green(mask), self.type2(mask)]))
 
@@ -433,21 +437,23 @@ class Sample:
 
         return pd.concat([self.ib_red(mask).sum(axis=1), self.ib_green(mask).sum(axis=1), self.type2(mask).sum(axis=1)])
 
-    def get_betas(self, mask: bool = True, include_out_of_band=False) -> pd.Series:
+    def get_betas(self, mask: bool = True, include_out_of_band=False) -> pd.DataFrame:
         """Calculate beta values for all probes (if mask is False) or unmasked probes (if mask is True).
 
         :param mask: If True, apply mask (only get beta values on non-masked probes). If False, return beta values of
         all probes.
 
-        :param include_out_of_band : is set to true, the Type 1 probes Beta values will be calculated on in-band AND
-        out-of-band signal values. If set to false (default), they will be calculated on in-band values only.
+        :param include_out_of_band : is set to true (default), the Type 1 probes Beta values will be calculated on
+        in-band AND out-of-band signal values. If set to false, they will be calculated on in-band values only.
+        equivalent to sumTypeI in sesame
 
-        :return pd.Series"""
+        :return: pd.DataFrame with probes as rows and sample as column"""
+
         df = self.get_signal_df(mask).copy().sort_index()  # work on a copy, as we don't want these changes to propagate
         # set NAs for Type II probes to 0, only where no methylation signal is expected
         df.loc['II', [['R', 'M']]] = 0
         df.loc['II', [['G', 'U']]] = 0
-        # set out-of-band signal to 0 if the option sum_type1 is not activated
+        # set out-of-band signal to 0 if the option include_out_of_band is not activated
         if not include_out_of_band:
             idx = pd.IndexSlice
             df.loc[idx['I', 'G'], 'R'] = 0
@@ -455,8 +461,11 @@ class Sample:
         # now we can calculate beta values
         methylated_signal = df['R', 'M'] + df['G', 'M']
         unmethylated_signal = df['R', 'U'] + df['G', 'U']
+
         # use clip function to set minimum values for each term as set in sesame
-        return methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
+        beta_values = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
+
+        return pd.DataFrame(beta_values, columns=[self.name])
 
     def dye_bias_correction(self, mask: bool = True, reference: float | None = None) -> None:
         """ Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If
@@ -496,7 +505,7 @@ class Sample:
         red_green_distortion = (top_20_median_red / top_20_median_green) / (median_red / median_green)
 
         if red_green_distortion is None or red_green_distortion > 10:
-            LOGGER.info(f'Red-Green distortion is too high ({red_green_distortion}. Masking green probes')
+            LOGGER.debug(f'Red-Green distortion is too high ({red_green_distortion}. Masking green probes')
             self.mask_indexes(self.type1_green(True).index)
             return
 
@@ -547,7 +556,7 @@ class Sample:
         # mask non unique probes - saves previous mask to reset it afterwards
         previous_masked_indexes = self.masked_indexes.copy()
         if not mask:
-            self.reset_mask()
+            self.reset_mask(quiet=True)
         self.mask_names(self.annotation.non_unique_mask_names, quiet=True)
 
         # Background = out-of-band type 1 probes + (optionally) negative controls
@@ -608,7 +617,7 @@ class Sample:
         # mask non-unique probes - but first save previous mask to reset it afterward
         previous_masked_indexes = self.masked_indexes.copy()
         if not mask:
-            self.reset_mask()
+            self.reset_mask(quiet=True)
 
         # quiet = true because we don't want to log the mask change as it will be reset at the end
         self.mask_names(self.annotation.non_unique_mask_names, quiet=True)
@@ -623,11 +632,11 @@ class Sample:
         bg_red = get_column_as_flat_array(background_df, 'R', remove_na=True)
 
         if np.sum(bg_red, where=~np.isnan(bg_red)) <= 100:
-            LOGGER.info('Not enough out of band signal, use empirical prior')
+            LOGGER.debug('Not enough out of band signal, use empirical prior')
             bg_red = [n for n in range(1000)]
 
         if np.sum(bg_green, where=~np.isnan(bg_green)) <= 100:
-            LOGGER.info('Not enough out of band signal, use empirical prior')
+            LOGGER.debug('Not enough out of band signal, use empirical prior')
             bg_green = [n for n in range(1000)]
 
         # reset mask
@@ -660,7 +669,7 @@ class Sample:
     def from_sesame(filepath: str | os.PathLike, annotation: Annotations, name: str | None = None):
         """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object. """
 
-        LOGGER.info(f'read {filepath}')
+        LOGGER.debug(f'read {filepath}')
 
         if name is None:
             name = Path(filepath).stem

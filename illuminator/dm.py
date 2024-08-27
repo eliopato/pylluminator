@@ -33,16 +33,16 @@ def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names
 def get_dml(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame) -> pd.DataFrame | None:
     """Find Differentially Methylated Locus (DML)
 
-    Parameters
-    ---------------
-    `betas` : DataFrame returned by Samples.get_betas() : beta values of all the samples to use to find DMRs
-    `formula` : R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
-    `sample_sheet` : dataframe containing the metadata used in the model, typically a samplesheet. It must have the
+    :param betas: DataFrame returned by Samples.get_betas() : beta values of all the samples to use to find DMRs
+    :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
+    :param sample_sheet: dataframe containing the metadata used in the model, typically a samplesheet. It must have the
     samples' names in a column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex']).
 
     more info on  design matrices and formulas:
         - https://www.statsmodels.org/devel/gettingstarted.html
         - https://patsy.readthedocs.io/en/latest/overview.html"""
+
+    LOGGER.info(f'>>> Start get DML')
 
     # check the input
     if 'sample_name' not in sample_sheet.columns:
@@ -74,6 +74,8 @@ def get_dml(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame) -> pd
             return get_model_parameters(row, design_matrix, factor_names)
         result_array = Parallel(n_jobs=-1)(delayed(wrapper_get_model_parameters)(row[1:]) for row in betas.itertuples())
 
+    LOGGER.info(f'get DML done')
+
     return pd.DataFrame(result_array, index=betas.index, columns=column_names)
 
 
@@ -81,15 +83,17 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
             dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
     """Find Differentially Methylated Regions (DMR) based on euclidian distance between Beta values
 
-    Parameters:
-    -------------------
-    `betas` : DataFrame returned by Samples.get_betas() : beta values of all the samples to use to find DMRs
-    `annotation` : samples' annotation information
-    `dml` : DataFrame returned by get_dml(), with p-values and statistics for each locus
-    `dist_cutoff`: cutoff used to find change points between DMRs, used on euclidian distance between beta values
-    `seg_per_locus`: used if dist_cutoff is not set : defines what quartile should be used as a distance cut-off. Higher
-    values leads to more segments. Should be 0 < seg_per_locus < 1, default is 0.5
+    :param betas: DataFrame returned by Samples.get_betas() : beta values of all the samples to use to find DMRs
+    :param annotation: samples' annotation information
+    :param dml: DataFrame returned by get_dml(), with p-values and statistics for each locus
+    :param dist_cutoff: cutoff used to find change points between DMRs, used on euclidian distance between beta values
+    :param seg_per_locus: used if dist_cutoff is not set : defines what quartile should be used as a distance cut-off.
+    Higher values leads to more segments. Should be 0 < seg_per_locus < 1, default is 0.5.
+
+    :return: pd.DataFrame with DMRs
     """
+
+    LOGGER.info(f'>>> Start get DMR')
 
     # data init.
     betas = betas.reset_index().set_index('probe_id')
@@ -129,11 +133,11 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dml: pd.DataFrame,
             seg_per_locus = 0.5
         # dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
         dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
-        LOGGER.info(f'Segments per locus : {seg_per_locus}')
+        LOGGER.debug(f'Segments per locus : {seg_per_locus}')
 
     if dist_cutoff <= 0:
         LOGGER.warning(f'Euclidian distance cutoff for DMP should be > 0')
-    LOGGER.info(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
+    LOGGER.debug(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
 
     # find change points
     change_points = last_probe_in_chromosome | (beta_euclidian_dist > dist_cutoff)
