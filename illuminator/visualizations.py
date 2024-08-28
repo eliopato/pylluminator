@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
 from scipy.cluster.hierarchy import linkage, dendrogram
+import seaborn as sns
 
 from illuminator.sample import Sample
 from illuminator.samples import Samples
@@ -139,3 +140,23 @@ def plot_nb_probes_and_types_per_chr(sample: Sample | Samples, title: None | str
             title = f'Number of probes per chromosome and type for {sample.nb_samples} samples'
 
     fig.suptitle(title)
+
+########################################################################################################################
+
+
+def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 100, keep_na=True) -> None:
+    """Plot a heatmap of the probes that are the most differentially methylated.
+
+    :param dmp: (pd.DataFrame) p-values and statistics for each probe, as returned by get_dmp()
+    :param betas: (pd.DataFrame) beta values as output from sample[s].get_betas() rows are probes and columns sample-s
+    :param nb_probes: (optional, int) number of probes to plot (default is 100)
+    :param keep_na: (optional, bool) set to False to drop probes with any NA beta values (default to True)
+
+    :return: None"""
+    if not keep_na:
+        dmp = dmp.dropna()
+
+    most_variable_probes = dmp.sort_values('p_value')[:nb_probes].index
+    idx = pd.IndexSlice
+    most_variable_probes_betas = betas.loc[idx[:, :, :, most_variable_probes], :]
+    sns.heatmap(most_variable_probes_betas.sort_values(betas.columns[0]))

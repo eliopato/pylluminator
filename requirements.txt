@@ -15,6 +15,7 @@ python-dateutil==2.9.0.post0
 pytz==2024.1
 scikit-learn==1.5.1
 scipy==1.14.0
+seaborn==0.13.2
 setuptools>=72.1.0
 six==1.16.0
 sorted_nearest==0.0.39
