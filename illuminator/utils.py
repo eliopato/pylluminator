@@ -68,20 +68,33 @@ def save_object(object_to_save, filepath: str):
         pickle.dump(object_to_save, f)
 
 
-def load_object(filepath: str, object_type):
-    """Load any object from a pickle file"""
-    LOGGER.info(f'Loading {object_type} object from {filepath}')
+def load_object(filepath: str, object_type=None):
+    """Load any object from a pickle file:
+
+    :param filepath: (str) full path to the object to load. The file *MUST* be in pickle format
+    :param object_type: (optional) type of the object, so that the function checks that it has the right type
+
+    :return: loaded object"""
+
+    LOGGER.info(f'Loading {object_type if object_type is not None else ""} object from {filepath}')
     with open(filepath, 'rb') as f:
         loaded_object = pickle.load(f)
 
-    if not isinstance(loaded_object, object_type):
-        LOGGER.error(f'The saved object type {type(loaded_object)} doesnt match the requested type ({object_type})')
+    if object_type is not None:
+        if not isinstance(loaded_object, object_type):
+            LOGGER.error(f'The saved object type {type(loaded_object)} doesnt match the requested type ({object_type})')
 
     return loaded_object
 
 
 def get_resource_folder(module_path: str, create_if_not_exist=True) -> MultiplexedPath | None:
-    """Find the resource folder, and creates it if it doesn't exist and if the parameter is set to True (default)"""
+    """Find the resource folder, and creates it if it doesn't exist and if the parameter is set to True (default)
+
+    :param module_path: (str) path in a module format (e.g. "illuminator.data.genomes")
+    :param create_if_not_exist: (bool, optional, default True) if the module directory doesn't exist, create it and its
+        parents if necessary
+
+    :return: path to the folder as a MultiplexedPath if it was found/created, None otherwise"""
 
     # check that the input module path is OK
     if not module_path.startswith('illuminator.data'):
