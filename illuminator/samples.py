@@ -25,6 +25,32 @@ class Samples:
         self.sample_sheet = sample_sheet_df
         self.samples = {}
 
+    def __getitem__(self, item: int | str):
+        if isinstance(item, int):
+            return self.samples[list(self.samples.keys())[item]]
+        return self.samples[item]
+
+    def __getattr__(self, method_name):
+        """Wrapper for Sample methods that can directly be applied to every sample"""
+
+        supported_functions = ['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
+                               'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
+                               'apply_non_unique_mask']
+
+        if callable(getattr(Sample, method_name)) and method_name in supported_functions:
+            def method(*args, **kwargs):
+                LOGGER.info(f'>> start {method_name}')
+                for sample in self.samples.values():
+                    getattr(sample, method_name)(*args, **kwargs)
+                LOGGER.info(f'done with {method_name}\n')
+
+            method.__name__ = method_name
+            method.__doc__ = getattr(Sample, method_name).__doc__
+            method.__signature__ = signature(getattr(Sample, method_name))
+            return method
+
+        LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
+
     def read_samples(self, datadir: str | os.PathLike | MultiplexedPath, max_samples: int | None = None) -> None:
         """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
         information from the sample sheet and follow this naming convention:
@@ -109,27 +135,6 @@ class Samples:
 
         LOGGER.info(f'done reading sesame files\n')
         return samples
-
-    def __getattr__(self, method_name):
-        """Wrapper for Sample methods that can directly be applied to every sample"""
-
-        supported_functions = ['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
-                               'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
-                               'apply_non_unique_mask']
-
-        if callable(getattr(Sample, method_name)) and method_name in supported_functions:
-            def method(*args, **kwargs):
-                LOGGER.info(f'>> start {method_name}')
-                for sample in self.samples.values():
-                    getattr(sample, method_name)(*args, **kwargs)
-                LOGGER.info(f'done with {method_name}\n')
-
-            method.__name__ = method_name
-            method.__doc__ = getattr(Sample, method_name).__doc__
-            method.__signature__ = signature(getattr(Sample, method_name))
-            return method
-
-        LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
 
 
     ####################################################################################################################
