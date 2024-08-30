@@ -12,7 +12,7 @@ from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
 from illuminator.annotations import Annotations
-from illuminator.utils import remove_probe_suffix
+from illuminator.utils import remove_probe_suffix, set_level_as_index
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,12 +40,12 @@ def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names
 
 
 def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_na=True) -> pd.DataFrame | None:
-    """Find Differentially Methylated Locus (DMP)
+    """Find Differentially Methylated Probes (DMP)
 
     :param betas: (pd.DataFrame) beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
     :param formula: (string) R-like formula used in the design matrix to describe the statistical model.
         e.g. '~age + sex'
-        more info on  design matrices and formulas:
+        More info on  design matrices and formulas:
             - https://www.statsmodels.org/devel/gettingstarted.html
             - https://patsy.readthedocs.io/en/latest/overview.html
     :param sample_sheet: (pd.DataFrame) metadata used in the model, typically a samplesheet. It must have the samples'
@@ -67,8 +67,7 @@ def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_
         betas = betas.dropna()
 
     # data init.
-    betas = betas.reset_index().set_index('probe_id')
-    betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
+    betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     # make the design matrix
     sample_info = sample_sheet.set_index('sample_name')
@@ -81,7 +80,6 @@ def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_
     column_names = ['p_value']
     for factor in factor_names:
         column_names.extend([f't_value_{factor}', f'estimate_{factor}', f'std_err_{factor}'])
-    column_dtypes = ['float64']  * len(column_names)
 
     # if it's a small dataset, don't parallelize
     if len(betas) <= 10000:
@@ -116,7 +114,7 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
     LOGGER.info(f'>>> Start get DMR')
 
     # data init.
-    betas = betas.reset_index().set_index('probe_id')
+    betas = set_level_as_index(betas, 'probe_id', drop_others=True)
     betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
     # get genomic range information (for chromosome id and probe position)

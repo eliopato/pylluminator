@@ -7,7 +7,7 @@ import seaborn as sns
 
 from illuminator.sample import Sample
 from illuminator.samples import Samples
-from illuminator.utils import get_chromosome_number
+from illuminator.utils import get_chromosome_number, set_level_as_index
 
 
 def plot_betas(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None) -> None:
@@ -144,19 +144,101 @@ def plot_nb_probes_and_types_per_chr(sample: Sample | Samples, title: None | str
 ########################################################################################################################
 
 
-def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 100, keep_na=True) -> None:
-    """Plot a heatmap of the probes that are the most differentially methylated.
+def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 100, keep_na=False) -> None:
+    """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
+    probes with dendrograms on the sides.
 
     :param dmp: (pd.DataFrame) p-values and statistics for each probe, as returned by get_dmp()
     :param betas: (pd.DataFrame) beta values as output from sample[s].get_betas() rows are probes and columns sample-s
     :param nb_probes: (optional, int) number of probes to plot (default is 100)
-    :param keep_na: (optional, bool) set to False to drop probes with any NA beta values (default to True)
+    :param keep_na: (optional, bool) set to False to drop probes with any NA beta values (default to False). Note that
+        if set to True, the rendered plot won't show the hierarchical clusters
 
     :return: None"""
-    if not keep_na:
-        dmp = dmp.dropna()
 
-    most_variable_probes = dmp.sort_values('p_value')[:nb_probes].index
-    idx = pd.IndexSlice
-    most_variable_probes_betas = betas.loc[idx[:, :, :, most_variable_probes], :]
-    sns.heatmap(most_variable_probes_betas.sort_values(betas.columns[0]))
+    # sort betas per p-value
+    sorted_probes = dmp.sort_values('p_value').index
+    sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes]
+
+    if keep_na:
+        sns.heatmap(sorted_betas[:nb_probes].sort_values(betas.columns[0]))
+    else:
+        sns.clustermap(sorted_betas.dropna()[:nb_probes])
+
+
+def manhattan_plot(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', value_col='p_value',
+                   annotation_col='probe_id', log10=True, title: None | str = None) -> None:
+    """Display a Manhattan plot of the given data.
+
+    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
+    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
+        `data_to_plot` dataframe.
+    :param value_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
+    :param annotation_col: (optional, string, default 'probe_id') the name of a column used to write annotation on the
+        plots for data that is above the significant threshold. Can be None to remove any annotation.
+    :param log10: (optional, boolean, default True) apply -log10 on the value column
+    :param title: custom title for plot
+
+    :return: nothing"""
+    # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
+    data_to_plot = data_to_plot.reset_index()
+
+    # convert the chromosome column to int values
+    if data_to_plot.dtypes[chromosome_col] != int:
+        data_to_plot[chromosome_col] = get_chromosome_number(data_to_plot[chromosome_col], True)
+        data_to_plot = data_to_plot.astype({chromosome_col: 'int'})
+
+    # sort by chromosome and make the column a category
+    data_to_plot = data_to_plot.sort_values(chromosome_col).astype({chromosome_col: 'category'})
+
+    high_threshold = 5e-08
+    medium_threshold = 1e-05
+
+    # apply -log10 to p-values if needed
+    if log10:
+        data_to_plot[value_col] = -np.log10(data_to_plot[value_col])
+        high_threshold = -np.log10(high_threshold)
+        medium_threshold = -np.log10(medium_threshold)
+
+    # make indices for plotting
+    data_to_plot['ind'] = range(len(data_to_plot))
+    data_to_plot_grouped = data_to_plot.groupby(chromosome_col, observed=True)
+
+    # figure initialization
+    fig, ax = plt.subplots(figsize=(14, 8))
+    colors = ['indigo', 'teal']
+    edge_colors = ['mediumorchid', 'turquoise']
+    x_labels = dict()
+    margin = int(len(data_to_plot) / 100)
+
+    # plot each chromosome scatter plot with its assigned color
+    for num, (name, group) in enumerate(data_to_plot_grouped):
+        # add margin to separate a bit the different groups; otherwise small groups won't show
+        group.ind = group.ind + (num+1) * margin
+        color_ix = num % len(colors)
+        group.plot(kind='scatter', x='ind', y=value_col, c=colors[color_ix], ax=ax, alpha=0.5, ec=edge_colors[color_ix])
+        x_labels[name] = group['ind'].iloc[-1] - (group['ind'].iloc[-1] - group['ind'].iloc[0]) / 2  # label position
+        # draw annotations for probes that are over the threshold, if annotation_col is set
+        if annotation_col is not None:
+            indexes_to_annotate = group[value_col] > medium_threshold if log10 else group[value_col] < medium_threshold
+            for _, row in group[indexes_to_annotate].iterrows():
+                plt.annotate(row[annotation_col], (row['ind'] + 0.03, row[value_col] + 0.03), color=colors[color_ix])
+
+    # add lines of significance threshold
+    x_start = -2*margin
+    x_end =  len(data_to_plot)+(len(data_to_plot_grouped)+1)*margin
+    plt.plot([x_start, x_end], [high_threshold, high_threshold], color='deepskyblue', alpha=0.7)
+    plt.plot([x_start, x_end], [medium_threshold, medium_threshold], linestyle='--', color='deepskyblue', alpha=0.5)
+
+    # display chromosomes labels on x axis
+    ax.set_xticks(list(x_labels.values()))
+    ax.set_xticklabels(list(x_labels.keys()))
+    ax.set_xlim([x_start, x_end])
+    ax.set_xlabel('Chromosome')
+
+    # define y label and graph title
+    ax.set_ylabel(f'-log10({value_col})' if log10 else value_col)
+    plt.title(title if title is not None else f'Manhattan plot of {len(data_to_plot)} probes')
+
+    plt.show()
+

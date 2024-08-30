@@ -369,12 +369,10 @@ class Sample:
         signal. If max values are equals, the channel is set to R (as opposed to G in sesame).
 
         :param switch_failed: if set to True, probes with NA values or whose max values are under a threshold (the 95th
-        percentile of the background signals) will be switched back to their original value. Default to False.
-
+            percentile of the background signals) will be switched back to their original value. Default to False.
         :param mask_failed: mask failed probes (same probes as switch_failed). Default to False.
-
         :param summary_only: does not replace the sample dataframe, only return the summary (useful for QC). Default to
-        False
+            False
 
         :return: None"""
 
@@ -441,11 +439,10 @@ class Sample:
         """Calculate beta values for all probes (if mask is False) or unmasked probes (if mask is True).
 
         :param mask: If True, apply mask (only get beta values on non-masked probes). If False, return beta values of
-        all probes.
-
+            all probes.
         :param include_out_of_band : is set to true (default), the Type 1 probes Beta values will be calculated on
-        in-band AND out-of-band signal values. If set to false, they will be calculated on in-band values only.
-        equivalent to sumTypeI in sesame
+            in-band AND out-of-band signal values. If set to false, they will be calculated on in-band values only.
+            equivalent to sumTypeI in sesame
 
         :return: pd.DataFrame with probes as rows and sample as column"""
 

@@ -5,6 +5,8 @@ import logging
 import urllib.request
 from pathlib import Path, PosixPath
 from importlib.resources import files
+
+import pandas
 from importlib.resources.readers import MultiplexedPath
 
 import numpy as np
@@ -53,7 +55,11 @@ def mask_dataframe(df: pd.DataFrame, indexes_to_mask: pd.MultiIndex) -> pd.DataF
 def remove_probe_suffix(probe_id: str) -> str:
     """Remove the last part of a probe ID, split by underscore. The last part is usually 2 letters and 2 numbers,
     referring to : top or bottom strand (T/B), converted or opposite strand (C/O), Infinium probe type (1/2),
-    and the number of synthesis for representation of the probe on the array (1,2,3,…,n)."""
+    and the number of synthesis for representation of the probe on the array (1,2,3,…,n).
+
+    :param probe_id: (string) the probe name to remove the suffix from
+
+    :return: (string) the probe name without the suffix"""
     str_split = probe_id.split('_')
     if len(str_split) < 2:
         return probe_id
@@ -62,7 +68,12 @@ def remove_probe_suffix(probe_id: str) -> str:
 
 
 def save_object(object_to_save, filepath: str):
-    """Save any object as a pickle file"""
+    """Save any object as a pickle file
+
+    :param object_to_save: (any) any object to save as a pickle file
+    :param filepath: (str) path describing where to save the file
+
+    :return: None"""
     LOGGER.info(f'Saving {type(object_to_save)} object in {filepath}')
     with open(filepath, 'wb') as f:
         pickle.dump(object_to_save, f)
@@ -170,18 +181,54 @@ def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: st
         # delete the tar file
         os.remove(target_file)
 
-
-def get_chromosome_number(chromosome_id: str | list[str]) -> list[int] | int | None:
+def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_string=False) -> list[int] | int | None:
     """From a string representing the chromosome ID, get the chromosome number. E.g. 'chr22' -> 22. If the input
     is not a numbered chromosome, return np.nan. The string part has to be only 'chr', not case-sensitive
-    :param chromosome_id : input string or list of strings
-    :return: the chromosome number as an integer, or np.nan if not applicable"""
 
-    if isinstance(chromosome_id, list):
-        return [get_chromosome_number(chr_id) for chr_id in chromosome_id]
+    :param chromosome_id : (string, list of string or pd.Series) input string(s) to extract the number from
+    :param convert_string : (optional, boolean, default False) convert any non-numbered chromosome to a number. Gives
+        X the ID 97, Y the ID 98 and M the ID 99. Any other string will be given the ID 100
 
+    :return: the chromosome(s) number(s) as an integer, or np.nan if not applicable"""
+
+    # for list and series, call the function on each member
+    if isinstance(chromosome_id, list) or isinstance(chromosome_id, pd.Series):
+        return [get_chromosome_number(chr_id, convert_string) for chr_id in chromosome_id]
+
+    # juste checking that it's not already an int to avoid a useless error...
+    if isinstance(chromosome_id, int):
+        return chromosome_id
+
+    # remove the 'chr' part of the string to keep only the number
     trimmed_str = chromosome_id.lower().replace('chr', '')
+    chromosome_number = None  # default value
+
+    # if the remaining string only contains digits, we're good !
     if trimmed_str.isdigit():
         return int(trimmed_str)
 
-    return None
+    # if the chromosome name is a string, only convert it if the parameter is set to true
+    if convert_string:
+        # give letter chromosomes a number ID (they're lowercased earlier)
+        supported_chrs = {'x': 97, 'y': 98, 'm': 99}
+        if trimmed_str in supported_chrs.keys():
+            chromosome_number = supported_chrs[trimmed_str]
+        else:
+            chromosome_number = 100
+
+    return chromosome_number
+
+def set_level_as_index(df: pd.DataFrame, level: str, drop_others=False) -> pd.DataFrame:
+    """Change the index of a MultiIndexed DataFrame, to a single Index, using a level of the MultiIndex. Other levels
+    will be dropped if drop_others is set to True
+
+    :param df: (pd.DataFrame) dataframe to update
+    :param level: (string) name of the index level to use as the new Index
+    :param drop_others: (optional, boolean, default False) drop all the other levels (as opposed to keeping them in new
+        columns)
+
+    :return: pd.DataFrame"""
+    if drop_others:
+        return df.reset_index(level).reset_index(drop=True).set_index(level)
+    else:
+        return df.reset_index().set_index(level)
