@@ -1,5 +1,6 @@
 import os
 import logging
+from inspect import signature
 from importlib.resources.readers import MultiplexedPath
 
 import pandas as pd
@@ -23,10 +24,6 @@ class Samples:
         self.annotation = None
         self.sample_sheet = sample_sheet_df
         self.samples = {}
-        # attach methods of Sample object that can be directly applied to the list of samples in self.samples
-        self.__attach_methods__(['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
-                                 'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
-                                 'apply_non_unique_mask'])
 
     def read_samples(self, datadir: str | os.PathLike | MultiplexedPath, max_samples: int | None = None) -> None:
         """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
@@ -116,23 +113,24 @@ class Samples:
     def __getattr__(self, method_name):
         """Wrapper for Sample methods that can directly be applied to every sample"""
 
-        def method(*args, **kwargs):
-            LOGGER.info(f'>> start {method_name}')
-            for sample in self.samples.values():
-                getattr(sample, method_name)(*args, **kwargs)
-            LOGGER.info(f'done with {method_name}\n')
+        supported_functions = ['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
+                               'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
+                               'apply_non_unique_mask']
 
-        return method
+        if callable(getattr(Sample, method_name)) and method_name in supported_functions:
+            def method(*args, **kwargs):
+                LOGGER.info(f'>> start {method_name}')
+                for sample in self.samples.values():
+                    getattr(sample, method_name)(*args, **kwargs)
+                LOGGER.info(f'done with {method_name}\n')
 
-    def __attach_methods__(self, method_names):
-        """Attach callable methods from Sample object to Samples."""
-        for method_name in method_names:
+            method.__name__ = method_name
+            method.__doc__ = getattr(Sample, method_name).__doc__
+            method.__signature__ = signature(getattr(Sample, method_name))
+            return method
 
-            if callable(getattr(Sample, method_name)):
-                method = self.__getattr__(method_name)
-                method.__name__ = method_name
-                method.__doc__ = getattr(Sample, method_name).__doc__
-                setattr(self, method_name, method)
+        LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
+
 
     ####################################################################################################################
     # Processing methods
