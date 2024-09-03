@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib import colormaps
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
@@ -8,7 +9,6 @@ import seaborn as sns
 from illuminator.sample import Sample
 from illuminator.samples import Samples
 from illuminator.utils import get_chromosome_number, set_level_as_index
-
 
 def plot_betas(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None) -> None:
     """Plot betas values density for each sample
@@ -242,3 +242,84 @@ def manhattan_plot(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', valu
 
     plt.show()
 
+
+def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col='Start', chromosome_col='Chromosome',
+                       value_col='p_value', title: None | str = None) -> None:
+    """Display a Manhattan plot of the given CNV (copy number variation) data.
+
+    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, a dataframe returned by
+        copy_number_variation()
+    :param segments_to_plot: (optional, pd.DataFrame) if set, display the segments.
+    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
+        `data_to_plot` dataframe.
+    :param x_col: (option, string, default 'Start') name of the column to use for X axis, start position of the probe/bin
+    :param value_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
+    :param title: custom title for plot
+
+    :return: nothing"""
+    # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
+    data_to_plot = data_to_plot.reset_index()
+
+    # convert the chromosome column to int values
+    if data_to_plot.dtypes[chromosome_col] != int:
+        data_to_plot['chr_id'] = get_chromosome_number(data_to_plot[chromosome_col], True)
+        data_to_plot = data_to_plot.astype({'chr_id': 'int'})
+    else:
+        data_to_plot['chr_id'] = data_to_plot[chromosome_col]
+
+    # sort by chromosome and make the column a category
+    data_to_plot = data_to_plot.sort_values(['chr_id', x_col]).astype({'chr_id': 'category'})
+
+    # make indices for plotting
+    data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
+
+    # figure initialization
+    fig, ax = plt.subplots(figsize=(14, 8))
+    margin = int(max(data_to_plot[x_col]) / 10)
+    chrom_start, chrom_end = 0, 0
+    x_labels, x_major_ticks, x_minor_ticks = [], [], [0]
+    cmap = colormaps.get_cmap('Spectral')
+
+    # plot each chromosome scatter plot with its assigned color
+    for num, (name, group) in enumerate(data_to_plot_grouped):
+        # add margin to separate a bit the different groups; otherwise small groups won't show
+        group[x_col] = chrom_start + group[x_col] + margin
+        chrom_end = max(group[x_col]) + margin
+
+        # build the chromosomes scatter plot
+        ax.scatter(group[x_col], group[value_col], c=-group[value_col], vmin=-0.5, vmax=0.5, cmap=cmap, alpha=0.9)
+        # save chromosome's name and limits for x-axis
+        x_labels.append(' '.join(set(group[chromosome_col])).replace('chr', ''))
+        x_minor_ticks.append(chrom_end)  # chromosome limits
+        x_major_ticks.append(chrom_start + (chrom_end - chrom_start) / 2)  # label position]
+
+        # plot segments
+        for chromosomes in set(group[chromosome_col]):
+            chrom_segments = segments_to_plot[segments_to_plot.chromosome == chromosomes]
+            for _, segment in chrom_segments.iterrows():
+                plt.plot([chrom_start + segment.start, chrom_start + segment.end],
+                         [segment.mean_cnv, segment.mean_cnv],
+                         c=cmap(segment.mean_cnv),
+                         linewidth=2)
+
+        chrom_start = chrom_end
+
+    ax.set_facecolor('#EBEBEB')  # set background color to grey
+    [ax.spines[side].set_visible(False) for side in ax.spines]  # hide plot frame
+
+    # grids style and plot limits
+    ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
+    ax.yaxis.grid(True, color='white', alpha=0.9, linestyle='dotted')
+    ax.set_axisbelow(True)  # so that the axis lines stay behind the dots
+    ax.set_xlim([0 - margin, chrom_end + margin])
+
+    # display chromosomes labels on x axis
+    ax.set_xticks(x_major_ticks, labels=x_labels)
+    ax.set_xticks(x_minor_ticks, minor=True)  # show ticks for chromosomes limits
+    ax.tick_params(axis='x', length=0)  # hide ticks for chromosomes labels
+    ax.set_xlabel('Chromosome')
+
+    # define y label and graph title
+    ax.set_ylabel(value_col)
+    plt.title(title if title is not None else f'Manhattan plot of {len(data_to_plot)} bins')
+    plt.show()

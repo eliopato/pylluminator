@@ -30,10 +30,15 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
 
     # normalization samples
     if normal_samples is None:
+        LOGGER.info('Getting normalization samples')
+        log_level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.WARNING)  # set log level to Debug to hide loading log messages
         normal_samples = get_normalization_samples(sample.annotation)
+        logging.getLogger().setLevel(log_level)
         if normal_samples is None:
             LOGGER.error('Please provide samples to use as normalization')
             return
+
     if sample.annotation.array_type != normal_samples.annotation.array_type:
         LOGGER.warning('Array types of input sample and normalization samples are different')
     normal_samples = normal_samples.samples.values()
