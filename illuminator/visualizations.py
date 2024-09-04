@@ -165,100 +165,29 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 10
     else:
         sns.clustermap(sorted_betas.dropna()[:nb_probes])
 
-
-def manhattan_plot(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', value_col='p_value',
-                   annotation_col='probe_id', log10=True, title: None | str = None) -> None:
+def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=None, chromosome_col='Chromosome',
+                    x_col='Start', y_col='p_value', annotation_col=None, log10=False, title: None | str = None,
+                    draw_significance=False) -> None:
     """Display a Manhattan plot of the given data.
 
     :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
-    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
-        `data_to_plot` dataframe.
-    :param value_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
-    :param annotation_col: (optional, string, default 'probe_id') the name of a column used to write annotation on the
-        plots for data that is above the significant threshold. Can be None to remove any annotation.
-    :param log10: (optional, boolean, default True) apply -log10 on the value column
-    :param title: custom title for plot
-
-    :return: nothing"""
-    # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
-    data_to_plot = data_to_plot.reset_index()
-
-    # convert the chromosome column to int values
-    if data_to_plot.dtypes[chromosome_col] != int:
-        data_to_plot[chromosome_col] = get_chromosome_number(data_to_plot[chromosome_col], True)
-        data_to_plot = data_to_plot.astype({chromosome_col: 'int'})
-
-    # sort by chromosome and make the column a category
-    data_to_plot = data_to_plot.sort_values(chromosome_col).astype({chromosome_col: 'category'})
-
-    high_threshold = 5e-08
-    medium_threshold = 1e-05
-
-    # apply -log10 to p-values if needed
-    if log10:
-        data_to_plot[value_col] = -np.log10(data_to_plot[value_col])
-        high_threshold = -np.log10(high_threshold)
-        medium_threshold = -np.log10(medium_threshold)
-
-    # make indices for plotting
-    data_to_plot['ind'] = range(len(data_to_plot))
-    data_to_plot_grouped = data_to_plot.groupby(chromosome_col, observed=True)
-
-    # figure initialization
-    fig, ax = plt.subplots(figsize=(14, 8))
-    colors = ['indigo', 'teal']
-    edge_colors = ['mediumorchid', 'turquoise']
-    x_labels = dict()
-    margin = int(len(data_to_plot) / 100)
-
-    # plot each chromosome scatter plot with its assigned color
-    for num, (name, group) in enumerate(data_to_plot_grouped):
-        # add margin to separate a bit the different groups; otherwise small groups won't show
-        group.ind = group.ind + (num+1) * margin
-        color_ix = num % len(colors)
-        group.plot(kind='scatter', x='ind', y=value_col, c=colors[color_ix], ax=ax, alpha=0.5, ec=edge_colors[color_ix])
-        x_labels[name] = group['ind'].iloc[-1] - (group['ind'].iloc[-1] - group['ind'].iloc[0]) / 2  # label position
-        # draw annotations for probes that are over the threshold, if annotation_col is set
-        if annotation_col is not None:
-            indexes_to_annotate = group[value_col] > medium_threshold if log10 else group[value_col] < medium_threshold
-            for _, row in group[indexes_to_annotate].iterrows():
-                plt.annotate(row[annotation_col], (row['ind'] + 0.03, row[value_col] + 0.03), color=colors[color_ix])
-
-    # add lines of significance threshold
-    x_start = -2*margin
-    x_end =  len(data_to_plot)+(len(data_to_plot_grouped)+1)*margin
-    plt.plot([x_start, x_end], [high_threshold, high_threshold], color='deepskyblue', alpha=0.7)
-    plt.plot([x_start, x_end], [medium_threshold, medium_threshold], linestyle='--', color='deepskyblue', alpha=0.5)
-
-    # display chromosomes labels on x axis
-    ax.set_xticks(list(x_labels.values()))
-    ax.set_xticklabels(list(x_labels.keys()))
-    ax.set_xlim([x_start, x_end])
-    ax.set_xlabel('Chromosome')
-
-    # define y label and graph title
-    ax.set_ylabel(f'-log10({value_col})' if log10 else value_col)
-    plt.title(title if title is not None else f'Manhattan plot of {len(data_to_plot)} probes')
-
-    plt.show()
-
-
-def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col='Start', chromosome_col='Chromosome',
-                       value_col='p_value', title: None | str = None) -> None:
-    """Display a Manhattan plot of the given CNV (copy number variation) data.
-
-    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, a dataframe returned by
-        copy_number_variation()
-    :param segments_to_plot: (optional, pd.DataFrame) if set, display the segments.
+    :param segments_to_plot: (optional, pd.DataFrame) if set, display the segments using columns "chromosome", "start",
+        "end" and "mean_cnv" of the given dataframe, where start and end are the position on the chromosome (as returned
+        by copy_number_variation())
     :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
         `data_to_plot` dataframe.
     :param x_col: (option, string, default 'Start') name of the column to use for X axis, start position of the probe/bin
-    :param value_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
-    :param title: custom title for plot
+    :param y_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
+    :param annotation_col: (optional, string, default 'probe_id') the name of a column used to write annotation on the
+        plots for data that is above the significant threshold. Can be None to remove any annotation.
+    :param log10: (optional, boolean, default True) apply -log10 on the value column
+    :param draw_significance: (option, boolean, default False) draw p-value significance lines (at 1e-05 and 5e-08)
+    :param title: (optional, string) custom title for plot
 
     :return: nothing"""
+
     # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
-    data_to_plot = data_to_plot.reset_index()
+    data_to_plot = data_to_plot.reset_index().dropna(subset=y_col)
 
     # convert the chromosome column to int values
     if data_to_plot.dtypes[chromosome_col] != int:
@@ -278,7 +207,22 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col=
     margin = int(max(data_to_plot[x_col]) / 10)
     chrom_start, chrom_end = 0, 0
     x_labels, x_major_ticks, x_minor_ticks = [], [], [0]
-    cmap = colormaps.get_cmap('Spectral')
+    high_threshold = 5e-08
+    medium_threshold = 1e-05
+
+    # apply -log10 to p-values if needed
+    if log10:
+        data_to_plot[y_col] = -np.log10(data_to_plot[y_col])
+        high_threshold = -np.log10(high_threshold)
+        medium_threshold = -np.log10(medium_threshold)
+
+    # define colormap and limits
+    v_max = np.max(data_to_plot[y_col])
+    v_min = np.min(data_to_plot[y_col])
+    if min(data_to_plot[y_col]) < 0:
+        cmap = colormaps.get_cmap('gist_rainbow')
+    else:
+        cmap = colormaps.get_cmap('viridis').reversed()
 
     # plot each chromosome scatter plot with its assigned color
     for num, (name, group) in enumerate(data_to_plot_grouped):
@@ -287,25 +231,38 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col=
         chrom_end = max(group[x_col]) + margin
 
         # build the chromosomes scatter plot
-        ax.scatter(group[x_col], group[value_col], c=-group[value_col], vmin=-0.5, vmax=0.5, cmap=cmap, alpha=0.9)
+        ax.scatter(group[x_col], group[y_col], c=group[y_col], vmin=v_min, vmax=v_max, cmap=cmap, alpha=0.9)
         # save chromosome's name and limits for x-axis
         x_labels.append(' '.join(set(group[chromosome_col])).replace('chr', ''))
         x_minor_ticks.append(chrom_end)  # chromosome limits
         x_major_ticks.append(chrom_start + (chrom_end - chrom_start) / 2)  # label position]
 
-        # plot segments
-        for chromosomes in set(group[chromosome_col]):
-            chrom_segments = segments_to_plot[segments_to_plot.chromosome == chromosomes]
-            for _, segment in chrom_segments.iterrows():
-                plt.plot([chrom_start + segment.start, chrom_start + segment.end],
-                         [segment.mean_cnv, segment.mean_cnv],
-                         c=cmap(segment.mean_cnv),
-                         linewidth=2)
+        # plot segments if a segment df is provided
+        if segments_to_plot is not None:
+            for chromosome in set(group[chromosome_col]):
+                chrom_segments = segments_to_plot[segments_to_plot.chromosome == chromosome]
+                for _, segment in chrom_segments.iterrows():
+                    plt.plot([chrom_start + segment.start, chrom_start + segment.end],
+                             [segment.mean_cnv, segment.mean_cnv],
+                             c='black', linewidth=2)
+
+        # draw annotations for probes that are over the threshold, if annotation_col is set
+        if annotation_col is not None:
+            indexes_to_annotate = group[y_col] > medium_threshold if log10 else group[y_col] < medium_threshold
+            for _, row in group[indexes_to_annotate].iterrows():
+                plt.annotate(row[annotation_col], (row[x_col] + 0.03, row[y_col] + 0.03), c=cmap(row[y_col]/v_max))
 
         chrom_start = chrom_end
 
     ax.set_facecolor('#EBEBEB')  # set background color to grey
     [ax.spines[side].set_visible(False) for side in ax.spines]  # hide plot frame
+
+    # add lines of significance threshold
+    if draw_significance:
+        x_start = 0-margin
+        x_end =  chrom_end + margin
+        plt.plot([x_start, x_end], [high_threshold, high_threshold], linestyle='dotted', c=cmap(high_threshold), alpha=0.7)
+        plt.plot([x_start, x_end], [medium_threshold, medium_threshold], linestyle='dotted', c=cmap(medium_threshold), alpha=0.5)
 
     # grids style and plot limits
     ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
@@ -320,6 +277,53 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col=
     ax.set_xlabel('Chromosome')
 
     # define y label and graph title
-    ax.set_ylabel(value_col)
-    plt.title(title if title is not None else f'Manhattan plot of {len(data_to_plot)} bins')
+    ax.set_ylabel(f'log10({y_col})' if log10 else y_col)
+    if title is None:
+        if 'probe_id' in data_to_plot.columns:
+            title = f'Manhattan plot of {len(data_to_plot)} probes'
+        else:
+            title = f'Manhattan plot of {len(data_to_plot)} bins'
+    plt.title(title)
     plt.show()
+
+def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', x_col='Start', y_col='p_value',
+                   annotation_col='probe_id', log10=True, draw_significance=True, title: None | str = None):
+    """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by
+    get_dmrs()
+
+    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting.
+    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
+        `data_to_plot` dataframe.
+    :param x_col: (option, string, default 'Start') name of the column to use for X axis, start position of the probe/bin
+    :param y_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
+    :param annotation_col: (optional, string, default 'probe_id') the name of a column used to write annotation on the
+        plots for data that is above the significant threshold. Can be None to remove any annotation.
+    :param log10: (optional, boolean, default True) apply -log10 on the value column
+    :param draw_significance: (option, boolean, default True) draw p-value significance lines (at 1e-05 and 5e-08)
+    :param title: (optional, string) custom title for plot
+
+    :return: nothing"""
+
+    _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=y_col, x_col=x_col,
+                    draw_significance=draw_significance, annotation_col=annotation_col, log10=log10, title=title)
+
+def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col='Start_bin', chromosome_col='Chromosome',
+                       y_col='cnv', title: None | str = None) -> None:
+    """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
+    copy_number_variation()
+
+    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, the bins signal dataframe.
+    :param segments_to_plot: (optional, pd.DataFrame) if set, display the segments using columns "chromosome", "start",
+        "end" and "mean_cnv" of the given dataframe, where start and end are the position on the chromosome.
+    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
+        `data_to_plot` dataframe.
+    :param x_col: (option, string, default 'Start_bin') name of the column to use for X axis, start position of the
+        probe/bin
+    :param y_col: (optional, string, default 'cnv') the name of the value column in the `data_to_plot` dataframe
+    :param title: (optional, string) custom title for plot
+
+    :return: nothing"""
+
+    _manhattan_plot(data_to_plot=data_to_plot, segments_to_plot=segments_to_plot, x_col=x_col,
+                    chromosome_col=chromosome_col, y_col=y_col, title=title,
+                    log10=False, annotation_col=None, draw_significance=False)
