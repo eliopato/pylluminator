@@ -4,9 +4,8 @@ import tarfile
 import logging
 import urllib.request
 from pathlib import Path, PosixPath
+import zipfile
 from importlib.resources import files
-
-import pandas
 from importlib.resources.readers import MultiplexedPath
 
 import numpy as np
@@ -232,3 +231,34 @@ def set_level_as_index(df: pd.DataFrame, level: str, drop_others=False) -> pd.Da
         return df.reset_index(level).reset_index(drop=True).set_index(level)
     else:
         return df.reset_index().set_index(level)
+
+def download_from_link(dl_link: str, target_filepath: PosixPath) -> int:
+    """Download a file and save it to the target. Returns -1 if the file could not be downloaded, 1 otherwise.
+
+    :param dl_link: (string) link to the file to be downloaded
+    :param target_filepath: (PosixPath) where the file will be saved
+
+    :return: (int) exit status"""
+
+    data_folder = target_filepath.parent
+    filename = target_filepath.name
+
+    LOGGER.debug(f'file {filename} not found in {data_folder}, trying to download it from {dl_link}')
+
+    os.makedirs(data_folder, exist_ok=True)  # create destination directory
+
+    try:
+        urllib.request.urlretrieve(dl_link, target_filepath)
+        LOGGER.debug(f'download successful')
+    except:
+        LOGGER.info(f'download from {dl_link} failed, try downloading it manually and save it in {data_folder}')
+        return -1
+
+    if filename.endswith('.zip'):
+        LOGGER.info(f'unzip downloaded file {target_filepath}')
+
+        with zipfile.ZipFile(target_filepath, 'r') as zip_ref:
+            zip_ref.extractall(convert_to_path(data_folder))
+        os.remove(target_filepath)  # remove archive
+
+    return 1

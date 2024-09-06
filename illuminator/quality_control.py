@@ -34,7 +34,7 @@ def detection_stats(sample: Sample, mask=False) -> None:
     p_values_df = sample.get_signal_df(mask)[['p_value', 'poobah_mask']]
 
     sample_probe_ids = sample.get_signal_df(mask).index.get_level_values('probe_id')
-    manifest_probe_ids = sample.annotation.manifest.probe_id
+    manifest_probe_ids = sample.annotation.probe_infos.probe_id
     missing_from_manifest = len([probe for probe in manifest_probe_ids if probe not in sample_probe_ids])
 
     missing_p_values = p_values_df['p_value'].isna().sum()

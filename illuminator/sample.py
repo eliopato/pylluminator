@@ -27,7 +27,6 @@ class Sample:
     def __init__(self, name: str):
         self.idata = None
         self.signal_df = None
-        self.full_signal_df = None
         self.name = name
         self.annotation = None
         self.masked_indexes = None
@@ -40,7 +39,7 @@ class Sample:
         else:
             self.idata[channel] = dataset
 
-    def merge_annotation_info(self, annotation: Annotations, min_beads=1, light_mode=True) -> None:
+    def merge_annotation_info(self, annotation: Annotations, min_beads=1) -> None:
         """Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
         channel information, methylation state and mask names for each probe. For manifest file, merging is done on
         `Illumina ID`, contained in columns `address_a` and `address_b` of the manifest file. For the mask file, we use
@@ -49,14 +48,6 @@ class Sample:
         self.annotation = annotation
         channel_dfs = []
 
-        if light_mode:
-            required_columns = ['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b']
-            manifest = annotation.manifest.loc[:, required_columns]
-            mask = annotation.mask.loc[:, ['mask_info']] if annotation.mask is not None else None
-        else:
-            manifest = annotation.manifest
-            mask = annotation.mask.drop(columns='probe_type') if annotation.mask is not None else None
-
         for channel, idata in self.idata.items():
 
             # filter out probes with too few beads
@@ -64,12 +55,10 @@ class Sample:
             idata_df = idata.probe_means[indexes_low_nb_beads]
             LOGGER.debug(f'{len(indexes_low_nb_beads)} probes were deleted from {channel} channel for having less than '
                          f'{min_beads} beads')
-            idata_df = idata_df[['mean_value']] if light_mode else idata_df
+            idata_df = idata_df[['mean_value']]
 
-            # merge manifest and mask information
-            sample_df = idata_df.join(manifest, how='inner')
-            if mask is not None:
-                sample_df = sample_df.join(mask, on='probe_id', how='left')
+            # merge manifest, mask and gene information
+            sample_df = idata_df.join(annotation.probe_infos, how='inner')
 
             # check for any lost probe when merge manifest (as it is an inner merge)
             lost_probes = len(sample_df) - len(idata_df)
@@ -89,13 +78,11 @@ class Sample:
 
             channel_dfs.append(sample_df.drop(columns=['address_a', 'address_b']))
 
-        self.full_signal_df = pd.concat(channel_dfs, ignore_index=True)
-
         # reshape dataframe to have something resembling sesame data structure - one row per probe
+        indexes = ['type', 'channel', 'probe_type', 'probe_id', 'mask_info']
         # todo : optimize here (4s)
-        self.signal_df = self.full_signal_df.pivot(values='mean_value',
-                                                   columns=['signal_channel', 'methylation_state'],
-                                                   index=['type', 'channel', 'probe_type', 'probe_id', 'mask_info'])
+        self.signal_df = pd.concat(channel_dfs, ignore_index=True).pivot(index=indexes, values='mean_value',
+                                                                         columns=['signal_channel', 'methylation_state'])
 
         # index column 'channel' corresponds by default to the manifest channel. But it could change by calling
         # 'infer_type_i_channel()' e.g., so we need to keep track of the manifest_channel in another column
@@ -232,7 +219,7 @@ class Sample:
         the current mask if there is any.
         `names_to_mask` can be a regex"""
 
-        if self.annotation.mask is None:
+        if 'mask_info' not in self.annotation.probe_infos.columns:
             LOGGER.warning('No mask is defined')
             return None
 
@@ -679,7 +666,7 @@ class Sample:
         sig_df = sig_df.rename(columns={'col': 'channel', 'Probe_ID': 'probe_id'})
 
         # prepare manifest for merge
-        manifest = annotation.manifest.loc[:, ['probe_id', 'type', 'probe_type', 'channel']]
+        manifest = annotation.probe_infos.loc[:, ['probe_id', 'type', 'probe_type', 'channel']]
         manifest = manifest.rename(columns={'channel': 'manifest_channel'})
         # remove probe suffix from manifest as they are not in SigDF files
         manifest['probe_id_to_join'] = manifest.probe_id.apply(remove_probe_suffix)
@@ -688,8 +675,6 @@ class Sample:
 
         # merge manifest and mask
         sample_df = sig_df.join(manifest, how='inner').set_index('probe_id')
-        if annotation.mask is not None:
-            sample_df = sample_df.join(annotation.mask.loc[:, ['mask_info']], on='probe_id', how='left')
 
         # move Green type II probes values to MG column
         sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']

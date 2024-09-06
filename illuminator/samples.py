@@ -97,12 +97,11 @@ class Samples:
 
         LOGGER.info(f'reading sample files done\n')
 
-    def merge_annotation_info(self, annotation: Annotations, light_mode=True) -> None:
+    def merge_annotation_info(self, annotation: Annotations) -> None:
         """For all samples, call the function to merge manifest and mask information to the methylation signal data
         read from idat files.
 
         :param annotation: Annotations object with genome version and array type corresponding to the data stored
-        :param light_mode: (optional, default True) if True, load only the required columns to speed up the process
 
         :return: None
         """
@@ -110,7 +109,7 @@ class Samples:
         self.annotation = annotation
         LOGGER.info(f'>> start merging manifest and sample data frames')
         for sample in self.samples.values():
-            sample.merge_annotation_info(self.annotation, light_mode)
+            sample.merge_annotation_info(self.annotation)
         LOGGER.info(f'done merging manifest and sample data frames\n')
 
     @staticmethod

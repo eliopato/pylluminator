@@ -89,7 +89,7 @@ def get_nb_probes_per_chr_and_type(sample: Sample | Samples) -> (pd.DataFrame, p
 
     chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
     type_df = pd.DataFrame(columns=['not masked', 'masked'])
-    manifest = sample.annotation.manifest
+    manifest = sample.annotation.probe_infos
     probes = set()
 
     for name, masked in [('not masked', True), ('masked', False)]:

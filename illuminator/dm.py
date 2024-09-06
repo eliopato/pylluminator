@@ -1,5 +1,3 @@
-import datetime
-
 import numpy as np
 import logging
 import pandas as pd
@@ -118,7 +116,7 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
     betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
     # get genomic range information (for chromosome id and probe position)
-    probe_coords_df = annotation.get_genomic_ranges().drop(columns='Strand', errors='ignore')
+    probe_coords_df = annotation.genomic_ranges.drop(columns='Strand', errors='ignore')
     non_empty_coords_df = probe_coords_df[probe_coords_df.End > probe_coords_df.Start]  # remove 0-width ranges
 
     betas_no_na = betas.dropna()  # remove probes with missing values
