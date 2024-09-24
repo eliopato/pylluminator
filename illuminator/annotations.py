@@ -69,7 +69,7 @@ class GenomeInfo:
         module_path = f'annotations.{name}.{genome_version}.genome_info'
         folder_genome = get_resource_folder(module_path, create_if_not_exist=False)
         if folder_genome is None:
-            LOGGER.warning(f'No genome information found in for {name} {genome_version}')
+            LOGGER.warning(f'No genome information found for {name} {genome_version}')
             return
 
         # read all the csv files
@@ -251,7 +251,7 @@ class SesameAnnotations:
             df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
             df = df.explode('illumina_id', ignore_index=True)
             df['illumina_id'] = df['illumina_id'].astype('int')
-            df.set_index('illumina_id', inplace=True)
+            df = df.set_index('illumina_id', inplace=True)
             # turn some columns into categories as it speeds up further processing
             df = df.rename(columns={'design_type': 'type'}, errors='ignore') # for older manifest versions
             df[['type', 'probe_type', 'channel']] = df[['type', 'probe_type', 'channel']].astype('category')
@@ -295,18 +295,17 @@ class SesameAnnotations:
 
         # select manifest column
         manifest = self.manifest[['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b', 'cpg_loc']]
-        manifest = manifest.drop_duplicates()
 
         if self.mask is not None:
             # select mask column (`mask_uniq` or column `mask_info` to get all  the information)
             mask = self.mask[['mask_uniq']].rename(columns={'mask_uniq': 'mask_info'})
             mask.mask_info = mask.mask_info.str.replace(',', ';').replace('"', '')
-            manifest = manifest.join(mask, on='probe_id').drop_duplicates()
+            manifest = manifest.join(mask, on='probe_id')
 
         if self.gene is not None:
             # select genes columns
             genes = self.gene[['genes_uniq', 'transcript_types']].rename(columns={'genes_uniq': 'genes'})
-            manifest = manifest.join(genes, on='probe_id').drop_duplicates()
+            manifest = manifest.join(genes, on='probe_id')
             manifest.transcript_types = manifest.transcript_types.apply(lambda x: ';'.join(set(str(x).replace('nan', '').split(';'))))
 
-        return manifest.drop_duplicates()
+        return manifest
