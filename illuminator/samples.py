@@ -14,12 +14,13 @@ from illuminator.utils import save_object, load_object, get_files_matching
 LOGGER = logging.getLogger(__name__)
 
 
+
 class Samples:
     """Samples contain a collection of Sample objects in a dictionary, with sample names as keys. It also holds the
     sample sheet information and the annotation object. It is mostly used to apply functions to several samples at a
     time"""
 
-    def __init__(self, sample_sheet_df: pd.DataFrame | None):
+    def __init__(self, sample_sheet_df: pd.DataFrame | None = None):
         """Initialize the object with only a sample-sheet (which can be None)"""
         self.annotation = None
         self.sample_sheet = sample_sheet_df
@@ -51,52 +52,6 @@ class Samples:
 
         LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
 
-    def read_samples(self, datadir: str | os.PathLike | MultiplexedPath, max_samples: int | None = None) -> None:
-        """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
-        information from the sample sheet and follow this naming convention:
-        `[sentrix ID]*[sentrix position]*[channel].idat` where the `*` can be any characters.
-        `channel` must be spelled `Red` or Grn`.
-
-        :param datadir: string or path-like pointing to the directory where sesame files are
-        :param max_samples: (optional, int or None, default to None) to only load N samples to speed up the process
-            (useful for testing purposes)
-
-        :return: None"""
-
-        LOGGER.info(f'>> start reading sample files from {datadir}')
-
-        if self.sample_sheet is None:
-            LOGGER.debug('No sample sheet provided, creating one')
-            self.sample_sheet, _ = sample_sheet.create_from_idats(datadir)
-
-        # for each sample
-        for _, line in self.sample_sheet.iterrows():
-
-            sample = Sample(line.sample_name)
-
-            # read each channel file
-            for channel in Channel:
-                pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat*'
-                paths = [str(p) for p in get_files_matching(datadir, pattern)]
-                if len(paths) == 0:
-                    LOGGER.error(f'no paths found matching {pattern}')
-                    continue
-                if len(paths) > 1:
-                    LOGGER.error(f'Too many files found matching {pattern} : {paths}')
-                    continue
-                LOGGER.debug(f'reading file {paths[0]}')
-                # set the sample's idata for this channel
-                sample.set_idata(channel, IdatDataset(paths[0]))
-
-            # add the sample to the dictionary
-            self.samples[line.sample_name] = sample
-
-            # only load the N first samples
-            if max_samples is not None and len(self.samples) == max_samples:
-                break
-
-        LOGGER.info(f'reading sample files done\n')
-
     def merge_annotation_info(self, annotation: Annotations) -> None:
         """For all samples, call the function to merge manifest and mask information to the methylation signal data
         read from idat files.
@@ -111,29 +66,6 @@ class Samples:
         for sample in self.samples.values():
             sample.merge_annotation_info(self.annotation)
         LOGGER.info(f'done merging manifest and sample data frames\n')
-
-    @staticmethod
-    def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations):
-        """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
-
-        :param datadir: string or path-like pointing to the directory where sesame files are
-        :param annotation: Annotations object with genome version and array type corresponding to the data stored
-
-        :return: a Samples object"""
-        LOGGER.info(f'>> start reading sesame files')
-        samples = Samples(None)
-        samples.annotation = annotation
-
-        # fin all .csv files in the subtree depending on datadir type
-        file_list = get_files_matching(datadir, '*.csv')
-
-        # load all samples
-        for csv_file in file_list:
-            sample = Sample.from_sesame(csv_file, annotation)
-            samples.samples[sample.name] = sample
-
-        LOGGER.info(f'done reading sesame files\n')
-        return samples
 
 
     ####################################################################################################################
@@ -199,3 +131,103 @@ class Samples:
 
         :return: the loaded object"""
         return load_object(filepath, Samples)
+
+
+def read_samples(datadir: str | os.PathLike | MultiplexedPath,
+                 sample_sheet_df: pd.DataFrame | None = None,
+                 sample_sheet_name: str | None = None,
+                 annotation: Annotations | None = None,
+                 max_samples: int | None = None) -> Samples | None:
+    """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
+    information from the sample sheet and follow this naming convention:
+    `[sentrix ID]*[sentrix position]*[channel].idat` where the `*` can be any characters.
+    `channel` must be spelled `Red` or Grn`.
+
+    :param datadir: (string or path-like) pointing to the directory where sesame files are
+    :param sample_sheet_df: (optional, pd.DataFrame) samples information. If not given, will be automatically rendered
+    :param sample_sheet_name: (optional, string) name of the csv file containing the samples' information. You cannot
+        provide both a sample sheet dataframe and name.
+    :param annotation: (optional, Annotations) probes information
+    :param max_samples: (optional, int or None, default to None) to only load N samples to speed up the process
+        (useful for testing purposes)
+
+    :return: Samples object or None if an error was raised"""
+
+    LOGGER.info(f'>> start reading sample files from {datadir}')
+
+    if sample_sheet_df is not None and sample_sheet_name is not None:
+        LOGGER.error('You can\'t provide both a sample sheet dataframe and name. Please only provide one parameter.')
+        return None
+    elif sample_sheet_df is None and sample_sheet_name is None:
+        LOGGER.debug('No sample sheet provided, creating one')
+        sample_sheet_df, _ = sample_sheet.create_from_idats(datadir)
+    elif sample_sheet_name is not None:
+        sample_sheet_df = sample_sheet.read_from_file(f'{datadir}/{sample_sheet_name}')
+
+    # check that the sample sheet was correctly created / read. If not, abort mission.
+    if sample_sheet_df is None:
+        return None
+
+    samples_dict = {}
+
+    # for each sample
+    for _, line in sample_sheet_df.iterrows():
+
+        sample = Sample(line.sample_name)
+
+        # read each channel file
+        for channel in Channel:
+            pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat*'
+            paths = [str(p) for p in get_files_matching(datadir, pattern)]
+            if len(paths) == 0:
+                LOGGER.error(f'no paths found matching {pattern}')
+                continue
+            if len(paths) > 1:
+                LOGGER.error(f'Too many files found matching {pattern} : {paths}')
+                continue
+            LOGGER.debug(f'reading file {paths[0]}')
+            # set the sample's idata for this channel
+            sample.set_idata(channel, IdatDataset(paths[0]))
+
+        if sample.idata is None:
+            LOGGER.error(f'no idat files found for sample {line.sample_name}, skipping it')
+            continue
+
+        # add the sample to the dictionary
+        samples_dict[line.sample_name] = sample
+
+        # only load the N first samples
+        if max_samples is not None and len(samples_dict) == max_samples:
+            break
+
+    samples = Samples(sample_sheet_df)
+    samples.samples = samples_dict
+
+    if annotation is not None:
+        samples.merge_annotation_info(annotation)
+
+    LOGGER.info(f'reading sample files done\n')
+    return samples
+
+
+def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations) -> Samples:
+    """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
+
+    :param datadir: string or path-like pointing to the directory where sesame files are
+    :param annotation: Annotations object with genome version and array type corresponding to the data stored
+
+    :return: a Samples object"""
+    LOGGER.info(f'>> start reading sesame files')
+    samples = Samples(None)
+    samples.annotation = annotation
+
+    # fin all .csv files in the subtree depending on datadir type
+    file_list = get_files_matching(datadir, '*.csv')
+
+    # load all samples
+    for csv_file in file_list:
+        sample = Sample.from_sesame(csv_file, annotation)
+        samples.samples[sample.name] = sample
+
+    LOGGER.info(f'done reading sesame files\n')
+    return samples
