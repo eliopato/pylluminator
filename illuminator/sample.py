@@ -25,8 +25,9 @@ class Sample:
     ####################################################################################################################
 
     def __init__(self, name: str):
-        self.idata = None
-        self.signal_df = None
+        self._idata = None
+        self._signal_df = None
+        self._betas_df = None
         self.name = name
         self.annotation = None
         self.masked_indexes = None
@@ -34,10 +35,10 @@ class Sample:
 
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
         """Add idata dataset to the sample idat dictionary, for the channel key passed in the argument"""
-        if self.idata is None:
-            self.idata = {channel: dataset}
+        if self._idata is None:
+            self._idata = {channel: dataset}
         else:
-            self.idata[channel] = dataset
+            self._idata[channel] = dataset
 
     def merge_annotation_info(self, annotation: Annotations, min_beads=1) -> None:
         """Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
@@ -77,19 +78,19 @@ class Sample:
 
             return sample_df.drop(columns=['address_a', 'address_b'])
 
-        channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self.idata.items()], ignore_index=True)
+        channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self._idata.items()], ignore_index=True)
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
-        self.signal_df = channels_df.pivot(index=indexes, values='mean_value',
+        self._signal_df = channels_df.pivot(index=indexes, values='mean_value',
                                            columns=['signal_channel', 'methylation_state'])
 
         # index column 'channel' corresponds by default to the manifest channel. But it could change by calling
         # 'infer_type_i_channel()' e.g., so we need to keep track of the manifest_channel in another column
-        self.signal_df['manifest_channel'] = self.signal_df.index.get_level_values('channel').values
+        self._signal_df['manifest_channel'] = self._signal_df.index.get_level_values('channel').values
 
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
-        self.signal_df['mask_info'] = self.signal_df.index.get_level_values('mask_info').fillna('').values
-        self.signal_df = self.signal_df.reset_index(level='mask_info', drop=True)
+        self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
+        self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
 
         # mask type I probes that have missing values (because they don't have enough beads).
         # type II probes with too few beads are automatically filtered out at the beginning as they have no signal value
@@ -105,9 +106,9 @@ class Sample:
     def get_signal_df(self, mask: bool = True):
         """Get the methylation signal dataframe, and apply the mask if `mask` is True"""
         if mask:
-            return mask_dataframe(self.signal_df, self.masked_indexes)
+            return mask_dataframe(self._signal_df, self.masked_indexes)
         else:
-            return self.signal_df
+            return self._signal_df
 
     def type1(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of Infinium type I probes, and apply the mask if `mask` is True"""
@@ -194,6 +195,12 @@ class Sample:
         else:
             LOGGER.error(f'Unknown channel {channel}. Must be R or G.')
             return None
+
+    def betas(self, mask: bool = True):
+        if mask:
+            return mask_dataframe(self._betas_df, self.masked_indexes)
+        else:
+            return self._betas_df
 
     ####################################################################################################################
     # Mask functions
@@ -327,23 +334,23 @@ class Sample:
         """Use an existing column specified by argument `column` as the new `channel` index. To keep the column, set
         `drop` to False"""
 
-        if column not in self.signal_df.columns:
-            LOGGER.error(f'column {column} not found in df ({self.signal_df.columns})')
+        if column not in self._signal_df.columns:
+            LOGGER.error(f'column {column} not found in df ({self._signal_df.columns})')
             return
 
         # save index levels order to keep the same index structure
-        lvl_order = self.signal_df.index.names
+        lvl_order = self._signal_df.index.names
 
-        if 'channel' in self.signal_df.columns and column != 'channel':
+        if 'channel' in self._signal_df.columns and column != 'channel':
             LOGGER.warning('dropping existing column `channel`')
-            self.signal_df.drop(column=['channel'], inplace=True)
+            self._signal_df.drop(column=['channel'], inplace=True)
 
         if drop:
-            self.signal_df.rename(columns={column: 'channel'}, inplace=True)
+            self._signal_df.rename(columns={column: 'channel'}, inplace=True)
         else:
-            self.signal_df['channel'] = self.signal_df[column]  # copy values in a new column
+            self._signal_df['channel'] = self._signal_df[column]  # copy values in a new column
 
-        self.signal_df = self.signal_df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order)
+        self._signal_df = self._signal_df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order)
 
     def reset_channel_index(self) -> None:
         """Set the channel index as the manifest channel.
@@ -363,8 +370,11 @@ class Sample:
 
         :return: None"""
 
+        # reset betas as we are modifying the signal dataframe
+        self._betas_df = None
+
         # subset to use
-        type1_df = self.signal_df.loc['I'].droplevel('methylation_state', axis=1).copy()
+        type1_df = self._signal_df.loc['I'].droplevel('methylation_state', axis=1).copy()
 
         # get the channel (provided by the index) where the signal is at its max for each probe
         type1_df['inferred_channel'] = type1_df.idxmax(axis=1, numeric_only=True).values
@@ -393,7 +403,7 @@ class Sample:
 
         # set the inferred channel as the new 'channel' index
         if not summary_only:
-            self.signal_df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
+            self._signal_df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
             # make the inferred channel the new channel index
             self.set_channel_index_as('inferred_channel', drop=True)
             LOGGER.debug(f"type 1 channel inference summary: R -> R: {summary['R']['R']} - R -> G: {summary['R']['G']} "
@@ -422,18 +432,16 @@ class Sample:
 
         return pd.concat([self.ib_red(mask).sum(axis=1), self.ib_green(mask).sum(axis=1), self.type2(mask).sum(axis=1)])
 
-    def get_betas(self, mask: bool = True, include_out_of_band=False) -> pd.DataFrame:
+    def calculate_betas(self, include_out_of_band=False) -> None:
         """Calculate beta values for all probes (if mask is False) or unmasked probes (if mask is True).
 
-        :param mask: If True, apply mask (only get beta values on non-masked probes). If False, return beta values of
-            all probes.
         :param include_out_of_band : is set to true (default), the Type 1 probes Beta values will be calculated on
             in-band AND out-of-band signal values. If set to false, they will be calculated on in-band values only.
             equivalent to sumTypeI in sesame
 
         :return: pd.DataFrame with probes as rows and sample as column"""
 
-        df = self.get_signal_df(mask).copy().sort_index()  # work on a copy, as we don't want these changes to propagate
+        df = self.get_signal_df(False).sort_index()
         # set NAs for Type II probes to 0, only where no methylation signal is expected
         df.loc['II', [['R', 'M']]] = 0
         df.loc['II', [['G', 'U']]] = 0
@@ -449,11 +457,14 @@ class Sample:
         # use clip function to set minimum values for each term as set in sesame
         beta_values = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
 
-        return pd.DataFrame(beta_values, columns=[self.name])
+        self._betas_df = pd.DataFrame(beta_values, columns=[self.name])
 
     def dye_bias_correction(self, mask: bool = True, reference: float | None = None) -> None:
         """ Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If
         the reference level is not given, it is set to the mean intensity of all the in-band signals."""
+
+        # reset betas as we are modifying the signal dataframe
+        self._betas_df = None
 
         if reference is None:
             reference = self.get_mean_ib_intensity(mask)
@@ -465,7 +476,7 @@ class Sample:
 
         for channel in ['R', 'G']:
             factor = reference / norm_values_dict[channel]
-            self.signal_df[channel] = self.signal_df[channel] * factor
+            self._signal_df[channel] = self._signal_df[channel] * factor
 
     def dye_bias_correction_nl(self, mask: bool = True) -> None:
         """Dye bias correction by matching green and red to mid-point.
@@ -476,6 +487,10 @@ class Sample:
         `mask` : if True include masked probes in Infinium-I probes. No big difference is noted in practice. More probes
         are generally better.
         """
+
+        # reset betas as we are modifying the signal dataframe
+        self._betas_df = None
+
         total_intensity_type1 = self.get_total_ib_intensity(False).loc['I']
 
         # check that there is not too much distortion between the two channels
@@ -527,8 +542,8 @@ class Sample:
                     data[below_range] = data[below_range] * (min_midpoint_intensity / min_intensity)
                 return data
 
-            self.signal_df.loc[:, [[channel, 'M']]] = fit_function(self.signal_df[[[channel, 'M']]].values)
-            self.signal_df.loc[:, [[channel, 'U']]] = fit_function(self.signal_df[[[channel, 'U']]].values)
+            self._signal_df.loc[:, [[channel, 'M']]] = fit_function(self._signal_df[[[channel, 'M']]].values)
+            self._signal_df.loc[:, [[channel, 'U']]] = fit_function(self._signal_df[[[channel, 'U']]].values)
 
     def noob_background_correction(self, mask: bool = True, use_negative_controls=True, offset=15) -> None:
         """
@@ -537,6 +552,10 @@ class Sample:
         are excluded.
         If `use_negative_controls=True`, background will be calculated with both negative control and out-of-band probes
         """
+
+        # reset betas as we are modifying the signal dataframe
+        self._betas_df = None
+
         # mask non unique probes - saves previous mask to reset it afterwards
         previous_masked_indexes = self.masked_indexes.copy()
         if not mask:
@@ -573,16 +592,19 @@ class Sample:
             bg[channel] = bg[channel][bg[channel] < (np.median(bg[channel]) + 10 * iqr(bg[channel]))]
 
             mu, sigma, alpha = background_correction_noob_fit(fg[channel], bg[channel])
-            meth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, self.signal_df[channel]['M'].values, offset)
-            unmeth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, self.signal_df[channel]['U'].values,
+            meth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, self._signal_df[channel]['M'].values, offset)
+            unmeth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, self._signal_df[channel]['U'].values,
                                                            offset)
 
-            self.signal_df.loc[:, [[channel, 'M']]] = meth_corrected_signal
-            self.signal_df.loc[:, [[channel, 'U']]] = unmeth_corrected_signal
+            self._signal_df.loc[:, [[channel, 'M']]] = meth_corrected_signal
+            self._signal_df.loc[:, [[channel, 'U']]] = unmeth_corrected_signal
 
     def scrub_background_correction(self, mask: bool = True) -> None:
         """Subtract residual background using background median.
         This function is meant to be used after noob."""
+
+        # reset betas as we are modifying the signal dataframe
+        self._betas_df = None
 
         median_bg = {'G': np.median(self.oob_green(mask)),
                      'R': np.median(self.oob_red(mask))}
@@ -590,13 +612,16 @@ class Sample:
         for channel in ['G', 'R']:
             for methylation_state in ['U', 'M']:
                 idx = [[channel, methylation_state]]
-                self.signal_df.loc[:, idx] = np.clip(self.signal_df[idx] - median_bg[channel], a_min=1, a_max=None)
+                self._signal_df.loc[:, idx] = np.clip(self._signal_df[idx] - median_bg[channel], a_min=1, a_max=None)
 
     def poobah(self, mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
         """Detection P-value based on empirical cumulative distribution function (ECDF) of out-of-band signal
         aka pOOBAH (p-vals by Out-Of-Band Array Hybridization).
         Parameter `threshold` is used to output a mask based on the p_values.
         Return a dataframe with columns `p_value` and `mask`."""
+
+        # reset betas as we are modifying the signal dataframe
+        self._betas_df = None
 
         # mask non-unique probes - but first save previous mask to reset it afterward
         previous_masked_indexes = self.masked_indexes.copy()
@@ -626,15 +651,15 @@ class Sample:
         # reset mask
         self.masked_indexes = previous_masked_indexes
 
-        pval_green = 1 - ecdf(bg_green)(self.signal_df[['G']].max(axis=1))
-        pval_red = 1 - ecdf(bg_red)(self.signal_df[['R']].max(axis=1))
+        pval_green = 1 - ecdf(bg_green)(self._signal_df[['G']].max(axis=1))
+        pval_red = 1 - ecdf(bg_red)(self._signal_df[['R']].max(axis=1))
 
         # set new columns with pOOBAH values
-        self.signal_df['p_value'] = np.min([pval_green, pval_red], axis=0)
-        self.signal_df['poobah_mask'] = self.signal_df['p_value'] > threshold
+        self._signal_df['p_value'] = np.min([pval_green, pval_red], axis=0)
+        self._signal_df['poobah_mask'] = self._signal_df['p_value'] > threshold
 
         # add pOOBAH mask to masked indexes
-        self.mask_indexes(self.signal_df.loc[self.signal_df['poobah_mask']].index)
+        self.mask_indexes(self._signal_df.loc[self._signal_df['poobah_mask']].index)
 
     ####################################################################################################################
     # Description, saving & loading
@@ -704,16 +729,16 @@ class Sample:
         description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
         description += '---------------------------------------------------------------------\n'
 
-        if self.signal_df is None:
-            if self.idata is None:
+        if self._signal_df is None:
+            if self._idata is None:
                 description += 'No data\n'
             else:
-                description += 'Probes raw information : (dict self.idata)\n'
-                for channel, dataset in self.idata.items():
+                description += 'Probes raw information : (dict self._idata)\n'
+                for channel, dataset in self._idata.items():
                     description += f'\nChannel {channel} head data:\n {dataset}\n'
         else:
-            description += 'Signal dataframe first items (self.signal_df or self.get_signal_df(mask=True|False)): \n'
-            description += f'{self.signal_df.head(3)}\n'
+            description += 'Signal dataframe first items (self._signal_df or self.get_signal_df(mask=True|False)): \n'
+            description += f'{self._signal_df.head(3)}\n'
         description += '=====================================================================\n'
         return description
 

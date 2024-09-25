@@ -251,7 +251,7 @@ class SesameAnnotations:
             df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
             df = df.explode('illumina_id', ignore_index=True)
             df['illumina_id'] = df['illumina_id'].astype('int')
-            df = df.set_index('illumina_id', inplace=True)
+            df = df.set_index('illumina_id')
             # turn some columns into categories as it speeds up further processing
             df = df.rename(columns={'design_type': 'type'}, errors='ignore') # for older manifest versions
             df[['type', 'probe_type', 'channel']] = df[['type', 'probe_type', 'channel']].astype('category')

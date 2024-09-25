@@ -1,6 +1,7 @@
 import os
 import logging
 from inspect import signature
+
 from importlib.resources.readers import MultiplexedPath
 
 import pandas as pd
@@ -9,7 +10,7 @@ from illuminator.sample import Sample
 import illuminator.sample_sheet as sample_sheet
 from illuminator.read_idat import IdatDataset
 from illuminator.annotations import Annotations, Channel
-from illuminator.utils import save_object, load_object, get_files_matching
+from illuminator.utils import save_object, load_object, get_files_matching, mask_dataframe
 
 
 LOGGER = logging.getLogger(__name__)
@@ -36,13 +37,19 @@ class Samples:
 
         supported_functions = ['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
                                'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
-                               'apply_non_unique_mask', 'merge_annotation_info', 'get_betas']
+                               'apply_non_unique_mask', 'merge_annotation_info', 'calculate_betas']
 
         if callable(getattr(Sample, method_name)) and method_name in supported_functions:
             def method(*args, **kwargs):
                 LOGGER.info(f'>> start {method_name}')
                 [getattr(sample, method_name)(*args, **kwargs) for sample in self.samples.values()]
                 LOGGER.info(f'done with {method_name}\n')
+
+                # if the method called updated the beta values, update the dataframe
+                if method_name == 'calculate_betas':
+                    self._betas_df = pd.concat([sample.betas(False) for sample in self.samples.values()], axis=1)
+                elif method_name not in ['apply_quality_mask', 'apply_non_unique_mask']:
+                    self._betas_df = None
 
             method.__name__ = method_name
             method.__doc__ = getattr(Sample, method_name).__doc__
@@ -51,6 +58,12 @@ class Samples:
 
         LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
 
+    def betas(self, mask: bool = True):
+        if mask:
+            masked_indexes = [sample.masked_indexes for sample in self.samples.values()]
+            return mask_dataframe(self._betas_df, masked_indexes)
+        else:
+            return self._betas_df
 
     ####################################################################################################################
     # Properties
@@ -156,7 +169,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
             # set the sample's idata for this channel
             sample.set_idata(channel, IdatDataset(paths[0]))
 
-        if sample.idata is None:
+        if sample._idata is None:
             LOGGER.error(f'no idat files found for sample {line.sample_name}, skipping it')
             continue
 

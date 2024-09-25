@@ -141,7 +141,8 @@ def betas_stats(sample: Sample, mask=False):
     sample.dye_bias_correction_nl(mask)
     sample.noob_background_correction(mask)
     sample.poobah(mask)
-    betas = sample.get_betas(mask)[sample.name]  # get betas as a pd.Series
+    sample.calculate_betas()
+    betas = sample.betas(mask)[sample.name]  # get betas as a pd.Series
 
     print_value('Mean', betas.mean())
     print_value('Median', betas.median())
