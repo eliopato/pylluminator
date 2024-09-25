@@ -46,19 +46,20 @@ class Sample:
         the `Probe_ID` to merge. We further use `Probe_ID` as an index throughout the code."""
         LOGGER.info(f'merging sample {self.name} with manifest {annotation}')
         self.annotation = annotation
-        channel_dfs = []
 
-        for channel, idata in self.idata.items():
+        # pivot table column names
+        indexes = ['type', 'channel', 'probe_type', 'probe_id', 'mask_info']
+        probe_info = annotation.probe_infos[indexes + ['address_a', 'address_b']]
 
+        def process_idat(channel, idata):
             # filter out probes with too few beads
             indexes_low_nb_beads = idata.probe_means.n_beads >= min_beads
-            idata_df = idata.probe_means[indexes_low_nb_beads]
+            idata_df = idata.probe_means.loc[indexes_low_nb_beads, ['mean_value']]
             LOGGER.debug(f'{len(indexes_low_nb_beads)} probes were deleted from {channel} channel for having less than '
                          f'{min_beads} beads')
-            idata_df = idata_df[['mean_value']]
 
             # merge manifest, mask and gene information
-            sample_df = idata_df.join(annotation.probe_infos, how='inner')
+            sample_df = pd.merge(idata_df, probe_info, how='inner', on='illumina_id')
 
             # check for any lost probe when merge manifest (as it is an inner merge)
             lost_probes = len(sample_df) - len(idata_df)
@@ -70,19 +71,17 @@ class Sample:
             sample_df.loc[sample_df.type == 'II', 'methylation_state'] = 'M' if channel.is_green else 'U'
             sample_df.loc[(sample_df.type == 'I') & (sample_df.index == sample_df.address_b), 'methylation_state'] = 'M'
             sample_df.loc[(sample_df.type == 'I') & (sample_df.index == sample_df.address_a), 'methylation_state'] = 'U'
-            sample_df.methylation_state = sample_df.methylation_state.astype('category')
 
             # set the signal channel to 'R' or 'G' depending on the channel defined in the idat filename
             sample_df['signal_channel'] = channel.value[0]  # first letter of the channel name
-            sample_df.signal_channel = sample_df.signal_channel.astype('category')
 
-            channel_dfs.append(sample_df.drop(columns=['address_a', 'address_b']))
+            return sample_df.drop(columns=['address_a', 'address_b'])
+
+        channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self.idata.items()], ignore_index=True)
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
-        indexes = ['type', 'channel', 'probe_type', 'probe_id', 'mask_info']
-        # todo : optimize here (4s)
-        self.signal_df = pd.concat(channel_dfs, ignore_index=True).pivot(index=indexes, values='mean_value',
-                                                                         columns=['signal_channel', 'methylation_state'])
+        self.signal_df = channels_df.pivot(index=indexes, values='mean_value',
+                                           columns=['signal_channel', 'methylation_state'])
 
         # index column 'channel' corresponds by default to the manifest channel. But it could change by calling
         # 'infer_type_i_channel()' e.g., so we need to keep track of the manifest_channel in another column
@@ -97,6 +96,7 @@ class Sample:
         self.masked_indexes = self.type1()[np.any(self.type1().isna(), axis=1)].index
         # these probes should stay masked no matter what
         self.forever_masked = self.masked_indexes
+
 
     ####################################################################################################################
     # Properties & getters

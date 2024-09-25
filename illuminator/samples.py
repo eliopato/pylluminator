@@ -11,8 +11,8 @@ from illuminator.read_idat import IdatDataset
 from illuminator.annotations import Annotations, Channel
 from illuminator.utils import save_object, load_object, get_files_matching
 
-LOGGER = logging.getLogger(__name__)
 
+LOGGER = logging.getLogger(__name__)
 
 
 class Samples:
@@ -36,13 +36,12 @@ class Samples:
 
         supported_functions = ['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
                                'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
-                               'apply_non_unique_mask']
+                               'apply_non_unique_mask', 'merge_annotation_info', 'get_betas']
 
         if callable(getattr(Sample, method_name)) and method_name in supported_functions:
             def method(*args, **kwargs):
                 LOGGER.info(f'>> start {method_name}')
-                for sample in self.samples.values():
-                    getattr(sample, method_name)(*args, **kwargs)
+                [getattr(sample, method_name)(*args, **kwargs) for sample in self.samples.values()]
                 LOGGER.info(f'done with {method_name}\n')
 
             method.__name__ = method_name
@@ -52,38 +51,6 @@ class Samples:
 
         LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
 
-    def merge_annotation_info(self, annotation: Annotations) -> None:
-        """For all samples, call the function to merge manifest and mask information to the methylation signal data
-        read from idat files.
-
-        :param annotation: Annotations object with genome version and array type corresponding to the data stored
-
-        :return: None
-        """
-
-        self.annotation = annotation
-        LOGGER.info(f'>> start merging manifest and sample data frames')
-        for sample in self.samples.values():
-            sample.merge_annotation_info(self.annotation)
-        LOGGER.info(f'done merging manifest and sample data frames\n')
-
-
-    ####################################################################################################################
-    # Processing methods
-    ####################################################################################################################
-
-    def get_betas(self, mask: bool = True, include_out_of_band: bool = True) -> pd.DataFrame:
-        """Compute beta values for all samples.
-        :param mask: set to True to apply current mask to each sample.
-        :param include_out_of_band: set to true to include Out-of-band signal of Type I probes in the Beta values
-        :return: a dataframe with samples as column, and probes (multi-indexed) as rows """
-        LOGGER.info(f'>> start calculating betas')
-        betas_list = []
-        for sample in self.samples.values():
-            betas_list.append(sample.get_betas(mask, include_out_of_band))
-        betas_df = pd.concat(betas_list, axis=1)
-        LOGGER.info(f'done calculating betas\n')
-        return betas_df
 
     ####################################################################################################################
     # Properties
@@ -204,6 +171,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     samples.samples = samples_dict
 
     if annotation is not None:
+        samples.annotation = annotation
         samples.merge_annotation_info(annotation)
 
     LOGGER.info(f'reading sample files done\n')
