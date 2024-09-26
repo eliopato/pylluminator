@@ -3,6 +3,7 @@ from matplotlib import colormaps
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 
+import logging
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
@@ -11,10 +12,13 @@ import seaborn as sns
 
 from illuminator.sample import Sample
 from illuminator.samples import Samples
+from illuminator.annotations import Annotations
 from illuminator.utils import get_chromosome_number, set_level_as_index
 
+LOGGER = logging.getLogger(__name__)
 
-def get_colors(sheet: pd.DataFrame, color_column: str, color_group_column: str, cmap_name='Spectral'):
+def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_column: str | None, cmap_name: str = 'Spectral'):
+    """Define the colors to use for each sample, depending on the columns used to categorized them."""
     legend_handles = []
     color_categories = dict()
     cmap = colormaps[cmap_name]
@@ -47,7 +51,9 @@ def get_colors(sheet: pd.DataFrame, color_column: str, color_group_column: str, 
 
     return legend_handles, color_categories
 
-def get_linestyles(sheet: pd.DataFrame, column: str | None):
+def _get_linestyles(sheet: pd.DataFrame, column: str | None):
+    """Define the line style to use for each sample, depending on the column used to categorized them."""
+
     linestyle_categories = dict()
     legend_handles = []
     line_styles = ['-', ':', '--', '-.']
@@ -69,9 +75,18 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
                custom_sheet: None | pd.DataFrame = None, mask=True) -> None:
     """Plot betas values density for each sample
 
-    :param betas: pd.DataFrame as output from sample[s].get_betas() - rows are probes and columns sample-s
-    :param n_bins: number of bins to calculate histogram. Default to 100
-    :param title: custom title for plot
+    :param samples : (Samples) with betas already calculated
+    :param n_bins: (int, optional, default 100) number of bins to generate the histogram
+    :param color_column: (str, optional, default None) name of a Sample Sheet column to define which samples get the
+        same color
+    :param color_group_column: (str, optional, default None) name of a Sample Sheet column to categorize samples and
+        give samples from the same category a similar color shade.
+    :param linestyle_column: (str, optional, default None) name of a Sample Sheet column to define which samples get the
+        same line style
+    :param custom_sheet: (pd.DataFrame, optional) a sample sheet to use. By default, use the samples' sheet. Useful if
+        you want to filter the samples to display
+    :param title: (str, optional) custom title for plot
+    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them."
 
     :return: None"""
 
@@ -80,8 +95,8 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
     betas = samples.betas(mask)[sheet.sample_name.values]
 
-    c_legend_handles, colors = get_colors(sheet, color_column, color_group_column)
-    ls_legend_handles, linestyles = get_linestyles(sheet, linestyle_column)
+    c_legend_handles, colors = _get_colors(sheet, color_column, color_group_column)
+    ls_legend_handles, linestyles = _get_linestyles(sheet, linestyle_column)
     legend_handles = c_legend_handles + ls_legend_handles
 
     # plot the data
@@ -110,7 +125,17 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     plt.show()
 
 
-def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=100, title: str | None=None):
+def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=100, title: str | None=None, mask=True):
+    """Plot betas grouped by one or several sample sheet columns. Display the average beta values per group with a plain
+    line, and individual beta values distribution as transparent lines.
+
+    :param samples : (Samples) with betas already calculated
+    :param group_columns: (list of str) name of one or several Sample Sheet column to categorize samples and
+        give samples from the same category a similar color shade.
+    :param n_bins: (int, optional, default 100) number of bins to generate the histogram
+    :param title: (str, optional) custom title for plot
+    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them."""
+
     cmap = colormaps['Spectral']
     plt.style.use('ggplot')
     bins = [n*1/n_bins for n in range(0, n_bins+1)]
@@ -152,10 +177,13 @@ def betas_mds(samples: Samples, color_group_column: str | None = None,
               random_state: int = 42, title: None | str = None, mask=True) -> None:
     """Plot samples in 2D space according to their beta distances.
 
-    :param betas: pd.DataFrame as output from sample[s].get_betas() - rows are probes and columns sample-s
-    :param colors: list of colors for each sample. Must have then length of N samples. Default to None
-    :param random_state: seed for the MDS model. Assigning a seed makes the graphe reproducible across calls.
-    :param title: custom title for plot
+    :param samples : Samples object, with betas already calculated
+    :param color_group_column: (str, optional, default None) name of a Sample Sheet column to categorize samples and
+        give samples from the same category a similar color shade.
+    :param random_state: (int, optional, default 42) seed for the MDS model. Assigning a seed makes the graphe
+        reproducible across calls.
+    :param title: (str, optional) custom title for plot
+    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them.
 
     :return: None"""
 
@@ -169,7 +197,7 @@ def betas_mds(samples: Samples, color_group_column: str | None = None,
     mds = MDS(n_components=2, random_state=random_state)
     fit = mds.fit_transform(betas_most_variance.T)
 
-    legend_handles, colors_dict = get_colors(samples.sample_sheet, 'sample_name', color_group_column)
+    legend_handles, colors_dict = _get_colors(samples.sample_sheet, 'sample_name', color_group_column)
     colors = [colors_dict[sample] for sample in betas.columns]
 
     plt.figure(figsize=(15, 10))
@@ -292,13 +320,16 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 10
     sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes]
 
     if keep_na:
-        sns.heatmap(sorted_betas[:nb_probes].sort_values(betas.columns[0]))
+        sns.heatmap(sorted_betas[:nb_probes].sort_values(betas.columns[0]), xticklabels=True)
     else:
-        sns.clustermap(sorted_betas.dropna()[:nb_probes])
+        sns.clustermap(sorted_betas.dropna()[:nb_probes], xticklabels=True)
 
-def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=None, chromosome_col='Chromosome',
-                    x_col='Start', y_col='p_value', annotation_col=None, log10=False, title: None | str = None,
-                    draw_significance=False) -> None:
+
+def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='Chromosome',
+                    x_col='Start', y_col='p_value', log10=False,
+                    annotation: Annotations | None = None, annotation_col: str = 'genes',
+                    medium_threshold=1e-05, high_threshold=5e-08,
+                    title: None | str = None, draw_significance=False) -> None:
     """Display a Manhattan plot of the given data.
 
     :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
@@ -309,8 +340,14 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=N
         `data_to_plot` dataframe.
     :param x_col: (option, string, default 'Start') name of the column to use for X axis, start position of the probe/bin
     :param y_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
-    :param annotation_col: (optional, string, default 'probe_id') the name of a column used to write annotation on the
-        plots for data that is above the significant threshold. Can be None to remove any annotation.
+    :param annotation: (optional, Annotation, default None) Annotation data to use to annotation significant probes.
+        Can be None to remove any annotation.
+    :param annotation_col: (optional, str, default None) the name of a column used to write annotation on the
+        plots for data that is above the significant threshold. Must be a column in the Annotation data
+    :param medium_threshold: (optional, float, default 1e-05) set the threshold used for displaying annotation
+        (and significance line if draw_significance is True)
+    :param high_threshold: (optional, float, default 1e-08) set the threshold for the higher significance line (drawn if
+        draw_significance is True)
     :param log10: (optional, boolean, default True) apply -log10 on the value column
     :param draw_significance: (option, boolean, default False) draw p-value significance lines (at 1e-05 and 5e-08)
     :param title: (optional, string) custom title for plot
@@ -330,16 +367,11 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=N
     # sort by chromosome and make the column a category
     data_to_plot = data_to_plot.sort_values(['chr_id', x_col]).astype({'chr_id': 'category'})
 
-    # make indices for plotting
-    data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
-
     # figure initialization
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(20, 14))
     margin = int(max(data_to_plot[x_col]) / 10)
     chrom_start, chrom_end = 0, 0
     x_labels, x_major_ticks, x_minor_ticks = [], [], [0]
-    high_threshold = 5e-08
-    medium_threshold = 1e-05
 
     # apply -log10 to p-values if needed
     if log10:
@@ -348,12 +380,27 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=N
         medium_threshold = -np.log10(medium_threshold)
 
     # define colormap and limits
-    v_max = np.max(data_to_plot[y_col])
-    v_min = np.min(data_to_plot[y_col])
+    cmap = colormaps.get_cmap('viridis').reversed()
     if min(data_to_plot[y_col]) < 0:
-        cmap = colormaps.get_cmap('gist_rainbow')
+        # v_max = np.max(abs(np.percentile(data_to_plot[y_col], [1, 99])))
+        v_max = np.min(abs(data_to_plot[y_col]))
+        v_min = -v_max
     else:
-        cmap = colormaps.get_cmap('viridis').reversed()
+        v_min = 0
+        v_max = np.max(data_to_plot[y_col])
+
+    # check annotation parameter, and select and clean up annotation if defined
+    gene_info = None
+    if annotation is not None and annotation_col not in annotation.probe_infos.columns:
+        LOGGER.error(f'{annotation_col} was not found in the annotation dataframe. '
+                     f'Available columns : {annotation.probe_infos.columns}.')
+        annotation = None
+    elif annotation is not None:
+        gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates().set_index('probe_id')
+        gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
+
+    # make indices for plotting
+    data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
 
     # plot each chromosome scatter plot with its assigned color
     for num, (name, group) in enumerate(data_to_plot_grouped):
@@ -370,18 +417,25 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=N
 
         # plot segments if a segment df is provided
         if segments_to_plot is not None:
-            for chromosome in set(group[chromosome_col]):
-                chrom_segments = segments_to_plot[segments_to_plot.chromosome == chromosome]
-                for _, segment in chrom_segments.iterrows():
+            for chromosomes in set(group[chromosome_col]):
+                chrom_segments = segments_to_plot[segments_to_plot.chromosome == chromosomes]
+                for segment in chrom_segments.itertuples(index=False):
                     plt.plot([chrom_start + segment.start, chrom_start + segment.end],
                              [segment.mean_cnv, segment.mean_cnv],
-                             c='black', linewidth=2)
+                             c=cmap(-segment.mean_cnv),
+                             linewidth=2)
 
         # draw annotations for probes that are over the threshold, if annotation_col is set
-        if annotation_col is not None:
-            indexes_to_annotate = group[y_col] > medium_threshold if log10 else group[y_col] < medium_threshold
-            for _, row in group[indexes_to_annotate].iterrows():
-                plt.annotate(row[annotation_col], (row[x_col] + 0.03, row[y_col] + 0.03), c=cmap(row[y_col]/v_max))
+        if annotation is not None:
+            if log10:
+                indexes_to_annotate = group[y_col] > medium_threshold
+            else:
+                indexes_to_annotate = group[y_col] < medium_threshold
+            x_col_idx = group.columns.get_loc(x_col)
+            y_col_idx = group.columns.get_loc(y_col)
+            for row in group[indexes_to_annotate].itertuples(index=False):
+                gene_name = gene_info.loc[row.probe_id, annotation_col]
+                plt.annotate(gene_name, (row[x_col_idx] + 0.03, row[y_col_idx] + 0.03), c=cmap(row[y_col_idx] / v_max))
 
         chrom_start = chrom_end
 
@@ -390,10 +444,12 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=N
 
     # add lines of significance threshold
     if draw_significance:
-        x_start = 0-margin
-        x_end =  chrom_end + margin
-        plt.plot([x_start, x_end], [high_threshold, high_threshold], linestyle='dotted', c=cmap(high_threshold), alpha=0.7)
-        plt.plot([x_start, x_end], [medium_threshold, medium_threshold], linestyle='dotted', c=cmap(medium_threshold), alpha=0.5)
+        x_start = 0 - margin
+        x_end = chrom_end + margin
+        plt.plot([x_start, x_end], [high_threshold, high_threshold], c=cmap(high_threshold), alpha=0.7,
+                 linestyle='dotted')
+        plt.plot([x_start, x_end], [medium_threshold, medium_threshold], linestyle='dotted',
+                 c=cmap(medium_threshold), alpha=0.5)
 
     # grids style and plot limits
     ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
@@ -417,18 +473,27 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame=N
     plt.title(title)
     plt.show()
 
+
 def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', x_col='Start', y_col='p_value',
-                   annotation_col='probe_id', log10=True, draw_significance=True, title: None | str = None):
-    """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by
-    get_dmrs()
+                       annotation: Annotations | None = None, annotation_col='genes', log10=True,
+                       draw_significance=True,
+                       medium_threshold=1e-05, high_threshold=5e-08,
+                       title: None | str = None):
+    """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
 
     :param data_to_plot: (pd.DataFrame) dataframe to use for plotting.
     :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
         `data_to_plot` dataframe.
     :param x_col: (option, string, default 'Start') name of the column to use for X axis, start position of the probe/bin
     :param y_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
-    :param annotation_col: (optional, string, default 'probe_id') the name of a column used to write annotation on the
-        plots for data that is above the significant threshold. Can be None to remove any annotation.
+    :param annotation: (optional, Annotation, default None) Annotation data to use to annotation significant probes.
+        Can be None to remove any annotation.
+    :param annotation_col: (optional, str, default None) the name of a column used to write annotation on the
+        plots for data that is above the significant threshold. Must be a column in the Annotation data
+    :param medium_threshold: (optional, float, default 1e-05) set the threshold used for displaying annotation
+        (and significance line if draw_significance is True)
+    :param high_threshold: (optional, float, default 1e-08) set the threshold for the higher significance line (drawn if
+        draw_significance is True)
     :param log10: (optional, boolean, default True) apply -log10 on the value column
     :param draw_significance: (option, boolean, default True) draw p-value significance lines (at 1e-05 and 5e-08)
     :param title: (optional, string) custom title for plot
@@ -436,9 +501,13 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', 
     :return: nothing"""
 
     _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=y_col, x_col=x_col,
-                    draw_significance=draw_significance, annotation_col=annotation_col, log10=log10, title=title)
+                    draw_significance=draw_significance, annotation=annotation, annotation_col=annotation_col,
+                    medium_threshold=medium_threshold, high_threshold=high_threshold,
+                    log10=log10, title=title)
 
-def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col='Start_bin', chromosome_col='Chromosome',
+
+def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col='Start_bin',
+                       chromosome_col='Chromosome',
                        y_col='cnv', title: None | str = None) -> None:
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
@@ -457,4 +526,4 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col=
 
     _manhattan_plot(data_to_plot=data_to_plot, segments_to_plot=segments_to_plot, x_col=x_col,
                     chromosome_col=chromosome_col, y_col=y_col, title=title,
-                    log10=False, annotation_col=None, draw_significance=False)
+                    log10=False, annotation=None, draw_significance=False)
