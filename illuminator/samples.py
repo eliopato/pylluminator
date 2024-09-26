@@ -43,13 +43,15 @@ class Samples:
             def method(*args, **kwargs):
                 LOGGER.info(f'>> start {method_name}')
                 [getattr(sample, method_name)(*args, **kwargs) for sample in self.samples.values()]
-                LOGGER.info(f'done with {method_name}\n')
 
                 # if the method called updated the beta values, update the dataframe
                 if method_name == 'calculate_betas':
+                    LOGGER.info(f'concatenating betas dataframes')
                     self._betas_df = pd.concat([sample.betas(False) for sample in self.samples.values()], axis=1)
                 elif method_name not in ['apply_quality_mask', 'apply_non_unique_mask']:
                     self._betas_df = None
+
+                LOGGER.info(f'done with {method_name}\n')
 
             method.__name__ = method_name
             method.__doc__ = getattr(Sample, method_name).__doc__

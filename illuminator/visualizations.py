@@ -1,5 +1,8 @@
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
+from matplotlib.lines import Line2D
+import matplotlib.patches as mpatches
+
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
@@ -10,7 +13,60 @@ from illuminator.sample import Sample
 from illuminator.samples import Samples
 from illuminator.utils import get_chromosome_number, set_level_as_index
 
-def plot_betas(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None) -> None:
+
+def get_colors(sheet: pd.DataFrame, color_column: str, color_group_column: str, cmap_name='Spectral'):
+    legend_handles = []
+    color_categories = dict()
+    cmap = colormaps[cmap_name]
+
+    # determine the line color
+    if color_column is not None:
+        categories = sorted(set(sheet[color_column]))
+        nb_colors = len(categories)
+        if color_group_column is None:
+            for i, category in enumerate(categories):
+                color_categories[category] = cmap(i / (nb_colors - 1))
+        else:
+            grouped_sheet = sheet.groupby(color_group_column)
+            nb_categories = len(grouped_sheet)
+            # gap between colors of two different group
+            cmap_group_interval_size = min(0.2, 1 / (nb_categories * 2 - 1))
+            # gap between two colors of the same group
+            cmap_color_interval_size = (1 - (nb_categories - 1) * cmap_group_interval_size) / nb_colors
+            idx_color = 0
+            for _, sub_sheet in grouped_sheet:
+                categories = sorted(set(sub_sheet[color_column]))
+                for i, category in enumerate(categories):
+                    idx_color += cmap_color_interval_size
+                    color_categories[category] = cmap(idx_color)
+                idx_color += cmap_group_interval_size
+
+        # make the legend (title + colors)
+        legend_handles += [Line2D([0], [0], color='black', linestyle='', label=f'{color_column} :')]
+        legend_handles += [mpatches.Patch(color=color, label=label) for label, color in color_categories.items()]
+
+    return legend_handles, color_categories
+
+def get_linestyles(sheet: pd.DataFrame, column: str | None):
+    linestyle_categories = dict()
+    legend_handles = []
+    line_styles = ['-', ':', '--', '-.']
+
+    # determine the line style
+    if column is not None:
+        categories = sorted(set(sheet[column]))
+        for i, category in enumerate(categories):
+            linestyle_categories[category] = line_styles[i % len(line_styles)]
+        legend_handles += [Line2D([0], [0], color='black', linestyle='', label=f'{column} :')]
+        legend_handles += [Line2D([0], [0], color='black', linestyle=ls, label=label) for label, ls in
+                           linestyle_categories.items()]
+
+    return legend_handles, linestyle_categories
+
+
+def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
+               color_column='sample_name', color_group_column: None | str = None, linestyle_column=None,
+               custom_sheet: None | pd.DataFrame = None, mask=True) -> None:
     """Plot betas values density for each sample
 
     :param betas: pd.DataFrame as output from sample[s].get_betas() - rows are probes and columns sample-s
@@ -19,15 +75,81 @@ def plot_betas(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None)
 
     :return: None"""
 
-    for index, row in betas.transpose().iterrows():
-        histogram_values = np.histogram(row.dropna().values, bins=n_bins, density=True)
-        plt.plot(histogram_values[1][:-1], histogram_values[0], label=index, linewidth=1)
-    title = title if title is not None else f'Samples\' beta values distances on {len(betas)} probes'
+    # initialize values
+    plt.style.use('ggplot')
+    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
+    betas = samples.betas(mask)[sheet.sample_name.values]
+
+    c_legend_handles, colors = get_colors(sheet, color_column, color_group_column)
+    ls_legend_handles, linestyles = get_linestyles(sheet, linestyle_column)
+    legend_handles = c_legend_handles + ls_legend_handles
+
+    # plot the data
+    plt.figure(figsize=(15, 10))
+
+    color = None
+    linestyle = None
+    for label, row in betas.transpose().iterrows():
+        histogram_y, histogram_x = np.histogram(row.dropna().values, bins=n_bins, density=True)
+        sample_sheet_row = sheet[sheet.sample_name == label]
+        if color_column is not None:
+            label = sample_sheet_row[color_column].iloc[0]
+            color = colors[label]
+        if linestyle_column is not None:
+            linestyle = linestyles[sample_sheet_row[linestyle_column].iloc[0]]
+        plt.plot(histogram_x[:-1], histogram_y, label=label, linewidth=1, color=color, linestyle=linestyle)
+
+    title = title if title is not None else f'{len(betas.columns)} samples\' beta values on {len(betas)} probes'
     plt.title(title)
-    plt.legend()
+
+    if len(legend_handles) > 0:
+        plt.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1, 1))
+    else:
+        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+
+    plt.show()
 
 
-def betas_mds(betas: pd.DataFrame, colors: list | None = None, random_state: int = 42, title: None | str = None) -> None:
+def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=100, title: str | None=None):
+    cmap = colormaps['Spectral']
+    plt.style.use('ggplot')
+    bins = [n*1/n_bins for n in range(0, n_bins+1)]
+    sheet = samples.sample_sheet
+
+    betas = samples.betas()
+
+    grouped_sheet = sheet.groupby(group_columns)
+    nb_groups = len(grouped_sheet)
+
+    plt.figure(figsize=(15, 10))
+
+    for i_group, (group_name, sub_sheet) in enumerate(grouped_sheet):
+        color = cmap(i_group / (nb_groups - 1))
+
+        histos = np.zeros((len(sub_sheet), n_bins))
+
+        # draw each sample's beta distribution with a very transparent line, and save values to calculate the average
+        for i, sample in enumerate(sub_sheet.sample_name):
+            hist_y, _ = np.histogram(betas[sample].dropna().values, bins=bins, density=True)
+            plt.plot(bins[:-1], hist_y, linewidth=1, alpha=0.1, color=color)
+            histos[i] = hist_y
+
+        # get average histogram for the group
+        mean_histo =  histos.mean(axis=0)
+
+        plt.plot(bins[:-1], mean_histo, label=group_name, linewidth=1, color=color)
+
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1), title=group_columns)
+
+    if title is None:
+        title = f'{len(betas.columns)} samples\' beta values on {len(betas)} probes, grouped by {group_columns}'
+    plt.title(title)
+
+    plt.show()
+
+
+def betas_mds(samples: Samples, color_group_column: str | None = None,
+              random_state: int = 42, title: None | str = None, mask=True) -> None:
     """Plot samples in 2D space according to their beta distances.
 
     :param betas: pd.DataFrame as output from sample[s].get_betas() - rows are probes and columns sample-s
@@ -37,6 +159,7 @@ def betas_mds(betas: pd.DataFrame, colors: list | None = None, random_state: int
 
     :return: None"""
 
+    betas = samples.betas(mask)
     # get betas with the most variance across samples (top 1000)
     betas_variance = np.var(betas, axis=1)
     indexes_most_variance = betas_variance.sort_values(ascending=False)[:1000].index
@@ -46,13 +169,19 @@ def betas_mds(betas: pd.DataFrame, colors: list | None = None, random_state: int
     mds = MDS(n_components=2, random_state=random_state)
     fit = mds.fit_transform(betas_most_variance.T)
 
+    legend_handles, colors_dict = get_colors(samples.sample_sheet, 'sample_name', color_group_column)
+    colors = [colors_dict[sample] for sample in betas.columns]
+
+    plt.figure(figsize=(15, 10))
     plt.scatter(x=fit[:, 0], y=fit[:, 1], label=betas.columns, c=colors)
 
     for index, name in enumerate(betas.columns):
         plt.annotate(name, (fit[index, 0], fit[index, 1]), fontsize=9)
 
-    title = title if title is not None else f'Samples\' beta values distances on {len(betas)} probes'
+    title = title if title is not None else f'MDS of the 1000 most variable probes'
     plt.title(title)
+
+    plt.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1, 1))
 
 
 def betas_dendrogram(betas: pd.DataFrame, title: None | str = None) -> None:
@@ -62,6 +191,8 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None) -> None:
     :param title: custom title for plot
 
     :return: None"""
+
+    plt.figure(figsize=(15, 10))
 
     linkage_matrix = linkage(betas.dropna().T.values, optimal_ordering=True, method='complete')
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
@@ -76,7 +207,7 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None) -> None:
     # colnames(M) < - paste("Component", c(1: k))
     # hc < - hclust(dist(M))
 
-    title = title if title is not None else f'Samples\' beta values distances on {len(betas)} probes'
+    title = title if title is not None else f'Samples\' beta values distances on {len(betas.dropna())} probes'
     plt.title(title)
 
 ########################################################################################################################
