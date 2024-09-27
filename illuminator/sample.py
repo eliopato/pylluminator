@@ -25,7 +25,7 @@ class Sample:
     ####################################################################################################################
 
     def __init__(self, name: str):
-        self._idata = None
+        self.idata = None
         self._signal_df = None
         self._betas_df = None
         self.name = name
@@ -35,10 +35,10 @@ class Sample:
 
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
         """Add idata dataset to the sample idat dictionary, for the channel key passed in the argument"""
-        if self._idata is None:
-            self._idata = {channel: dataset}
+        if self.idata is None:
+            self.idata = {channel: dataset}
         else:
-            self._idata[channel] = dataset
+            self.idata[channel] = dataset
 
     def merge_annotation_info(self, annotation: Annotations, min_beads=1) -> None:
         """Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
@@ -78,7 +78,7 @@ class Sample:
 
             return sample_df.drop(columns=['address_a', 'address_b'])
 
-        channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self._idata.items()], ignore_index=True)
+        channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self.idata.items()], ignore_index=True)
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
         self._signal_df = channels_df.pivot(index=indexes, values='mean_value',
@@ -730,11 +730,11 @@ class Sample:
         description += '---------------------------------------------------------------------\n'
 
         if self._signal_df is None:
-            if self._idata is None:
+            if self.idata is None:
                 description += 'No data\n'
             else:
-                description += 'Probes raw information : (dict self._idata)\n'
-                for channel, dataset in self._idata.items():
+                description += 'Probes raw information : (dict self.idata)\n'
+                for channel, dataset in self.idata.items():
                     description += f'\nChannel {channel} head data:\n {dataset}\n'
         else:
             description += 'Signal dataframe first items (self._signal_df or self.get_signal_df(mask=True|False)): \n'

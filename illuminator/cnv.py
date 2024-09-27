@@ -8,9 +8,8 @@ import linear_segment
 from sklearn.linear_model import LinearRegression
 
 from illuminator.sample import Sample
-from illuminator.samples import Samples
+from illuminator.samples import Samples, read_samples
 from illuminator.annotations import ArrayType, Annotations
-from illuminator.sample_sheet import create_from_idats
 from illuminator.utils import get_resource_folder, get_files_matching, download_from_geo
 
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
     normal_samples = normal_samples.samples.values()
 
     genome_info = sample.annotation.genome_info
-    probe_coords_df = sample.annotation.get_genomic_ranges()
+    probe_coords_df = sample.annotation.genomic_ranges
 
     # get total intensity per probe and drop unnecessary indexes
     target_intensity = sample.get_total_ib_intensity()
@@ -116,16 +115,11 @@ def get_normalization_samples(annotation: Annotations):
     Only EPIC v2 and EPIC are supported for now"""
 
     if annotation.array_type == ArrayType.HUMAN_EPIC_V2:
+
         idat_dir = get_resource_folder('arrays.epic_v2_normalization_data')
         gsm_ids = ['GSM7139626', 'GSM7139627']
         download_from_geo(gsm_ids, idat_dir)
-
-        # read downloaded idat files
-        normal_samples_sheet, _ = create_from_idats(idat_dir)
-        normal_samples = Samples(normal_samples_sheet)
-        normal_samples.read_samples(idat_dir)
-        normal_samples.merge_annotation_info(annotation)
-        return normal_samples
+        return read_samples(idat_dir, annotation=annotation)
 
     if annotation.array_type == ArrayType.HUMAN_EPIC:
 

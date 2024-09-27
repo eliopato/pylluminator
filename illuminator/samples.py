@@ -171,7 +171,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
             # set the sample's idata for this channel
             sample.set_idata(channel, IdatDataset(paths[0]))
 
-        if sample._idata is None:
+        if sample.idata is None:
             LOGGER.error(f'no idat files found for sample {line.sample_name}, skipping it')
             continue
 
