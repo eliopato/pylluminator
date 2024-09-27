@@ -30,6 +30,9 @@ class Samples:
             return self.samples[list(self.samples.keys())[item]]
         return self.samples[item]
 
+    def keys(self):
+        return self.samples.keys()
+
     def __getattr__(self, method_name):
         """Wrapper for Sample methods that can directly be applied to every sample"""
 

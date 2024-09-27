@@ -15,38 +15,62 @@ from illuminator.utils import set_logger, get_logger, get_logger_level
 LOGGER = get_logger()
 
 
-def copy_number_variation(sample: Sample, normal_samples: Samples | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
+def copy_number_variation(samples: Samples | Sample, sample_name: str | None = None, normalization_samples_names: list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
     """Perform copy number variation (CNV) and copy number segmentation for a sample
 
-    :param sample: (illuminator.Sample) sample to be analyzed
-    :param normal_samples: (optional, illuminator.Samples, default None) samples to use for normalization, of the same
-        array type and genome version of `sample`. If none is specified (default), default normalization samples will be
-        loaded from a database - but this only work for EPIC/hg38 and EPICv2/hg38; for other array versions, you
-        **need** to provide samples.
+    :param samples: (illuminator.Sample or illuminator.Samples) sample to be analyzed
+    :param sample_name: (string or None, default None) name of the Sample to calculate CNV of. Necessary if you provide
+        a Samples object as first parameter, ignored if you provide a single Sample.
+    :param normalization_samples_names: (optional, str, default empty list) names of the samples to use for
+        normalization, that have to be part of the passed Samples object. If empty (default), default normalization
+        samples will be loaded from a database - but this only work for EPIC/hg38 and EPICv2/hg38; for other array
+        versions, you **need** to provide samples.
 
     :return: tuple(pr.Pyranges, pd.DataFrame, pd.DataFrame) : (1) the bins coordinates as a pr.Pyranges object, (3) the
         bins signal as a pd.DataFrame object, and (3) the segments as a pd.DataFrame object"""
 
-    # normalization samples
-    if normal_samples is None:
-        LOGGER.info('Getting normalization samples')
-        log_level = get_logger_level()
-        set_logger('WARNING')  # set log level to Debug to hide loading log messages
-        normal_samples = get_normalization_samples(sample.annotation)
-        set_logger(log_level)
+    # check input parameters
+
+    if isinstance(samples, Samples) and sample_name is None:
+        LOGGER.error('You can\'t calculate the copy number variation of several samples. Please provide either a single '
+                     'Sample object or a Samples object and a sample name.')
+        return None
+
+    if isinstance(samples, Sample) and len(normalization_samples_names) > 0:
+        LOGGER.error(f'The normalization samples names {normalization_samples_names} can`t be found as you provided'
+                     f'a single Sample object. Please provide the Samples object that contains these samples.')
+        return None
+
+    if isinstance(samples, Sample) and sample_name is not None:
+        LOGGER.warning('When a single Sample object is passed to the function, parameter `sample_name` is ignored.')
+
+    # get normalization samples
+    if normalization_samples_names is None or len(normalization_samples_names) == 0:
+        # load default normalization samples for the given array version
+        normal_samples = get_normalization_samples(samples.annotation)
+
         if normal_samples is None:
             LOGGER.error('Please provide samples to use as normalization')
-            return
+            return None
 
-    if sample.annotation.array_type != normal_samples.annotation.array_type:
-        LOGGER.warning('Array types of input sample and normalization samples are different')
-    normal_samples = normal_samples.samples.values()
+        normal_samples = normal_samples.samples.values()
+    else:
+        # extract normalization samples from the samples object
+        normal_samples = [samples[key] for key in normalization_samples_names if key in samples.keys()]
 
-    genome_info = sample.annotation.genome_info
-    probe_coords_df = sample.annotation.genomic_ranges
+        if len(normal_samples) == 0:
+            LOGGER.error(f'The normalization samples {normalization_samples_names} were not found in the Samples object')
+            return None
+
+        if len(normal_samples) != len(normalization_samples_names):
+            LOGGER.warning(f'These normalization samples were not found in the Samples object provided : '
+                           f'{[name for name in normalization_samples_names if name not in samples.keys()]}')
+
+    genome_info = samples.annotation.genome_info
+    probe_coords_df = samples.annotation.genomic_ranges
 
     # get total intensity per probe and drop unnecessary indexes
-    target_intensity = sample.get_total_ib_intensity()
+    target_intensity = samples[sample_name].get_total_ib_intensity()
     target_intensity = target_intensity.reset_index(['channel', 'type', 'probe_type'], drop=True).dropna()
 
     norm_intensities_list = [s.get_total_ib_intensity() for s in normal_samples]
@@ -113,12 +137,17 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
 def get_normalization_samples(annotation: Annotations):
     """Read from the package's data normalization samples data, depending on the array type.
     Only EPIC v2 and EPIC are supported for now"""
+    LOGGER.info('Getting normalization samples')
+
+    log_level = get_logger_level()
+    set_logger('WARNING')  # set log level to Debug to hide loading log messages
 
     if annotation.array_type == ArrayType.HUMAN_EPIC_V2:
 
         idat_dir = get_resource_folder('arrays.epic_v2_normalization_data')
         gsm_ids = ['GSM7139626', 'GSM7139627']
         download_from_geo(gsm_ids, idat_dir)
+        set_logger(log_level)
         return read_samples(idat_dir, annotation=annotation)
 
     if annotation.array_type == ArrayType.HUMAN_EPIC:
@@ -134,8 +163,10 @@ def get_normalization_samples(annotation: Annotations):
             for zip_file in datafiles_zip:
                 with zipfile.ZipFile(zip_file, 'r') as zip_ref:
                     zip_ref.extractall(datadir_str)
-
+        set_logger(log_level)
         return Samples.from_sesame(datadir, annotation)
+
+    set_logger(log_level)
 
     LOGGER.error(f'No predefined normalization data for array {annotation.array_type}')
     return None
