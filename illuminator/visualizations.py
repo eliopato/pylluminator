@@ -3,7 +3,6 @@ from matplotlib import colormaps
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 
-import logging
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
@@ -13,9 +12,10 @@ import seaborn as sns
 from illuminator.sample import Sample
 from illuminator.samples import Samples
 from illuminator.annotations import Annotations
-from illuminator.utils import get_chromosome_number, set_level_as_index
+from illuminator.utils import get_chromosome_number, set_level_as_index, get_logger
 
-LOGGER = logging.getLogger(__name__)
+
+LOGGER = get_logger()
 
 def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_column: str | None, cmap_name: str = 'Spectral'):
     """Define the colors to use for each sample, depending on the columns used to categorized them."""

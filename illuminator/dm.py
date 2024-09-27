@@ -1,5 +1,4 @@
 import numpy as np
-import logging
 import pandas as pd
 import pyranges as pr
 
@@ -12,7 +11,9 @@ from joblib import Parallel, delayed
 from illuminator.annotations import Annotations
 from illuminator.utils import remove_probe_suffix, set_level_as_index
 
-LOGGER = logging.getLogger(__name__)
+from illuminator.utils import get_logger
+
+LOGGER = get_logger()
 
 
 def combine_p_values_stouffer(p_values: pd.Series):

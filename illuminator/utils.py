@@ -11,7 +11,21 @@ from importlib.resources.readers import MultiplexedPath
 import numpy as np
 import pandas as pd
 
-LOGGER = logging.getLogger(__name__)
+
+def set_logger(level) -> None:
+    logging.getLogger().setLevel(level)  # set the verbosity : DEBUG, INFO, WARNING, ERROR
+
+
+def get_logger(level=None) -> logging.Logger:
+    if level is not None:
+        set_logger(level)
+    return logging.getLogger(__name__)
+
+def get_logger_level():
+    return logging.getLogger().level
+
+
+LOGGER = get_logger()
 
 
 def column_names_to_snake_case(df: pd.DataFrame) -> pd.DataFrame:

@@ -6,13 +6,13 @@ import numpy as np
 import struct
 from pathlib import PurePath
 import gzip
-import logging
+
+from illuminator.utils import get_logger
+
+LOGGER = get_logger()
 
 DEFAULT_IDAT_VERSION = 3
 DEFAULT_IDAT_FILE_ID = 'IDAT'
-
-
-LOGGER = logging.getLogger(__name__)
 
 
 def npread(file_like, dtype: str, n: int) -> np.ndarray:

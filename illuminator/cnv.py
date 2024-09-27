@@ -1,4 +1,3 @@
-import logging
 import zipfile
 
 import pandas as pd
@@ -11,8 +10,9 @@ from illuminator.sample import Sample
 from illuminator.samples import Samples, read_samples
 from illuminator.annotations import ArrayType, Annotations
 from illuminator.utils import get_resource_folder, get_files_matching, download_from_geo
+from illuminator.utils import set_logger, get_logger, get_logger_level
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger()
 
 
 def copy_number_variation(sample: Sample, normal_samples: Samples | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
@@ -30,10 +30,10 @@ def copy_number_variation(sample: Sample, normal_samples: Samples | None = None)
     # normalization samples
     if normal_samples is None:
         LOGGER.info('Getting normalization samples')
-        log_level = logging.getLogger().level
-        logging.getLogger().setLevel(logging.WARNING)  # set log level to Debug to hide loading log messages
+        log_level = get_logger_level()
+        set_logger('WARNING')  # set log level to Debug to hide loading log messages
         normal_samples = get_normalization_samples(sample.annotation)
-        logging.getLogger().setLevel(log_level)
+        set_logger(log_level)
         if normal_samples is None:
             LOGGER.error('Please provide samples to use as normalization')
             return

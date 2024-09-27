@@ -1,11 +1,12 @@
 import os.path
 import pandas as pd
-import logging
 from importlib.resources.readers import MultiplexedPath
 
 from illuminator.utils import column_names_to_snake_case, get_files_matching, convert_to_path
 
-LOGGER = logging.getLogger(__name__)
+from illuminator.utils import get_logger
+
+LOGGER = get_logger()
 
 
 def read_from_file(filepath: str = '', delimiter: str = ',') -> pd.DataFrame | None:

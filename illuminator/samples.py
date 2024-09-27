@@ -1,5 +1,4 @@
 import os
-import logging
 from inspect import signature
 
 from importlib.resources.readers import MultiplexedPath
@@ -10,10 +9,9 @@ from illuminator.sample import Sample
 import illuminator.sample_sheet as sample_sheet
 from illuminator.read_idat import IdatDataset
 from illuminator.annotations import Annotations, Channel
-from illuminator.utils import save_object, load_object, get_files_matching, mask_dataframe
+from illuminator.utils import save_object, load_object, get_files_matching, mask_dataframe, get_logger
 
-
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger()
 
 
 class Samples:

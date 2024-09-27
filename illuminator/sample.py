@@ -1,6 +1,5 @@
 import re
 import os
-import logging
 from pathlib import Path
 
 import pandas as pd
@@ -13,7 +12,9 @@ from illuminator.stats import norm_exp_convolution, quantile_normalization_using
     iqr
 from illuminator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix
 
-LOGGER = logging.getLogger(__name__)
+from illuminator.utils import get_logger
+
+LOGGER = get_logger()
 
 
 class Sample:

@@ -1,11 +1,11 @@
 from enum import Enum, unique
 import pandas as pd
-import logging
 import pyranges as pr
 
 from illuminator.utils import get_resource_folder, download_from_link, column_names_to_snake_case, concatenate_non_na
+from illuminator.utils import get_logger
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger()
 
 
 @unique

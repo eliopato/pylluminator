@@ -1,9 +1,10 @@
-import logging
 import numpy as np
 from statsmodels.robust import mad
 from scipy.stats import norm
 
-LOGGER = logging.getLogger(__name__)
+from illuminator.utils import get_logger
+
+LOGGER = get_logger()
 
 
 def iqr(data: np.array):
