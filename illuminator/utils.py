@@ -66,7 +66,8 @@ def mask_dataframe(df: pd.DataFrame, indexes_to_mask: pd.MultiIndex | list) -> p
     if isinstance(indexes_to_mask, list):
         all_masked_indexes = set()
         for masked_indexes in indexes_to_mask:
-            all_masked_indexes.update(masked_indexes)
+            if masked_indexes is not None:
+                all_masked_indexes.update(masked_indexes)
         return df[~df.index.isin(all_masked_indexes)]
 
     return df[~df.index.isin(indexes_to_mask)]

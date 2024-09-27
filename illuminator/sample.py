@@ -32,7 +32,6 @@ class Sample:
         self.name = name
         self.annotation = None
         self.masked_indexes = None
-        self.forever_masked = None
 
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
         """Add idata dataset to the sample idat dictionary, for the channel key passed in the argument"""
@@ -54,19 +53,8 @@ class Sample:
         probe_info = annotation.probe_infos[indexes + ['address_a', 'address_b']]
 
         def process_idat(channel, idata):
-            # filter out probes with too few beads
-            indexes_low_nb_beads = idata.probe_means.n_beads >= min_beads
-            idata_df = idata.probe_means.loc[indexes_low_nb_beads, ['mean_value']]
-            LOGGER.debug(f'{len(indexes_low_nb_beads)} probes were deleted from {channel} channel for having less than '
-                         f'{min_beads} beads')
-
             # merge manifest, mask and gene information
-            sample_df = pd.merge(idata_df, probe_info, how='inner', on='illumina_id')
-
-            # check for any lost probe when merge manifest (as it is an inner merge)
-            lost_probes = len(sample_df) - len(idata_df)
-            if lost_probes > 0:
-                LOGGER.warning(f'Lost {lost_probes} while merging information with Manifest (out of {len(idata_df)})')
+            sample_df = pd.merge(idata.probe_means, probe_info, how='inner', on='illumina_id')
 
             # deduce methylation state (M = methylated, U = unmethylated) depending on infinium type
             sample_df['methylation_state'] = '?'
@@ -81,6 +69,19 @@ class Sample:
 
         channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self.idata.items()], ignore_index=True)
 
+        # check for any lost probe when merge manifest (as it is an inner merge)
+        total_probes = len(self.idata[Channel.RED].probe_means)
+        lost_probes = int(total_probes - len(channels_df) / 2)
+        pct_lost = 100 * lost_probes / total_probes
+        LOGGER.info(f'Lost {lost_probes:,} probes ({pct_lost:.2f}%) while merging information with Manifest')
+
+        # remove probes with not enough beads
+        low_nb_beads = channels_df.n_beads < min_beads
+        lost_probes = int(low_nb_beads.sum() / 2)
+        pct_lost = 100 * lost_probes / total_probes
+        LOGGER.info(f'Removing {lost_probes:,} probes ({pct_lost:.2f}%) that have less than {min_beads} beads')
+        channels_df = channels_df.loc[~low_nb_beads]
+
         # reshape dataframe to have something resembling sesame data structure - one row per probe
         self._signal_df = channels_df.pivot(index=indexes, values='mean_value',
                                            columns=['signal_channel', 'methylation_state'])
@@ -92,12 +93,6 @@ class Sample:
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
         self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
         self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
-
-        # mask type I probes that have missing values (because they don't have enough beads).
-        # type II probes with too few beads are automatically filtered out at the beginning as they have no signal value
-        self.masked_indexes = self.type1()[np.any(self.type1().isna(), axis=1)].index
-        # these probes should stay masked no matter what
-        self.forever_masked = self.masked_indexes
 
 
     ####################################################################################################################
@@ -218,7 +213,7 @@ class Sample:
         """Reset the mask to None (=no probe masked) and optionally set it to a new mask if `names_to_mask` is set"""
         if not quiet:
             LOGGER.debug('Resetting mask')
-        self.masked_indexes = self.forever_masked
+        self.masked_indexes = None
         if names_to_mask is not None:
             self.mask_names(names_to_mask)
 
@@ -745,3 +740,4 @@ class Sample:
 
     def __repr__(self):
         return self.__str__()
+

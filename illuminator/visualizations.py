@@ -287,16 +287,16 @@ def get_nb_probes_per_chr_and_type(sample: Sample | Samples) -> (pd.DataFrame, p
     chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
     type_df = pd.DataFrame(columns=['not masked', 'masked'])
     manifest = sample.annotation.probe_infos
-    probes = set()
 
     for name, masked in [('not masked', True), ('masked', False)]:
+        probes = set()
         if isinstance(sample, Sample):
             probes = sample.get_signal_df(masked).reset_index().probe_id
         elif isinstance(sample, Samples):
             for current_sample in sample.samples.values():
                 probes.update(current_sample.get_signal_df(masked).reset_index().probe_id)
-        chrm_and_type = manifest.loc[manifest.probe_id.isin(probes), ['probe_id', 'cpg_chrm', 'type']].drop_duplicates()
-        chromosome_df[name] = chrm_and_type.groupby('cpg_chrm').count()['probe_id']
+        chrm_and_type = manifest.loc[manifest.probe_id.isin(probes), ['probe_id', 'chromosome', 'type']].drop_duplicates()
+        chromosome_df[name] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
         type_df[name] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
 
     chromosome_df['masked'] = chromosome_df['masked'] - chromosome_df['not masked']

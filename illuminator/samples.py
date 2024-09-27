@@ -117,7 +117,8 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
                  sample_sheet_df: pd.DataFrame | None = None,
                  sample_sheet_name: str | None = None,
                  annotation: Annotations | None = None,
-                 max_samples: int | None = None) -> Samples | None:
+                 max_samples: int | None = None,
+                 min_beads=1) -> Samples | None:
     """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
     information from the sample sheet and follow this naming convention:
     `[sentrix ID]*[sentrix position]*[channel].idat` where the `*` can be any characters.
@@ -130,6 +131,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     :param annotation: (optional, Annotations) probes information
     :param max_samples: (optional, int or None, default to None) to only load N samples to speed up the process
         (useful for testing purposes)
+    :param min_beads: (optional, int, default to 1) filter probes that have less than N beads
 
     :return: Samples object or None if an error was raised"""
 
@@ -185,7 +187,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
 
     if annotation is not None:
         samples.annotation = annotation
-        samples.merge_annotation_info(annotation)
+        samples.merge_annotation_info(annotation, min_beads)
 
     LOGGER.info(f'reading sample files done\n')
     return samples
