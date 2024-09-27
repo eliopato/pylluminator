@@ -380,14 +380,13 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         medium_threshold = -np.log10(medium_threshold)
 
     # define colormap and limits
-    cmap = colormaps.get_cmap('viridis').reversed()
-    if min(data_to_plot[y_col]) < 0:
-        # v_max = np.max(abs(np.percentile(data_to_plot[y_col], [1, 99])))
-        v_max = np.min(abs(data_to_plot[y_col]))
-        v_min = -v_max
+    v_max = np.max(data_to_plot[y_col])
+    v_min = np.min(data_to_plot[y_col])
+    if v_min < 0:
+        cmap = colormaps.get_cmap('gist_rainbow')
     else:
+        cmap = colormaps.get_cmap('viridis').reversed()
         v_min = 0
-        v_max = np.max(data_to_plot[y_col])
 
     # check annotation parameter, and select and clean up annotation if defined
     gene_info = None
@@ -445,11 +444,9 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     # add lines of significance threshold
     if draw_significance:
         x_start = 0 - margin
-        x_end = chrom_end + margin
-        plt.plot([x_start, x_end], [high_threshold, high_threshold], c=cmap(high_threshold), alpha=0.7,
-                 linestyle='dotted')
-        plt.plot([x_start, x_end], [medium_threshold, medium_threshold], linestyle='dotted',
-                 c=cmap(medium_threshold), alpha=0.5)
+        x_end =  chrom_end + margin
+        plt.plot([x_start, x_end], [high_threshold, high_threshold], c=cmap(high_threshold), alpha=0.7, ls=':')
+        plt.plot([x_start, x_end], [medium_threshold, medium_threshold], ls=':', c=cmap(medium_threshold), alpha=0.5)
 
     # grids style and plot limits
     ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
