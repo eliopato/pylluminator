@@ -93,8 +93,14 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     # initialize values
     plt.style.use('ggplot')
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.betas(mask)[sheet.sample_name.values]
+    betas = samples.betas(mask)  # get betas with or without masked probes
 
+    # keep only samples that are both in sample sheet and betas columns
+    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
+    betas = betas[filtered_samples]
+    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
+
+    # define the color and line style of each sample
     c_legend_handles, colors = _get_colors(sheet, color_column, color_group_column)
     ls_legend_handles, linestyles = _get_linestyles(sheet, linestyle_column)
     legend_handles = c_legend_handles + ls_legend_handles
@@ -114,7 +120,7 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
             linestyle = linestyles[sample_sheet_row[linestyle_column].iloc[0]]
         plt.plot(histogram_x[:-1], histogram_y, label=label, linewidth=1, color=color, linestyle=linestyle)
 
-    title = title if title is not None else f'{len(betas.columns)} samples\' beta values on {len(betas)} probes'
+    title = title if title is not None else f'Beta values of {len(betas.columns)} samples on {len(betas)} probes'
     plt.title(title)
 
     if len(legend_handles) > 0:
@@ -125,7 +131,8 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     plt.show()
 
 
-def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=100, title: str | None=None, mask=True):
+def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=100, title: str | None=None, mask=True,
+                       custom_sheet: None | pd.DataFrame = None) -> None:
     """Plot betas grouped by one or several sample sheet columns. Display the average beta values per group with a plain
     line, and individual beta values distribution as transparent lines.
 
@@ -134,14 +141,23 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
         give samples from the same category a similar color shade.
     :param n_bins: (int, optional, default 100) number of bins to generate the histogram
     :param title: (str, optional) custom title for plot
-    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them."""
+    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them.
+    :param custom_sheet: (pd.DataFrame, optional) a sample sheet to use. By default, use the samples' sheet. Useful if
+        you want to filter the samples to display
+
+    :return None"""
 
     cmap = colormaps['Spectral']
     plt.style.use('ggplot')
     bins = [n*1/n_bins for n in range(0, n_bins+1)]
-    sheet = samples.sample_sheet
 
-    betas = samples.betas()
+    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
+    betas = samples.betas(mask)  # get betas with or without masked probes
+
+    # keep only samples that are both in sample sheet and betas columns
+    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
+    betas = betas[filtered_samples]
+    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
 
     grouped_sheet = sheet.groupby(group_columns)
     nb_groups = len(grouped_sheet)
@@ -167,14 +183,27 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1), title=group_columns)
 
     if title is None:
-        title = f'{len(betas.columns)} samples\' beta values on {len(betas)} probes, grouped by {group_columns}'
+        title = f'Beta values of {len(betas.columns)} samples on {len(betas)} probes, grouped by {group_columns}'
     plt.title(title)
 
     plt.show()
 
 
-def betas_mds(samples: Samples, color_group_column: str | None = None,
-              random_state: int = 42, title: None | str = None, mask=True) -> None:
+def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None) -> None:
+
+    for design_type in ['I', 'II']:
+        betas_to_plot = betas.loc[design_type].transpose()
+        for index, row in betas_to_plot.iterrows():
+            histogram_values = np.histogram(row.dropna().values, bins=n_bins, density=False)
+            plt.plot(histogram_values[1][:-1], histogram_values[0], label=index, linewidth=1)
+
+    title = title if title is not None else f'Samples\' beta values distances on {len(betas)} probes'
+    plt.title(title)
+    plt.legend()
+
+
+def betas_mds(samples: Samples, color_group_column: str | None = None, random_state: int = 42, title: None | str = None,
+              mask=True, custom_sheet: None | pd.DataFrame = None) -> None:
     """Plot samples in 2D space according to their beta distances.
 
     :param samples : Samples object, with betas already calculated
@@ -184,10 +213,19 @@ def betas_mds(samples: Samples, color_group_column: str | None = None,
         reproducible across calls.
     :param title: (str, optional) custom title for plot
     :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them.
+    :param custom_sheet: (pd.DataFrame, optional) a sample sheet to use. By default, use the samples' sheet. Useful if
+        you want to filter the samples to display
 
     :return: None"""
 
-    betas = samples.betas(mask)
+    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
+    betas = samples.betas(mask)  # get betas with or without masked probes
+
+    # keep only samples that are both in sample sheet and betas columns
+    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
+    betas = betas[filtered_samples]
+    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
+
     # get betas with the most variance across samples (top 1000)
     betas_variance = np.var(betas, axis=1)
     indexes_most_variance = betas_variance.sort_values(ascending=False)[:1000].index
@@ -197,7 +235,7 @@ def betas_mds(samples: Samples, color_group_column: str | None = None,
     mds = MDS(n_components=2, random_state=random_state)
     fit = mds.fit_transform(betas_most_variance.T)
 
-    legend_handles, colors_dict = _get_colors(samples.sample_sheet, 'sample_name', color_group_column)
+    legend_handles, colors_dict = _get_colors(sheet, 'sample_name', color_group_column)
     colors = [colors_dict[sample] for sample in betas.columns]
 
     plt.figure(figsize=(15, 10))

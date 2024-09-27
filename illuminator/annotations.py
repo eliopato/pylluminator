@@ -278,7 +278,6 @@ class SesameAnnotations:
         genomic_ranges = genomic_ranges[['probe_id', 'Chromosome', 'Start', 'End', 'Strand']].drop_duplicates()
         genomic_ranges = genomic_ranges.set_index('probe_id')
 
-
         genomic_ranges['Strand'] = genomic_ranges.Strand.replace({'f': '-', 'r': '+', 'u': '*'}).fillna('*')
         genomic_ranges['Chromosome'] = genomic_ranges.Chromosome.fillna('*')
         genomic_ranges['Start'] = genomic_ranges.Start.fillna(0).astype(int)
