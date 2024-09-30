@@ -236,7 +236,7 @@ class IdatDataset:
             if not self.is_correct_version(idat_file, DEFAULT_IDAT_VERSION):
                 raise ValueError('Not a version 3 IDAT file. Unsupported IDAT version.')
 
-            self.probe_means = self.read(idat_file)
+            self.probes_df = self.read(idat_file)
             if self.overflow_check() is False:
                 LOGGER.warning("IDAT: contains negative probe values (uint16 overflow error)")
 
@@ -324,7 +324,7 @@ class IdatDataset:
         illumina_ids = npread(idat_file, '<i4', self.n_snps_read)
 
         seek_to_section(IdatSectionCode.MEAN)
-        probe_means = npread(idat_file, '<u2', self.n_snps_read)  # '<u2' reads data as numpy unsigned-float16
+        probes_df = npread(idat_file, '<u2', self.n_snps_read)  # '<u2' reads data as numpy unsigned-float16
 
         seek_to_section(IdatSectionCode.RUN_INFO)
         run_info_entry_count, = struct.unpack('<L', idat_file.read(4))
@@ -336,7 +336,7 @@ class IdatDataset:
             code_version = read_string(idat_file)
             self.run_info.append((timestamp, entry_type, parameters, codeblock, code_version))
 
-        data = {'mean_value': probe_means}
+        data = {'mean_value': probes_df}
 
         seek_to_section(IdatSectionCode.STD_DEV)
         data['std_dev'] = npread(idat_file, '<u2', self.n_snps_read)
@@ -357,13 +357,13 @@ class IdatDataset:
         return data_frame
 
     def overflow_check(self) -> bool:
-        if hasattr(self, 'probe_means'):
-            if (self.probe_means.values < 0).any():
+        if hasattr(self, 'probes_df'):
+            if (self.probes_df.values < 0).any():
                 return False
         return True
 
     def __str__(self):
-        return f'IdatDataset object.\nHead of self.probe_means dataframe : \n{self.probe_means.head(3)}'
+        return f'IdatDataset object.\nHead of self.probes_df dataframe : \n{self.probes_df.head(3)}'
 
     def __repr__(self):
         return self.__str__()

@@ -4,6 +4,8 @@ __pycache__
 drafts/
 stub.py
 data/
+.ipynb_checkpoints/
+.gitattributes
 
 # data
 *.gz

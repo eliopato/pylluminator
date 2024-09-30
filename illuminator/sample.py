@@ -32,6 +32,7 @@ class Sample:
         self.name = name
         self.annotation = None
         self.masked_indexes = None
+        self.min_beads = None
 
     def set_idata(self, channel: Channel, dataset: IdatDataset) -> None:
         """Add idata dataset to the sample idat dictionary, for the channel key passed in the argument"""
@@ -47,6 +48,7 @@ class Sample:
         the `Probe_ID` to merge. We further use `Probe_ID` as an index throughout the code."""
         LOGGER.info(f'merging sample {self.name} with manifest {annotation}')
         self.annotation = annotation
+        self.min_beads = min_beads
 
         # pivot table column names
         indexes = ['type', 'channel', 'probe_type', 'probe_id', 'mask_info']
@@ -54,7 +56,7 @@ class Sample:
 
         def process_idat(channel, idata):
             # merge manifest, mask and gene information
-            sample_df = pd.merge(idata.probe_means, probe_info, how='inner', on='illumina_id')
+            sample_df = pd.merge(idata.probes_df, probe_info, how='inner', on='illumina_id')
 
             # deduce methylation state (M = methylated, U = unmethylated) depending on infinium type
             sample_df['methylation_state'] = '?'
@@ -70,22 +72,22 @@ class Sample:
         channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self.idata.items()], ignore_index=True)
 
         # check for any lost probe when merge manifest (as it is an inner merge)
-        total_probes = len(self.idata[Channel.RED].probe_means)
-        lost_probes = int(total_probes - len(channels_df) / 2)
+        total_probes = len(self.idata[Channel.RED].probes_df)
+        lost_probes = int(total_probes - len(set(channels_df.probe_id)))
         pct_lost = 100 * lost_probes / total_probes
         LOGGER.info(f'Lost {lost_probes:,} probes ({pct_lost:.2f}%) while merging information with Manifest')
 
         # remove probes with not enough beads
         low_nb_beads = channels_df.n_beads < min_beads
-        lost_probes = int(low_nb_beads.sum() / 2)
-        pct_lost = 100 * lost_probes / total_probes
-        LOGGER.info(f'Removing {lost_probes:,} probes ({pct_lost:.2f}%) that have less than {min_beads} beads')
-        channels_df = channels_df.loc[~low_nb_beads]
+        probes_to_filter = set(channels_df[low_nb_beads].probe_id)
+        nb_filtered_probes = len(probes_to_filter)
+        pct_filtered = 100 * nb_filtered_probes / total_probes
+        LOGGER.info(f'Removing {nb_filtered_probes:,} probes ({pct_filtered:.2f}%) that have less than {min_beads} beads')
+        channels_df = channels_df[~channels_df.probe_id.isin(probes_to_filter)]
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
         self._signal_df = channels_df.pivot(index=indexes, values='mean_value',
                                            columns=['signal_channel', 'methylation_state'])
-
         # index column 'channel' corresponds by default to the manifest channel. But it could change by calling
         # 'infer_type_i_channel()' e.g., so we need to keep track of the manifest_channel in another column
         self._signal_df['manifest_channel'] = self._signal_df.index.get_level_values('channel').values
@@ -733,11 +735,10 @@ class Sample:
                 for channel, dataset in self.idata.items():
                     description += f'\nChannel {channel} head data:\n {dataset}\n'
         else:
-            description += 'Signal dataframe first items (self._signal_df or self.get_signal_df(mask=True|False)): \n'
+            description += 'Signal dataframe first items (self.get_signal_df(mask=True|False)): \n'
             description += f'{self._signal_df.head(3)}\n'
         description += '=====================================================================\n'
         return description
 
     def __repr__(self):
         return self.__str__()
-
