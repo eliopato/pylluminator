@@ -38,7 +38,7 @@ class Samples:
 
         supported_functions = ['dye_bias_correction', 'dye_bias_correction_nl', 'noob_background_correction',
                                'scrub_background_correction', 'poobah', 'infer_type1_channel', 'apply_quality_mask',
-                               'apply_non_unique_mask', 'merge_annotation_info', 'calculate_betas']
+                               'apply_non_unique_mask', 'apply_xy_mask', 'merge_annotation_info', 'calculate_betas']
 
         if callable(getattr(Sample, method_name)) and method_name in supported_functions:
             def method(*args, **kwargs):
@@ -49,7 +49,7 @@ class Samples:
                 if method_name == 'calculate_betas':
                     LOGGER.info(f'concatenating betas dataframes')
                     self._betas_df = pd.concat([sample.betas(False) for sample in self.samples.values()], axis=1)
-                elif method_name not in ['apply_quality_mask', 'apply_non_unique_mask']:
+                elif method_name not in ['apply_quality_mask', 'apply_non_unique_mask', 'apply_xy_mask']:
                     self._betas_df = None
 
                 LOGGER.info(f'done with {method_name}\n')

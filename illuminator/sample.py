@@ -95,7 +95,7 @@ class Sample:
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
         self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
         self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
-        
+
 
     ####################################################################################################################
     # Properties & getters
@@ -179,8 +179,8 @@ class Sample:
         if probe_ids is None or len(probe_ids) == 0:
             return None
 
-        idx = pd.IndexSlice
-        return self.get_signal_df(mask).loc[idx[:, :, :, probe_ids], :]
+        probes_mask = self.get_signal_df(mask).index.get_level_values('probe_id').isin(probe_ids)
+        return self.get_signal_df(mask)[probes_mask]
 
     def oob(self, mask: bool = True, channel=None) -> pd.DataFrame | None:
         """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `mask` is True"""
@@ -252,7 +252,7 @@ class Sample:
         else:
             self.masked_indexes = self.masked_indexes.append(indexes_to_mask).drop_duplicates()
         if not quiet:
-            LOGGER.debug(f'Mask added, {self.nb_probes_masked} probes are masked ({nb_masked_before_add} previously)')
+            LOGGER.info(f'Mask added, {self.nb_probes_masked} probes are masked ({nb_masked_before_add} previously)')
 
     def apply_quality_mask(self):
         """Shortcut to apply quality mask on this sample"""
@@ -261,6 +261,12 @@ class Sample:
     def apply_non_unique_mask(self):
         """Shortcut to apply non unique probes mask on this sample"""
         self.mask_names(self.annotation.non_unique_mask_names)
+
+    def apply_xy_mask(self):
+        """Shortcut to mask probes from XY chromosome"""
+        xy_probes_ids = self.annotation.probe_infos[self.annotation.probe_infos.chromosome.isin(['X', 'Y'])].probe_id
+        xy_probes_indexes = self.get_probes_with_probe_ids(xy_probes_ids).index
+        self.mask_indexes(xy_probes_indexes)
 
     ####################################################################################################################
     # Control functions
