@@ -95,7 +95,7 @@ class Sample:
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
         self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
         self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
-
+        
 
     ####################################################################################################################
     # Properties & getters
@@ -555,7 +555,7 @@ class Sample:
         self._betas_df = None
 
         # mask non unique probes - saves previous mask to reset it afterwards
-        previous_masked_indexes = self.masked_indexes.copy()
+        previous_masked_indexes = None if self.masked_indexes is None else self.masked_indexes.copy()
         if not mask:
             self.reset_mask(quiet=True)
         self.mask_names(self.annotation.non_unique_mask_names, quiet=True)
@@ -622,7 +622,7 @@ class Sample:
         self._betas_df = None
 
         # mask non-unique probes - but first save previous mask to reset it afterward
-        previous_masked_indexes = self.masked_indexes.copy()
+        previous_masked_indexes = None if self.masked_indexes is None else self.masked_indexes.copy()
         if not mask:
             self.reset_mask(quiet=True)
 

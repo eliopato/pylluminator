@@ -18,12 +18,16 @@ def print_header(title: str, mask=False) -> None:
 
 def print_value(name: str, value) -> None:
     """Format and print a QC value"""
-    print(f'{name}\t\t:  {value}')
-
+    if isinstance(value, (float, np.float32, np.float64)):
+        print(f'{name:<55} {value:.2f}')
+    elif isinstance(value, (int, np.int32, np.int64)):
+        print(f'{name:<55} {value:,}')
+    else:
+        print(f'{name:<55} {value}')
 
 def print_pct(name: str, value) -> None:
     """Format and print a QC percentage (x100 will be applied to the input value)"""
-    print(f'{name}\t\t:  {100*value} %')
+    print(f'{name:<55} {100*value:.2f} %')
 
 
 def detection_stats(sample: Sample, mask=False) -> None:
@@ -34,7 +38,7 @@ def detection_stats(sample: Sample, mask=False) -> None:
     p_values_df = sample.get_signal_df(mask)[['p_value', 'poobah_mask']]
 
     sample_probe_ids = sample.get_signal_df(mask).index.get_level_values('probe_id')
-    manifest_probe_ids = sample.annotation.probe_infos.probe_id
+    manifest_probe_ids = set(sample.annotation.probe_infos.probe_id)
     missing_from_manifest = len([probe for probe in manifest_probe_ids if probe not in sample_probe_ids])
 
     missing_p_values = p_values_df['p_value'].isna().sum()
@@ -45,7 +49,7 @@ def detection_stats(sample: Sample, mask=False) -> None:
 
     p_values_df = p_values_df.dropna()
 
-    value_detection = sum(p_values_df['poobah_mask'])
+    value_detection = len(p_values_df[~p_values_df.poobah_mask])
     print_value('N. Probes w/ Detection Success', value_detection)
     print_pct('% Detection Success', value_detection / len(p_values_df))
 
@@ -54,8 +58,9 @@ def detection_stats(sample: Sample, mask=False) -> None:
             print_value(f'\nN. {probe_type} probes', 0)
             continue
         probes = p_values_df.xs(probe_type, level='probe_type')
-        probes_value = sum(probes['poobah_mask'])
-        print_value(f'\nN. {probe_type} probes', len(probes))
+        probes_value = len(probes[~probes.poobah_mask])
+        print()
+        print_value(f'N. {probe_type} probes', len(probes))
         print_value(f'N. Probes w/ Detection Success {probe_type}', probes_value)
         print_pct(f'% Detection Success {probe_type}', probes_value / len(probes))
 
@@ -73,10 +78,10 @@ def intensity_stats(sample: Sample, mask=False) -> None:
     print_value('Mean out-of-band type I Green signal intensity ', sample.oob_red(mask).mean(axis=None))
 
     type_i_m_na = pd.isna(sample.meth(mask).loc['I']).values.sum()
-    type_ii_m_na = pd.isna(sample.meth(mask).loc['II', 'G']).values.sum()
+    type_ii_m_na = pd.isna(sample.meth(mask).loc['II']['G']).values.sum()
     print_value('Number of NAs in Methylated signal', type_i_m_na + type_ii_m_na)
     type_i_u_na = pd.isna(sample.unmeth(mask).loc['I']).values.sum()
-    type_ii_u_na = pd.isna(sample.unmeth(mask).loc['II', 'R']).values.sum()
+    type_ii_u_na = pd.isna(sample.unmeth(mask).loc['II']['R']).values.sum()
     print_value('Number of NAs in Unmethylated signal', type_ii_u_na + type_i_u_na)
     print_value('Number of NAs in Type 1 Red signal', sample.type1_red(mask).isna().values.sum())
     print_value('Number of NAs in Type 1 Green signal', sample.type1_green(mask).isna().values.sum())

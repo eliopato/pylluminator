@@ -197,7 +197,7 @@ def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | 
             histogram_values = np.histogram(row.dropna().values, bins=n_bins, density=False)
             plt.plot(histogram_values[1][:-1], histogram_values[0], label=index, linewidth=1)
 
-    title = title if title is not None else f'Samples\' beta values distances on {len(betas)} probes'
+    title = title if title is not None else f'Beta values per design type on {len(betas)} probes'
     plt.title(title)
     plt.legend()
 
