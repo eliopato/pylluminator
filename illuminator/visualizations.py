@@ -26,7 +26,7 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_colum
     # determine the line color
     if color_column is not None:
         categories = sorted(set(sheet[color_column]))
-        nb_colors = len(categories)
+        nb_colors = len(sheet[color_column])
         if color_group_column is None:
             for i, category in enumerate(categories):
                 color_categories[category] = cmap(i / (nb_colors - 1))
@@ -41,8 +41,8 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_colum
             for _, sub_sheet in grouped_sheet:
                 categories = sorted(set(sub_sheet[color_column]))
                 for i, category in enumerate(categories):
-                    idx_color += cmap_color_interval_size
                     color_categories[category] = cmap(idx_color)
+                    idx_color += cmap_color_interval_size
                 idx_color += cmap_group_interval_size
 
         # make the legend (title + colors)
@@ -202,8 +202,9 @@ def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | 
     plt.legend()
 
 
-def betas_mds(samples: Samples, color_group_column: str | None = None, random_state: int = 42, title: None | str = None,
-              mask=True, custom_sheet: None | pd.DataFrame = None) -> None:
+def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column: str | None = None,
+              random_state: int = 42, title: None | str = None, mask=True,
+              custom_sheet: None | pd.DataFrame = None) -> None:
     """Plot samples in 2D space according to their beta distances.
 
     :param samples : Samples object, with betas already calculated
@@ -217,6 +218,8 @@ def betas_mds(samples: Samples, color_group_column: str | None = None, random_st
         you want to filter the samples to display
 
     :return: None"""
+
+    plt.style.use('ggplot')
 
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
     betas = samples.betas(mask)  # get betas with or without masked probes
@@ -235,13 +238,13 @@ def betas_mds(samples: Samples, color_group_column: str | None = None, random_st
     mds = MDS(n_components=2, random_state=random_state)
     fit = mds.fit_transform(betas_most_variance.T)
 
-    legend_handles, colors_dict = _get_colors(sheet, 'sample_name', color_group_column)
-    colors = [colors_dict[sample] for sample in betas.columns]
+    legend_handles, colors_dict = _get_colors(sheet, label_column, color_group_column)
 
     plt.figure(figsize=(15, 10))
-    plt.scatter(x=fit[:, 0], y=fit[:, 1], label=betas.columns, c=colors)
+    labels = [sheet.loc[sheet.sample_name == name, label_column].values[0] for name in betas.columns]
+    plt.scatter(x=fit[:, 0], y=fit[:, 1], label=labels, c=[colors_dict[label] for label in labels])
 
-    for index, name in enumerate(betas.columns):
+    for index, name in enumerate(labels):
         plt.annotate(name, (fit[index, 0], fit[index, 1]), fontsize=9)
 
     title = title if title is not None else f'MDS of the 1000 most variable probes'
