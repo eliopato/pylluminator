@@ -5,23 +5,31 @@ import logging
 import urllib.request
 from pathlib import Path, PosixPath
 import zipfile
-from importlib.resources import files
+from importlib.resources import files, as_file
 from importlib.resources.readers import MultiplexedPath
 
 import numpy as np
 import pandas as pd
 
 
-def set_logger(level) -> None:
-    logging.getLogger().setLevel(level)  # set the verbosity : DEBUG, INFO, WARNING, ERROR
+def set_logger(level: str | int) -> None:
+    """Set the logger verbosity level
+    :param level: string or int : NOTSET (0), DEBUG (10), INFO (20), WARNING (30), ERROR (40), CRITICAL (50)
+    :return: None"""
+    logging.getLogger().setLevel(level)
 
 
-def get_logger(level=None) -> logging.Logger:
+def get_logger(level: str | int = None) -> logging.Logger:
+    """Get the current logger and sets its level if the parameter level is defined
+    :param level: string or int, optional : NOTSET (0), DEBUG (10), INFO (20), WARNING (30), ERROR (40), CRITICAL (50)
+    :return: Logger object"""
     if level is not None:
         set_logger(level)
     return logging.getLogger(__name__)
 
-def get_logger_level():
+def get_logger_level() -> int:
+    """return the current logger level
+    :return: int, NOTSET (0), DEBUG (10), INFO (20), WARNING (30), ERROR (40), CRITICAL (50)"""
     return logging.getLogger().level
 
 
@@ -119,7 +127,7 @@ def load_object(filepath: str, object_type=None):
     return loaded_object
 
 
-def get_resource_folder(module_path: str, create_if_not_exist=True) -> MultiplexedPath | None:
+def get_resource_folder(module_path: str, create_if_not_exist=True) -> Path | None:
     """Find the resource folder, and creates it if it doesn't exist and if the parameter is set to True (default)
 
     :param module_path: (str) path in a module format (e.g. "illuminator.data.genomes")
@@ -127,6 +135,10 @@ def get_resource_folder(module_path: str, create_if_not_exist=True) -> Multiplex
         parents if necessary
 
     :return: path to the folder as a MultiplexedPath if it was found/created, None otherwise"""
+
+    # asking for the root directory
+    if module_path == 'illuminator':
+        return files(module_path)
 
     # check that the input module path is OK
     if not module_path.startswith('illuminator.data'):
@@ -168,40 +180,6 @@ def get_files_matching(root_path: str | os.PathLike | MultiplexedPath, pattern: 
     return [p for p in convert_to_path(root_path).rglob(pattern)]
 
 
-def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: str | os.PathLike | MultiplexedPath) -> None:
-    """Download idat files from GEO (Gene Expression Omnibus) given one or several GSM ids."""
-
-    # uniformization of the input parameter : if there is only one GSM id, make it a list anyway
-    if isinstance(gsm_ids_to_download, str):
-        gsm_ids_to_download = [gsm_ids_to_download]
-
-    # uniformization of the input parameter : make MultiplexedPath and strings a Path
-    target_directory = convert_to_path(target_directory)
-    # create the directory if it doesn't exist
-    os.makedirs(target_directory, exist_ok=True)
-
-    # download and un-tar GSM files one by one
-    for gsm_id in gsm_ids_to_download:
-        # check that it doesn't already exist :
-        matching_files = get_files_matching(target_directory, f'{gsm_id}*idat*')
-        if len(matching_files) >= 2:
-            LOGGER.debug(f'idat files already exist for {gsm_id} in {target_directory}, skipping. ({matching_files}')
-            continue
-        # otherwise, start downloading
-        LOGGER.debug(f'downloading {gsm_id}')
-        target_file = f'{target_directory}/{gsm_id}.tar'
-        dl_link = f'https://www.ncbi.nlm.nih.gov/geo/download/?acc={gsm_id}&format=file'
-        try:
-            urllib.request.urlretrieve(dl_link, target_file)
-        except:
-            LOGGER.error(f'download failed, download it from {dl_link} and add it to the {target_directory} folder')
-            continue
-        # if the download succeeded, untar the file
-        with tarfile.TarFile(target_file, 'r') as tar_ref:
-            tar_ref.extractall(target_directory, filter='data')
-        # delete the tar file
-        os.remove(target_file)
-
 def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_string=False) -> list[int] | int | None:
     """From a string representing the chromosome ID, get the chromosome number. E.g. 'chr22' -> 22. If the input
     is not a numbered chromosome, return np.nan. The string part has to be only 'chr', not case-sensitive
@@ -239,6 +217,7 @@ def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_st
 
     return chromosome_number
 
+
 def set_level_as_index(df: pd.DataFrame, level: str, drop_others=False) -> pd.DataFrame:
     """Change the index of a MultiIndexed DataFrame, to a single Index, using a level of the MultiIndex. Other levels
     will be dropped if drop_others is set to True
@@ -254,33 +233,90 @@ def set_level_as_index(df: pd.DataFrame, level: str, drop_others=False) -> pd.Da
     else:
         return df.reset_index().set_index(level)
 
-def download_from_link(dl_link: str, target_filepath: PosixPath) -> int:
-    """Download a file and save it to the target. Returns -1 if the file could not be downloaded, 1 otherwise.
+def get_or_download_data(output_folder: str | MultiplexedPath | os.PathLike, filename: str, dl_link: str) -> pd.DataFrame | None:
+    """Check if the file exists, and if now download it from a given link and saves it in the output folder under the
+    same name. Read the file as a pandas dataframe, with the first column being the index, and return it. Return None
+    if no file was found
+
+     :param output_folder: (string or path-like) where to locally save the file
+     :param filename: (string) name of the file to download - will be added at the end of the download link
+     :param dl_link: (string) link to download the file from
+
+     :return: pd.DataFrame or None if no file was downloaded"""
+    filepath = convert_to_path(output_folder).joinpath(filename)
+
+    if not filepath.exists():
+        dl_link = dl_link + filename
+        if download_from_link(dl_link, output_folder, filename) == -1:
+            return None
+
+    return pd.read_csv(str(filepath))
+
+
+def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: str | os.PathLike | MultiplexedPath) -> None:
+    """Download idat files from GEO (Gene Expression Omnibus) given one or several GSM ids.
+
+    :param gsm_ids_to_download: (string or list of string) GSM IDs to download
+    :param target_directory: (string or path-like object) where the downloaded files will be saved
+
+    :return: None"""
+
+    # uniformization of the input parameter : if there is only one GSM id, make it a list anyway
+    if isinstance(gsm_ids_to_download, str):
+        gsm_ids_to_download = [gsm_ids_to_download]
+
+    # uniformization of the input parameter : make MultiplexedPath and strings a Path
+    target_directory = convert_to_path(target_directory)
+    # create the directory if it doesn't exist
+    os.makedirs(target_directory, exist_ok=True)
+
+    # download and un-tar GSM files one by one
+    for gsm_id in gsm_ids_to_download:
+
+        # check that it doesn't already exist :
+        matching_files = get_files_matching(target_directory, f'{gsm_id}*idat*')
+        if len(matching_files) >= 2:
+            LOGGER.debug(f'idat files already exist for {gsm_id} in {target_directory}, skipping. ({matching_files}')
+            continue
+
+        # if not, download and un-tar them
+        dl_link = f'https://www.ncbi.nlm.nih.gov/geo/download/?acc={gsm_id}&format=file'
+        download_from_link(dl_link, target_directory, f'{gsm_id}.tar')
+
+
+def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str) -> int:
+    """Download a file and save it to the target. Unzip or un-tar the file if it is compressed.
+    Return -1 if the file could not be downloaded, 1 otherwise.
 
     :param dl_link: (string) link to the file to be downloaded
-    :param target_filepath: (PosixPath) where the file will be saved
+    :param output_folder: (string) where the file will be saved
+    :param filename: (string) name of the file to download
 
     :return: (int) exit status"""
 
-    data_folder = target_filepath.parent
-    filename = target_filepath.name
+    LOGGER.debug(f'file {filename} not found in {output_folder}, trying to download it from {dl_link}')
+    output_folder = convert_to_path(output_folder)
+    target_filepath = output_folder.joinpath(filename)
 
-    LOGGER.debug(f'file {filename} not found in {data_folder}, trying to download it from {dl_link}')
-
-    os.makedirs(data_folder, exist_ok=True)  # create destination directory
+    os.makedirs(output_folder, exist_ok=True)  # create destination directory
 
     try:
         urllib.request.urlretrieve(dl_link, target_filepath)
         LOGGER.debug(f'download successful')
     except:
-        LOGGER.info(f'download from {dl_link} failed, try downloading it manually and save it in {data_folder}')
+        LOGGER.info(f'download of {filename} from {dl_link} failed, try downloading it manually and save it in {output_folder}')
         return -1
 
     if filename.endswith('.zip'):
-        LOGGER.info(f'unzip downloaded file {target_filepath}')
-
+        LOGGER.debug(f'unzip downloaded file {target_filepath}')
         with zipfile.ZipFile(target_filepath, 'r') as zip_ref:
-            zip_ref.extractall(convert_to_path(data_folder))
+            zip_ref.extractall(convert_to_path(output_folder))
+        os.remove(target_filepath)  # remove archive
+    elif filename.endswith('.tar'):
+        LOGGER.debug(f'untar downloaded file {target_filepath}')
+        # if the download succeeded, untar the file
+        with tarfile.TarFile(target_filepath, 'r') as tar_ref:
+            tar_ref.extractall(output_folder, filter='data')
         os.remove(target_filepath)  # remove archive
 
     return 1
