@@ -73,17 +73,26 @@ class GenomeInfo:
             return
 
         # read all the csv files
-        for info in ['gap_info', 'seq_length']:
+        for info in ['gap_info', 'seq_length', 'chromosome_regions', 'transcripts_exons', 'transcripts_list']:
             filepath = str(folder_genome.joinpath(f'{info}.csv'))
-
             df = pd.read_csv(filepath)
 
             if info == 'gap_info':
                 df.End = df.End.astype('int')
                 df.Start = df.Start.astype('int')
-                self.gap_info = pr.PyRanges(df)
+                gen_info = pr.PyRanges(df)
+            elif info == 'seq_length':
+                gen_info = dict(zip(df.Chromosome, df.SeqLength))
+            elif info == 'transcripts_list':
+                gen_info = df.set_index('group_name')
+            elif info == 'transcripts_exons':
+                gen_info = df.set_index('transcript_id')
+            elif info == 'chromosome_regions':
+                gen_info = df.set_index('chrom')
             else:
-                self.seq_length = dict(zip(df.Chromosome, df.SeqLength))
+                gen_info = df
+
+            self.__setattr__(info, gen_info)
 
 
 class Annotations:
@@ -250,14 +259,14 @@ class SesameAnnotations:
             # for type I probes that have both address A and address B set, split them in two rows
             df['illumina_id'] = df.apply(lambda x: concatenate_non_na(x, ['address_a', 'address_b']), axis=1)
             df = df.explode('illumina_id', ignore_index=True)
-            df = df.rename(columns={'design_type': 'type', 'cpg_chrm': 'chromosome'}, errors='ignore')
+            df = df.rename(columns={'design_type': 'type', 'cpg_chrm': 'chromosome',
+                                    'cpg_beg': 'start', 'cpg_end': 'end'}, errors='ignore')
             df['chromosome'] = df['chromosome'].str.lower().str.replace('chr', '').str.upper()
             # turn some columns into categories as it speeds up further processing
             df = df.astype({'illumina_id': 'int', 'type': 'category', 'probe_type': 'category',
                             'channel' :'category', 'chromosome': 'category'})
             df = df.set_index('illumina_id')
             df['probe_type'] = df.probe_type.cat.rename_categories({'rs': 'snp'})  # to improve readability
-            df['location'] = df['cpg_beg'] + (df['cpg_end'] - df['cpg_beg']) / 2
         else:
             df = df.set_index('probe_id')
             if kind == 'mask':
@@ -273,7 +282,7 @@ class SesameAnnotations:
             LOGGER.warning('Make genomic ranges : provide a manifest first')
             return None
 
-        genomic_ranges = self.manifest.rename(columns={'chromosome': 'Chromosome', 'cpg_beg': 'Start', 'cpg_end': 'End',
+        genomic_ranges = self.manifest.rename(columns={'chromosome': 'Chromosome', 'start': 'Start', 'end': 'End',
                                                        'map_yd_a': 'Strand', 'probe_strand': 'Strand'}, errors='ignore')
         genomic_ranges = genomic_ranges[['probe_id', 'Chromosome', 'Start', 'End', 'Strand']].drop_duplicates()
         genomic_ranges = genomic_ranges.set_index('probe_id')
@@ -293,7 +302,8 @@ class SesameAnnotations:
             return None
 
         # select manifest column
-        manifest = self.manifest[['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b', 'location', 'chromosome']]
+        manifest = self.manifest[['probe_id', 'type', 'probe_type', 'channel', 'address_a', 'address_b', 'start', 'end',
+                                  'chromosome']]
 
         if self.mask is not None:
             # select mask column (`mask_uniq` or column `mask_info` to get all  the information)

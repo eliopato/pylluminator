@@ -252,7 +252,7 @@ class Sample:
         else:
             self.masked_indexes = self.masked_indexes.append(indexes_to_mask).drop_duplicates()
         if not quiet:
-            LOGGER.info(f'Mask added, {self.nb_probes_masked} probes are masked ({nb_masked_before_add} previously)')
+            LOGGER.info(f'masking {self.nb_probes_masked - nb_masked_before_add:,} probes')
 
     def apply_quality_mask(self):
         """Shortcut to apply quality mask on this sample"""

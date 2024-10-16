@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colormaps
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
+from matplotlib import gridspec
 
 import numpy as np
 import pandas as pd
@@ -544,9 +545,9 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', 
                     log10=log10, title=title)
 
 
-def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col='Start_bin',
-                       chromosome_col='Chromosome',
-                       y_col='cnv', title: None | str = None) -> None:
+def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
+                       x_col='Start_bin', chromosome_col='Chromosome', y_col='cnv',
+                       title: None | str = None) -> None:
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
 
@@ -565,3 +566,182 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None, x_col=
     _manhattan_plot(data_to_plot=data_to_plot, segments_to_plot=segments_to_plot, x_col=x_col,
                     chromosome_col=chromosome_col, y_col=y_col, title=title,
                     log10=False, annotation=None, draw_significance=False)
+
+########################################################################################################################
+
+def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=1500, keep_na: bool=False,
+                   protein_coding_only=True, figsize=(20, 20)) -> None:
+    """"Show the beta values of a gene for all probes and samples in its transcription zone.
+
+    :param samples : Samples object, with betas already calculated
+    :param gene_name : (string) name of the gene to visualize
+    :param mask: (bool, default True) True removes masked probes from betas, False keeps them.
+    :param padding: (int, default 1500) length in kb pairs to add at the end and beginning of the transcription
+        zone
+    :param keep_na : (boolean, default False) set to True to only output probes with no NA value for any sample
+    :param protein_coding_only: (boolean, default True) limit displayed transcripts to protein coding ones
+    :param figsize: (tuple, default (20, 20)) size of the whole plot
+
+    :return None"""
+
+    color_map = {'gneg': 'lightgrey', 'gpos25': 'lightblue', 'gpos50': 'blue', 'gpos75': 'darkblue', 'gpos100': 'purple',
+                 'gvar': 'lightgreen', 'acen': 'yellow', 'stalk': 'pink'}
+
+    links_args = {'color': 'red', 'alpha': 0.3}
+
+    ################## DATA PREP
+    genome_info = samples.annotation.genome_info
+
+    transcript_data = genome_info.transcripts_exons.join(genome_info.transcripts_exons)
+    gene_data = transcript_data[transcript_data.gene_name == gene_name]
+    if protein_coding_only:
+        gene_data = gene_data[gene_data.transcript_type == 'protein_coding']
+
+    chromosome = gene_data.iloc[0].Chromosome
+
+    chr_df = genome_info.chr.loc[chromosome]
+
+    gene_transcript_start = gene_data.Start.min() - padding
+    gene_transcript_end = gene_data.End.max() + padding
+    gene_transcript_length = gene_transcript_end - gene_transcript_start
+
+    gene_data = txns[(txns.Chromosome == chromosome) & (
+                ((txns.Start >= gene_transcript_start) & (txns.Start <= gene_transcript_end)) | (
+                    (txns.End >= gene_transcript_start) & (txns.End <= gene_transcript_end))) & (
+                                 txns.transcript_type == 'protein_coding')]
+
+    gene_data = gene_data.sort_values('Start')
+
+    probe_info_df = samples.annotation.probe_info
+    is_gene_in_interval = probe_info_df.chromosome == chromosome.replace('chr', '')
+    is_gene_in_interval &= (probe_info_df.start >= gene_transcript_start) & (probe_info_df.start <= gene_transcript_end)
+    is_gene_in_interval &= (probe_info_df.end >= gene_transcript_start) & (probe_info_df.end <= gene_transcript_end)
+    gene_probes = probe_info_df[is_gene_in_interval][['probe_id', 'start', 'end']].drop_duplicates().set_index('probe_id')
+    gene_betas = samples.betas(mask).reset_index('probe_id').reset_index(drop=True).set_index('probe_id')
+    betas_location = gene_betas.join(gene_probes, how='inner').sort_values('start')
+
+    print(chromosome, gene_transcript_start, gene_transcript_end)
+
+    ################## PLOT LINKS BETWEEN TRANSCRIPTS AND BETAS
+
+    height_ratios = [0.05, 0.05, 0.45, 0.05, 0.4]
+    nb_plots = len(height_ratios)
+
+    betas_data = betas_location if keep_na else betas_location.dropna()
+    heatmap_data = betas_data.drop(columns=['start', 'end']).T
+
+    if keep_na:
+        fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
+        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, xticklabels=True)
+    else:
+        dendrogram_ratio = 0.05
+        g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False,
+                           dendrogram_ratio=dendrogram_ratio, xticklabels=True)
+        shift_ratio = np.sum(height_ratios[:-1])
+        g.gs.update(top=shift_ratio)  # shift the heatmap to the bottom of the figure
+        gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio, height_ratios=height_ratios[:-1])
+        axes = [g.fig.add_subplot(gs) for gs in gs2]
+
+    ################## plot chromosome and chromosome-transcript links
+
+    chr_ax = axes[0]
+
+    # make rectangles of different colors depending on the chromosome region
+    for _, row in chr_df.iterrows():
+        chr_ax.add_patch(mpatches.Rectangle((row.Start, 0), row.End - row.Start, 0.5, color=color_map[row.gieStain]))
+
+    # red lines showing the beginning and end of the gene region
+    chr_ax.plot([gene_transcript_start, gene_transcript_start], [-1, 1], **links_args)
+    chr_ax.plot([gene_transcript_end, gene_transcript_end], [-1, 1], **links_args)
+
+    chr_length = chr_df['End'].max()
+    chr_ax.set_xlim(0, chr_length)
+    chr_ax.set_ylim(0, 0.5)
+    chr_ax.axis('off')
+
+    ################## PLOT TRANSCRIPTS
+
+    trans_ax = axes[2]
+    y_labels = []
+    y_positions = []
+    transcript_index = 0
+
+    for transcript_index, (transcript_id, transcript_data) in enumerate(gene_data.groupby('transcript_id', sort=False)):
+
+        # name of the transcript for y ticks labels
+        y_labels.append(transcript_id)
+        y_position = transcript_index * 2 + 0.5
+        y_positions.append(y_position)
+
+        transcript_start = transcript_data.Start.min()
+        transcript_end = transcript_data.End.max()
+
+        if transcript_data.iloc[0].Strand == '-':
+            arrow_coords = (transcript_start, y_position, -padding, 0)
+            transcript_end += padding
+        else:
+            arrow_coords = (transcript_end, y_position, padding, 0)
+            transcript_start -= padding
+
+
+        # line of the full transcript length
+        trans_ax.plot([transcript_start, transcript_end], [y_position, y_position], color='black', alpha=0.3, zorder=1)
+        # arrow at the end of the line to show the strand direction
+        trans_ax.arrow(*arrow_coords, shape='full', fill=True, color='black', head_width=0.75, length_includes_head=True,
+                    head_length=int(padding / 3), width=0, alpha=0.3)
+
+        # draw the patches for each transcript location
+        for row in transcript_data.itertuples():
+            trans_ax.add_patch(mpatches.Rectangle((row.Start, y_position-0.5), row.End - row.Start, 1, color='black'))
+
+            # # if a probe intersects with a transcript, draw a colored patch
+            # for beta_row in betas_data.itertuples():
+            #     if (row.Start <= beta_row.start <= row.End) or (row.Start <= beta_row.end <= row.End):
+            #         rec_coords = (beta_row.start, i*3+0.2), beta_row.end - beta_row.start
+            #         trans_ax.add_patch(mpatches.Rectangle(*rec_coords, 0.6, color='limegreen', zorder=2))
+
+
+    chr_trans_link_ax = axes[1]
+
+    for beta_row in betas_data.itertuples():
+        rec_coords = (beta_row.start, 0), beta_row.end - beta_row.start, transcript_index * 2 + 1
+        trans_ax.add_patch(mpatches.Rectangle(*rec_coords, zorder=2, **links_args))
+        # draw link between chromosome and transcript
+        trans_position = beta_row.start + (beta_row.end - beta_row.start) / 2
+        trans_position_in_chr = trans_position / chr_length
+        trans_position_in_trans = (trans_position - gene_transcript_start) / gene_transcript_length
+        chr_trans_link_ax.plot([trans_position_in_trans, trans_position_in_chr, trans_position_in_chr], [0, 0.8, 1], **links_args)
+
+    # hide all axes but keep the y labels (transcript names)
+    [trans_ax.spines[pos].set_visible(False) for pos in ['top', 'right', 'bottom', 'left']]
+    trans_ax.set_yticks(y_positions, y_labels)
+    trans_ax.set_xticks([])
+    trans_ax.set_xlim(gene_transcript_start, gene_transcript_end)
+    trans_ax.set_ylim(0, transcript_index * 2 + 1)
+
+    chr_trans_link_ax.set_xlim(0, 1)
+    chr_trans_link_ax.set_ylim(0, 1)
+    chr_trans_link_ax.axis('off')
+
+    ################## PLOT LINKS
+
+    lin_ax = axes[3]
+
+    nb_probes = len(betas_data)
+    probe_shift = 1 / (2 * nb_probes)
+
+    for i, beta_row in enumerate(betas_data.itertuples()):
+        probe_loc = beta_row.start - gene_transcript_start + (beta_row.end - beta_row.start) / 2
+        x_transcript = probe_loc / gene_transcript_length
+        x_beta = i / nb_probes + probe_shift
+        lin_ax.plot([x_beta, x_transcript, x_transcript], [0, 1.5, 2], **links_args)
+
+    lin_ax.set_xlim(0, 1)
+    lin_ax.set_ylim(0, 2)
+    lin_ax.axis('off')
+
+    # for ax in axes[:nb_plots-1]:
+    #     ax.axis('off')
+
+    plt.subplots_adjust(wspace=0, hspace=0)
+    plt.show()

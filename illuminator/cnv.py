@@ -36,16 +36,16 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
                      'Sample object or a Samples object and a sample name.')
         return None
 
-    if isinstance(samples, Sample) and len(normalization_samples_names) > 0:
-        LOGGER.error(f'The normalization samples names {normalization_samples_names} can`t be found as you provided'
-                     f'a single Sample object. Please provide the Samples object that contains these samples.')
-        return None
+    # if isinstance(samples, Sample) and normalization_samples_names is not None and len(normalization_samples_names) > 0:
+    #     LOGGER.error(f'The normalization samples names {normalization_samples_names} can`t be found as you provided'
+    #                  f'a single Sample object. Please provide the Samples object that contains these samples.')
+    #     return None
 
     if isinstance(samples, Sample) and sample_name is not None:
         LOGGER.warning('When a single Sample object is passed to the function, parameter `sample_name` is ignored.')
 
     # get normalization samples
-    if normalization_samples_names is None or len(normalization_samples_names) == 0:
+    if normalization_samples_names is None or len(normalization_samples_names) == 0 or isinstance(samples, Sample):
         # load default normalization samples for the given array version
         normal_samples = get_normalization_samples(samples.annotation)
 
@@ -70,6 +70,9 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
     probe_coords_df = samples.annotation.genomic_ranges
 
     # get total intensity per probe and drop unnecessary indexes
+    if isinstance(samples, Samples):
+        samples = samples[sample_name]
+
     target_intensity = samples[sample_name].get_total_ib_intensity()
     target_intensity = target_intensity.reset_index(['channel', 'type', 'probe_type'], drop=True).dropna()
 
@@ -134,7 +137,7 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
     return probe_coords, signal_bins, seg_df.set_index('seg_id')
 
 
-def get_normalization_samples(annotation: Annotations):
+def get_normalization_samples(annotation: Annotations) -> Samples | None:
     """Read from the package's data normalization samples data, depending on the array type.
     Only EPIC v2 and EPIC are supported for now"""
     LOGGER.info('Getting normalization samples')
