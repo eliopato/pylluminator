@@ -8,8 +8,8 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
 from illuminator.read_idat import IdatDataset
 from illuminator.annotations import Annotations, Channel, ArrayType
-from illuminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit, \
-    iqr
+from illuminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
+from illuminator.stats import iqr
 from illuminator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix
 
 from illuminator.utils import get_logger
@@ -57,7 +57,14 @@ class Sample:
         def process_idat(channel, idata):
             # merge manifest, mask and gene information
             sample_df = pd.merge(idata.probes_df, probe_info, how='inner', on='illumina_id')
-
+            if channel == Channel.RED:
+                # check for any lost probe when merging the manifest (as it is an inner merge) - only for one channel,
+                # as both channels have the same probes
+                nb_probes_before_merge = len(idata.probes_df)
+                lost_probes = nb_probes_before_merge - len(sample_df)
+                pct_lost = 100 * lost_probes / nb_probes_before_merge
+                # print('sample df', len(sample_df))
+                LOGGER.info(f'Lost {lost_probes:,} illumina probes ({pct_lost:.2f}%) while merging information with Manifest')
             # deduce methylation state (M = methylated, U = unmethylated) depending on infinium type
             sample_df['methylation_state'] = '?'
             sample_df.loc[sample_df.type == 'II', 'methylation_state'] = 'M' if channel.is_green else 'U'
@@ -70,20 +77,12 @@ class Sample:
             return sample_df.drop(columns=['address_a', 'address_b'])
 
         channels_df = pd.concat([process_idat(channel, idata) for channel, idata in self.idata.items()], ignore_index=True)
-
-        # check for any lost probe when merge manifest (as it is an inner merge)
-        total_probes = len(self.idata[Channel.RED].probes_df)
-        lost_probes = int(total_probes - len(set(channels_df.probe_id)))
-        pct_lost = 100 * lost_probes / total_probes
-        LOGGER.info(f'Lost {lost_probes:,} probes ({pct_lost:.2f}%) while merging information with Manifest')
-
         # remove probes with not enough beads
         low_nb_beads = channels_df.n_beads < min_beads
-        probes_to_filter = set(channels_df[low_nb_beads].probe_id)
-        nb_filtered_probes = len(probes_to_filter)
-        pct_filtered = 100 * nb_filtered_probes / total_probes
+        nb_filtered_probes = sum(low_nb_beads)
+        pct_filtered = 100 * nb_filtered_probes / len(channels_df)
         LOGGER.info(f'Removing {nb_filtered_probes:,} probes ({pct_filtered:.2f}%) that have less than {min_beads} beads')
-        channels_df = channels_df[~channels_df.probe_id.isin(probes_to_filter)]
+        channels_df = channels_df[~low_nb_beads]
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
         self._signal_df = channels_df.pivot(index=indexes, values='mean_value',
@@ -95,7 +94,6 @@ class Sample:
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
         self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
         self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
-
 
     ####################################################################################################################
     # Properties & getters
