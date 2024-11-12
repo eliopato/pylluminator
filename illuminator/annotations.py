@@ -5,7 +5,7 @@ import pyranges as pr
 from illuminator.utils import get_resource_folder, get_logger, get_or_download_data
 
 LOGGER = get_logger()
-ILLUMINA_DATA_LINK = 'https://github.com/eliopato/illuminator-data/raw/main/annotations/'
+ILLUMINA_DATA_LINK = 'https://github.com/eliopato/illuminator-data/raw/main/'
 
 @unique
 class Channel(Enum):
@@ -54,6 +54,7 @@ class ArrayType(Enum):
     def __str__(self):
         return self.value
 
+
 class GenomeInfo:
     """Additional genome information provided by external files"""
 
@@ -64,13 +65,20 @@ class GenomeInfo:
             LOGGER.warning('You must set genome version to load genome information')
             return
 
-        folder_genome = get_resource_folder(f'annotations.{name}.{genome_version}.genome_info')
-        dl_link = f'{ILLUMINA_DATA_LINK}/{genome_version}/genome_info/'
+        folder_genome = get_resource_folder(f'genome_info.{name}.{genome_version}')
+        dl_link = f'{ILLUMINA_DATA_LINK}/genome_info/{genome_version}/'
 
         # read all the csv files
         for info in ['gap_info', 'seq_length', 'chromosome_regions', 'transcripts_exons', 'transcripts_list']:
 
-            df = get_or_download_data(folder_genome, f'{info}.csv', dl_link)
+            filepath = folder_genome.joinpath(f'{info}.csv')
+            if filepath.exists():
+                df = pd.read_csv(str(filepath))
+            elif name == 'default':
+                df = get_or_download_data(folder_genome, f'{info}.csv', dl_link)
+            else:
+                LOGGER.error(f'File {filepath} doesn\'t exist for custom annotation info {name}, please add it')
+                continue
 
             if df is None:
                 LOGGER.error(f'not able to get {info}')
@@ -87,7 +95,7 @@ class GenomeInfo:
             elif info == 'transcripts_exons':
                 gen_info = df.set_index('transcript_id')
             elif info == 'chromosome_regions':
-                gen_info = df.set_index('chrom')
+                gen_info = df.set_index('Chromosome')
             else:
                 gen_info = df
 
@@ -107,6 +115,8 @@ class Annotations:
         self.name = name
         # load genome info files
         self.genome_info = GenomeInfo(name, genome_version)
+        self.probe_infos = None
+        self.genomic_ranges = None
 
         # load probe_info and genomic_ranges files
 
@@ -121,7 +131,7 @@ class Annotations:
                 LOGGER.debug(f'reading csv {filepath}')
                 df = pd.read_csv(filepath, index_col=0)
             elif self.name == 'default':
-                dl_link = f'{ILLUMINA_DATA_LINK}/{self.genome_version}/{self.array_type}/'
+                dl_link = f'{ILLUMINA_DATA_LINK}/annotations/{self.genome_version}/{self.array_type}/'
                 df = get_or_download_data(data_folder, f'{info}.csv', dl_link)
 
             if df is None:
