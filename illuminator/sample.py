@@ -1,3 +1,4 @@
+import gc
 import re
 import os
 from pathlib import Path
@@ -41,7 +42,7 @@ class Sample:
         else:
             self.idata[channel] = dataset
 
-    def merge_annotation_info(self, annotation: Annotations, min_beads=1) -> None:
+    def merge_annotation_info(self, annotation: Annotations, min_beads=1, keep_idat=False) -> None:
         """Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
         channel information, methylation state and mask names for each probe. For manifest file, merging is done on
         `Illumina ID`, contained in columns `address_a` and `address_b` of the manifest file. For the mask file, we use
@@ -94,6 +95,11 @@ class Sample:
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
         self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
         self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
+
+        # if we don't want to keep idata, make sure we free the memory
+        if not keep_idat:
+            self.idata = None
+            gc.collect()
 
     ####################################################################################################################
     # Properties & getters
