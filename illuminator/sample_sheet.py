@@ -30,6 +30,7 @@ def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
     :return: the sample sheet as a dataframe, or None if the file could not be read
     :rtype: pandas.DataFrame | None
     """
+    filepath = os.path.expanduser(filepath)
 
     extension = filepath.split('.')[-1]
     if extension != 'csv':
@@ -95,6 +96,7 @@ def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
     samples_dict = {'GSM_ID': [], 'sample_name': [], 'sentrix_id': [], 'sentrix_position': []}
 
     idat_folder = convert_to_path(idat_folder)
+
     if not idat_folder.exists():
         LOGGER.error(f'{idat_folder} is not a valid directory path')
         return None, None

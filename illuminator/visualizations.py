@@ -1,3 +1,5 @@
+import os.path
+
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
 from matplotlib.lines import Line2D
@@ -169,7 +171,7 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
         plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(os.path.expanduser(save_path))
 
     plt.show()
 
@@ -244,7 +246,7 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
     plt.title(title)
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(os.path.expanduser(save_path))
 
     plt.show()
 
@@ -277,7 +279,7 @@ def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | 
     plt.legend()
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(os.path.expanduser(save_path))
 
     plt.show()
 
@@ -349,7 +351,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     plt.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1, 1))
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(os.path.expanduser(save_path))
 
     plt.show()
 
@@ -387,7 +389,7 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: N
     plt.title(title)
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(os.path.expanduser(save_path))
 
     plt.show()
 
@@ -464,7 +466,7 @@ def plot_nb_probes_and_types_per_chr(sample: Sample | Samples, title: None | str
     fig.suptitle(title)
 
     if save_path is not None:
-        fig.savefig(save_path)
+        fig.savefig(os.path.expanduser(save_path))
 
 ########################################################################################################################
 
@@ -501,7 +503,7 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 10
         plot = sns.clustermap(sorted_betas.dropna()[:nb_probes], xticklabels=True)
 
     if save_path is not None:
-        plot.get_figure().savefig(save_path)
+        plot.get_figure().savefig(os.path.expanduser(save_path))
 
 
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='Chromosome',
@@ -672,7 +674,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     plt.title(title)
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(os.path.expanduser(save_path))
 
     plt.show()
 
@@ -962,6 +964,6 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
     plt.subplots_adjust(wspace=0, hspace=0)
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(os.path.expanduser(save_path))
 
     plt.show()

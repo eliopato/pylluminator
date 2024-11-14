@@ -11,6 +11,7 @@ import numpy as np
 import struct
 from pathlib import PurePath
 import gzip
+import os
 
 from illuminator.utils import get_logger
 
@@ -163,6 +164,8 @@ def get_file_object(filepath):
         open the file in 'rb' mode
 
     :return: a file-like object based on the provided input."""
+    filepath = os.path.expanduser(filepath)
+
     if pd.api.types.is_file_like(filepath):
         return filepath
 
@@ -244,6 +247,7 @@ class IdatDataset:
         :type bit: str
 
         :raises: ValueError: The IDAT file has an incorrect identifier or version specifier."""
+
         self.barcode = None
         self.chip_type = None
         self.n_snps_read = 0

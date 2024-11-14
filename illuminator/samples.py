@@ -9,7 +9,7 @@ from illuminator.sample import Sample
 import illuminator.sample_sheet as sample_sheet
 from illuminator.read_idat import IdatDataset
 from illuminator.annotations import Annotations, Channel
-from illuminator.utils import save_object, load_object, get_files_matching, mask_dataframe, get_logger
+from illuminator.utils import save_object, load_object, get_files_matching, mask_dataframe, get_logger, convert_to_path
 
 LOGGER = get_logger()
 
@@ -193,7 +193,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
 
     :return: Samples object or None if an error was raised
     :rtype: Samples | None"""
-
+    datadir = convert_to_path(datadir)  # expand user and make it a Path
     LOGGER.info(f'>> start reading sample files from {datadir}')
 
     if sample_sheet_df is not None and sample_sheet_name is not None:

@@ -998,7 +998,8 @@ class Sample:
         :param name: sample name
         :type name: str
 
-        :return None"""
+        :return: None"""
+        filepath = os.path.expanduser(filepath)
 
         LOGGER.debug(f'read {filepath}')
 

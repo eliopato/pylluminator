@@ -155,6 +155,7 @@ def save_object(object_to_save, filepath: str):
     :type filepath: str
 
     :return: None"""
+    filepath = os.path.expanduser(filepath)
     LOGGER.info(f'Saving {type(object_to_save)} object in {filepath}')
     with open(filepath, 'wb') as f:
         pickle.dump(object_to_save, f)
@@ -170,6 +171,7 @@ def load_object(filepath: str, object_type=None):
 
     :return: loaded object
     :rtype: Any"""
+    filepath = os.path.expanduser(filepath)
 
     LOGGER.info(f'Loading {object_type if object_type is not None else ""} object from {filepath}')
     with open(filepath, 'rb') as f:
@@ -229,6 +231,7 @@ def convert_to_path(input_path: str | os.PathLike | MultiplexedPath) -> Path | P
     """Return the `input_path` in a PathLike format.
 
     If it's a string or a MultiplexedPath, convert it to a PathLike object.
+    Expand user if it's a string or a pathLike.
 
     :param input_path: path to convert
     :type input_path: str  | os.PathLike | MultiplexedPath
@@ -238,7 +241,7 @@ def convert_to_path(input_path: str | os.PathLike | MultiplexedPath) -> Path | P
     """
     if isinstance(input_path, MultiplexedPath):
         return input_path.joinpath('*').parent  # convert MultiplexedPath into PosixPath
-    return Path(input_path)
+    return Path(os.path.expanduser(input_path))
 
 
 def get_files_matching(root_path: str | os.PathLike | MultiplexedPath, pattern: str) -> list[os.PathLike]:
