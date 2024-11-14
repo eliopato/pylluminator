@@ -1,3 +1,8 @@
+"""
+The Copy Number Variations (CNV) module defines the functions to detect changes in the number of copies on a particular
+region of the genome, and splits the genome in segments with similar CNV.
+"""
+
 import zipfile
 
 import pandas as pd
@@ -18,16 +23,21 @@ LOGGER = get_logger()
 def copy_number_variation(samples: Samples | Sample, sample_name: str | None = None, normalization_samples_names: list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
     """Perform copy number variation (CNV) and copy number segmentation for a sample
 
-    :param samples: (illuminator.Sample or illuminator.Samples) sample to be analyzed
-    :param sample_name: (string or None, default None) name of the Sample to calculate CNV of. Necessary if you provide
-        a Samples object as first parameter, ignored if you provide a single Sample.
-    :param normalization_samples_names: (optional, str, default empty list) names of the samples to use for
-        normalization, that have to be part of the passed Samples object. If empty (default), default normalization
-        samples will be loaded from a database - but this only work for EPIC/hg38 and EPICv2/hg38; for other array
-        versions, you **need** to provide samples.
+    :param samples: sample(s) to be analyzed
+    :type samples: Sample | Samples
 
-    :return: tuple(pr.Pyranges, pd.DataFrame, pd.DataFrame) : (1) the bins coordinates as a pr.Pyranges object, (3) the
-        bins signal as a pd.DataFrame object, and (3) the segments as a pd.DataFrame object"""
+    :param sample_name: name of the Sample to calculate CNV of. Necessary if you provide a Samples object as first
+        parameter, ignored if you provide a single Sample. Default None
+    :type sample_name: str | None
+
+    :param normalization_samples_names: names of the samples to use for normalization, that have to be part of the passed
+        Samples object. If empty (default), default normalization samples will be loaded from a database - but this only
+        work for EPIC/hg38 and EPICv2/hg38; for other array versions, you **need** to provide samples. Default []
+    :type normalization_samples_names: list[str]
+
+    :return: a tuple with : the bins coordinates, the bins signal, the segments
+    :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
+    """
 
     # check input parameters
 
@@ -139,7 +149,15 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
 
 def get_normalization_samples(annotation: Annotations) -> Samples | None:
     """Read from the package's data normalization samples data, depending on the array type.
-    Only EPIC v2 and EPIC are supported for now"""
+
+    Only EPIC v2 and EPIC are supported for now.
+
+    :param annotation: annotation used for your samples
+    :type annotation: Annotations
+
+    :return: samples to use for normalization, corresponding to the given annotation type and version, or None if no
+        normalization samples exist for this annotation
+    :rtype: Samples | None"""
     LOGGER.info('Getting normalization samples')
 
     log_level = get_logger_level()
@@ -175,15 +193,31 @@ def get_normalization_samples(annotation: Annotations) -> Samples | None:
     return None
 
 
-def merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: pr.PyRanges, minimum_overlap=20,
-                                  precision=1) -> pr.PyRanges:
+def merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: pr.PyRanges, minimum_overlap: int =20,
+                                  precision:float = 1) -> pr.PyRanges:
     """Merge adjacent intervals from `pr_to_merge` until they have a minimum probes overlap such as defined in parameter
-    `minimum_overlap`. Overlap count is calculated with `pr_to_overlap_with`.
+    `minimum_overlap`.
 
-    Parameter `precision` must be between 0 and minimum_overlap. 0 is the maximum precision, meaning that resulting
-    intervals will be on average smaller (closer to the minimum) - but it comes at a cost : a higher computing time.
 
-    Return a PyRanges object with probes overlap >= `minimum_overlap`"""
+    Overlap count is calculated with `pr_to_overlap_with`.
+
+    :param pr_to_merge: intervals to merge
+    :type pr_to_merge: pyranges.PyRanges
+
+    :param pr_to_overlap_with: intervals used as reference for overlap calculation
+    :type pr_to_overlap_with: pyranges.PyRanges
+
+    :param minimum_overlap: target minimum overlap for each bin. Merging of adjacent intervals stops when this number
+        is reached. Default: 20
+    :type minimum_overlap: int
+
+    :param precision: must be between 0 and minimum_overlap. 0 is the maximum precision, meaning that resulting
+        intervals will be on average smaller (closer to the minimum) - but it comes at a cost : a higher computing time.
+        Default: 1
+    :type precision: float
+
+    :return: intervals with probes overlap >= `minimum_overlap`
+    :rtype: pyranges.PyRanges"""
 
     pr_to_merge = pr_to_merge.reset_index(drop=True)  # to ensure an int type index, not object
     pr_to_overlap_with = pr_to_overlap_with.reset_index(drop=True)  # to ensure an int type index, not object

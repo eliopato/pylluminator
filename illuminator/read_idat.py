@@ -1,4 +1,9 @@
-# Most of this code comes from https://github.com/FoxoTech/methylprep
+"""
+Functions to parse .idat files.
+
+Most of this code comes from https://github.com/FoxoTech/methylprep
+"""
+
 
 from enum import IntEnum, unique
 import pandas as pd
@@ -19,17 +24,17 @@ def npread(file_like, dtype: str, n: int) -> np.ndarray:
     """Parses a binary file multiple times, allowing for control if the file ends prematurely. This replaces
      read_results() and runs faster, and it provides support for reading gzipped idat files without decompressing.
 
-    Arguments:
-        infile {file-like} -- The binary file to read the select number of bytes.
-        dtype {data type} -- used within idat files, 2-bit, or 4-bit numbers stored in binary at specific addresses
-        n {number of snps read} -- see files/idat.py for how this function is applied.
+    :param file_like: The binary file to read the select number of bytes.
+    :type file_like: file-like
+    :param dtype: used within idat files, 2-bit, or 4-bit numbers stored in binary at specific addresses
+    :type dtype: str
+    :param n: number of snps read
+    :type n: int
 
-    Raises:
-        EOFError: If the end of the file is reached before the number of elements have
-            been processed.
+    :raises: EOFError: If the end of the file is reached before the number of elements have been processed.
 
-    Returns:
-        A list of the parsed values.
+    :return: A list of the parsed values.
+    :rtype: numpy.ndarray
     """
     dtype = np.dtype(dtype)
     # np.readfile is not able to read from gzopene-d file
@@ -45,40 +50,37 @@ def npread(file_like, dtype: str, n: int) -> np.ndarray:
 def read_byte(infile) -> int:
     """Converts a single byte to an integer value.
 
-    Arguments:
-        infile {file-like} -- The binary file to read the select number of bytes.
+    :param infile: The binary file to read the select number of bytes.
+    :type infile: file-like
 
-    Returns:
-        [integer] -- Unsigned integer value converted from the supplied bytes.
+    :return: Unsigned integer value converted from the supplied bytes.
+    :rtype: int
     """
     return bytes_to_int(infile.read(1), signed=False)
 
 
-def bytes_to_int(input_bytes, signed=False):
+def bytes_to_int(input_bytes, signed=False) -> int:
     """Returns the integer represented by the given array of bytes. Pre-sets the byteorder to be little-endian.
 
-    Arguments:
-        input_bytes -- Holds the array of bytes to convert. The argument must either support the buffer protocol or
-            be an iterable object producing bytes. Bytes and bytearray are examples of built-in objects that support the
-            buffer protocol.
+    :param input_bytes: Holds the array of bytes to convert. The argument must either support the buffer protocol or
+        be an iterable object producing bytes. Bytes and bytearray are examples of built-in objects that support the
+        buffer protocol.
+    :param signed: Indicates whether two's complement is used to represent the integer - Default False
+    :type signed: bool
 
-    Keyword Arguments:
-        signed {bool} -- Indicates whether two's complement is used to represent the integer. (default: {False})
-
-    Returns:
-        [integer] -- Integer value converted from the supplied bytes.
-    """
+    :return: Integer value converted from the supplied bytes.
+    :rtype: int"""
     return int.from_bytes(input_bytes, byteorder='little', signed=signed)
 
 
 def read_string(infile) -> str:
     """Converts an array of bytes to a string.
 
-    Arguments:
-        infile {file-like} -- The binary file to read the select number of bytes.
+    :param infile: The binary file to read the select number of bytes.
+    :type infile: file-like
 
-    Returns:
-        [string] -- UTF-8 decoded string value.
+    :return: UTF-8 decoded string value.
+    :rtype: str
     """
     num_bytes = read_byte(infile)
     num_chars = num_bytes % 128
@@ -96,54 +98,54 @@ def read_string(infile) -> str:
 def read_short(infile) -> int:
     """Converts a two-byte element to an integer value.
 
-    Arguments:
-        infile {file-like} -- The binary file to read the select number of bytes.
+    :param infile: The binary file to read the select number of bytes.
+    :type infile: file-like
 
-    Returns:
-        [integer] -- Unsigned integer value converted from the supplied bytes.
-    """
+    :return: Unsigned integer value converted from the supplied bytes.
+    :rtype: int"""
     return bytes_to_int(infile.read(2), signed=False)
 
 
 def read_int(infile) -> int:
     """Converts a four-byte element to an integer value.
 
-    Arguments:
-        infile {file-like} -- The binary file to read the select number of bytes.
+    :param infile: The binary file to read the select number of bytes.
+    :type infile: file-like
 
-    Returns:
-        [integer] -- Signed integer value converted from the supplied bytes.
-    """
+    :return: Signed integer value converted from the supplied bytes.
+    :rtype: int"""
     return bytes_to_int(infile.read(4), signed=True)
 
 
 def read_long(infile) -> int:
     """Converts an eight-byte element to an integer value.
 
-    Arguments:
-        infile {file-like} -- The binary file to read the select number of bytes.
+    :param infile: The binary file to read the select number of bytes.
+    :type infile: file-like
 
-    Returns:
-        [integer] -- Signed integer value converted from the supplied bytes.
-    """
+    :return: Signed integer value converted from the supplied bytes.
+    :rtype: int"""
     return bytes_to_int(infile.read(8), signed=True)
 
 
 def read_char(infile, num_bytes: int) -> str:
     """Converts an array of bytes to a string.
 
-    Arguments:
-        infile {file-like} -- The binary file to read the select number of bytes.
-        num_bytes {integer} -- The number of bytes to read and parse.
+    :param infile: The binary file to read the select number of bytes.
+    :type infile: file-like
+    :param num_bytes: The number of bytes to read and parse.
+    :type num_bytes: int
 
-    Returns:
-        [string] -- UTF-8 decoded string value.
-    """
+    :return: UTF-8 decoded string value.
+    :rtype: str"""
     return infile.read(num_bytes).decode('utf-8')
 
 
 def read_and_reset(inner):
-    """Decorator that resets a file-like object back to the original position after the function has been called."""
+    """Decorator that resets a file-like object back to the original position after the function has been called.
+
+    :param inner: file to read and reset
+    :type inner: file-like"""
 
     def wrapper(infile, *args, **kwargs):
         current_position = infile.tell()
@@ -155,8 +157,12 @@ def read_and_reset(inner):
 
 
 def get_file_object(filepath):
-    """Returns a file-like object based on the provided input. If the input argument is a string, it will attempt to
-    open the file in 'rb' mode."""
+    """Get an opened file object. Unzip if filepath is a .gz file.
+
+    :param filepath: a string, or path-like object. If the input argument is a string, it will attempt to
+        open the file in 'rb' mode
+
+    :return: a file-like object based on the provided input."""
     if pd.api.types.is_file_like(filepath):
         return filepath
 
@@ -208,19 +214,36 @@ class IdatSectionCode(IntEnum):
 class IdatDataset:
     """Validates and parses an Illumina IDAT file.
 
-    Arguments:
-        filepath {str} -- the IDAT file to parse.
+    :ivar barcode:
+    :vartype barcode:
 
-    Keyword Arguments:
-        bit {default 'float32'} -- 'float16' will pre-normalize intensities, capping max intensity at 32127. This cuts
-            data size in half, but will reduce precision on ~0.01% of probes. [effectively downscaling fluorescence]
+    :ivar chip_type:
+    :vartype chip_type:
 
-    Raises:
-        ValueError: The IDAT file has an incorrect identifier or version specifier.
+    :ivar n_snps_read. Default: 0
+    :vartype n_snps_read:
+
+    :ivar run_info: Default []
+    :vartype run_info:
+
+    :ivar bit: Defines the data type, hence the precision. Default: 'float32'
+    :vartype bit: str
+
+    :ivar probes_df: dataframe with the .idat file data parsed (illumina IDs, mean_value, std_dev, n_beads)
+    :vartype probes_df: pandas.DataFrame
     """
 
     def __init__(self, filepath: str, bit='float32'):
-        """Initializes the IdatDataset, reads and parses the IDAT file."""
+        """Initializes the IdatDataset by reading the .idat file provided.
+
+        :param filepath: the IDAT file to parse.
+        :type filepath: str
+        :param bit: Either 'float32' or 'float16'. 'float16' will pre-normalize intensities, capping max intensity at 32127.
+            This cuts data size in half, but will reduce precision on ~0.01% of probes. [effectively downscaling fluorescence]
+            Default: 'float32'
+        :type bit: str
+
+        :raises: ValueError: The IDAT file has an incorrect identifier or version specifier."""
         self.barcode = None
         self.chip_type = None
         self.n_snps_read = 0
@@ -245,13 +268,13 @@ class IdatDataset:
     def is_idat_file(idat_file, expected) -> bool:
         """Checks if the provided file has the correct identifier.
 
-        Arguments:
-            idat_file {file-like} -- the IDAT file to check.
-            expected {string} -- expected IDAT file identifier.
+        :param idat_file: the IDAT file to check.
+        :type idat_file: file-like
+        :param expected: expected IDAT file identifier.
+        :type expected: str
 
-        Returns:
-            [boolean] -- If the IDAT file identifier matches the expected value
-        """
+        :return: If the IDAT file identifier matches the expected value
+        :rtype: bool"""
         idat_file.seek(IdatHeaderLocation.FILE_TYPE.value)
         file_type = read_char(idat_file, len(expected))
         return file_type.lower() == expected.lower()
@@ -261,13 +284,13 @@ class IdatDataset:
     def is_correct_version(idat_file, expected: int) -> bool:
         """Checks if the provided file has the correct version.
 
-        Arguments:
-            idat_file {file-like} -- the IDAT file to check.
-            expected {integer} -- expected IDAT version.
+        :param idat_file: the IDAT file to check.
+        :type idat_file: file-like
+        :param expected: expected IDAT version.
+        :type expected: int
 
-        Returns:
-            [boolean] -- If the IDAT file version matches the expected value
-        """
+        :return: If the IDAT file version matches the expected value
+        :rtype: bool"""
         idat_file.seek(IdatHeaderLocation.VERSION.value)
         idat_version = read_long(idat_file)
         return str(idat_version) == str(expected)
@@ -277,12 +300,11 @@ class IdatDataset:
     def get_section_offsets(idat_file) -> dict:
         """Parses the IDAT file header to get the byte position for the start of each section.
 
-        Arguments:
-            idat_file {file-like} -- the IDAT file to process.
+        :param idat_file: the IDAT file to process.
+        :type idat_file: file-like
 
-        Returns:
-            [dict] -- The byte offset for each file section.
-        """
+        :return: The byte offset for each file section.
+        :rtype: dict"""
         idat_file.seek(IdatHeaderLocation.FIELD_COUNT.value)
         num_fields = read_int(idat_file)
 
@@ -299,12 +321,11 @@ class IdatDataset:
         """Reads the IDAT file and parses the appropriate sections. Joins the mean probe intensity values with their
         Illumina probe ID.
 
-        Arguments:
-            idat_file {file-like} -- the IDAT file to process.
+        :param idat_file: the IDAT file to process.
+        :type idat_file: file-like
 
-        Returns:
-            DataFrame -- mean probe intensity values indexed by Illumina ID.
-        """
+        :return: mean probe intensity values indexed by Illumina ID.
+        :rtype: pandas.DataFrame"""
         section_offsets = self.get_section_offsets(idat_file)
 
         def seek_to_section(section_code):
@@ -357,6 +378,10 @@ class IdatDataset:
         return data_frame
 
     def overflow_check(self) -> bool:
+        """Check if there is any negative value in the dataframe, meaning there was an overflow
+
+        :return: True if an overflow was detected in any value
+        :rtype: bool"""
         if hasattr(self, 'probes_df'):
             if (self.probes_df.values < 0).any():
                 return False

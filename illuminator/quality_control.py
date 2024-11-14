@@ -1,3 +1,7 @@
+"""
+The Quality Control (QC) module gives an insight on a single Sample object probes values by calculating and printing some
+reference statistics.
+"""
 import pandas as pd
 import numpy as np
 
@@ -5,7 +9,14 @@ from illuminator.sample import Sample as Sample
 
 
 def print_header(title: str, mask=False) -> None:
-    """Format and print a QC section header"""
+    """Format and print a QC section header
+
+    :param title: title of the section header
+    :type title: str
+    :param mask: True removes masked probes, False keeps them. Default False
+    :type mask: bool
+
+    :return: None"""
     if mask:
         mask_str = 'mask applied'
     else:
@@ -17,7 +28,13 @@ def print_header(title: str, mask=False) -> None:
 
 
 def print_value(name: str, value) -> None:
-    """Format and print a QC value"""
+    """Format and print a QC value
+
+    :param name: name (description) of the value to display
+    :type name: str
+    :param value: value to display. Can be anything printable.
+
+    :return: None"""
     if isinstance(value, (float, np.float32, np.float64)):
         print(f'{name:<55} {value:.2f}')
     elif isinstance(value, (int, np.int32, np.int64)):
@@ -26,15 +43,28 @@ def print_value(name: str, value) -> None:
         print(f'{name:<55} {value}')
 
 def print_pct(name: str, value) -> None:
-    """Format and print a QC percentage (x100 will be applied to the input value)"""
+    """Format and print a QC percentage (x100 will be applied to the input value)
+
+    :param name: name (description) of the value to display
+    :type name: str
+    :param value: value to display. Can be anything numeric.
+
+    :return: None"""
     print(f'{name:<55} {100*value:.2f} %')
 
 
 def detection_stats(sample: Sample, mask=False) -> None:
-    """Print detection statistics of the given sample."""
+    """Print detection statistics of the given sample.
+
+    :param sample: sample to print the stats of
+    :type sample: Sample
+    :param mask: True removes masked probes, False keeps them. Default False
+    :type mask: bool
+
+    :return: None"""
     print_header('Detection', mask)
 
-    sample.poobah(mask, sample, threshold=0.05)
+    sample.poobah(mask, True, threshold=0.05)
     p_values_df = sample.get_signal_df(mask)[['p_value', 'poobah_mask']]
 
     sample_probe_ids = sample.get_signal_df(mask).index.get_level_values('probe_id')
@@ -66,7 +96,14 @@ def detection_stats(sample: Sample, mask=False) -> None:
 
 
 def intensity_stats(sample: Sample, mask=False) -> None:
-    """Print intensity statistics of the given sample."""
+    """Print intensity statistics of the given sample.
+
+    :param sample: sample to print the stats of
+    :type sample: Sample
+    :param mask: True removes masked probes, False keeps them. Default False
+    :type mask: bool
+
+    :return: None"""
     print_header('Signal intensity', mask)
 
     print_value('Mean in-band signal intensity', sample.get_mean_ib_intensity(mask))
@@ -91,7 +128,14 @@ def intensity_stats(sample: Sample, mask=False) -> None:
 
 
 def nb_probes_stats(sample: Sample, mask=False) -> None:
-    """Print probe counts per Infinium type and Probe type"""
+    """Print probe counts per Infinium type and Probe type
+
+    :param sample: sample to print the stats of
+    :type sample: Sample
+    :param mask: True removes masked probes, False keeps them. Default False
+    :type mask: bool
+
+    :return: None"""
 
     print_header('Number of probes', mask)
 
@@ -105,7 +149,12 @@ def nb_probes_stats(sample: Sample, mask=False) -> None:
 
 
 def type1_color_channels_stats(sample: Sample) -> None:
-    """Print channel switch counts for Infinium type I probes"""
+    """Print channel switch counts for Infinium type I probes
+
+    :param sample: sample to print the stats of
+    :type sample: Sample
+
+    :return: None"""
 
     print_header('Type I color channel', False)
 
@@ -117,7 +166,14 @@ def type1_color_channels_stats(sample: Sample) -> None:
 
 
 def dye_bias_stats(sample: Sample, mask=False) -> None:
-    """Print dye bias stats for Infinium type I probes"""
+    """Print dye bias stats for Infinium type I probes
+
+    :param sample: sample to print the stats of
+    :type sample: Sample
+    :param mask: True removes masked probes, False keeps them. Default False
+    :type mask: bool
+
+    :return: None"""
 
     print_header('Dye bias', mask)
 
@@ -138,8 +194,15 @@ def dye_bias_stats(sample: Sample, mask=False) -> None:
     print_value('Ratio of top vs global Red-to-green median intensities', red_green_distortion)
 
 
-def betas_stats(sample: Sample, mask=False):
-    """Print Betas stats"""
+def betas_stats(sample: Sample, mask=False) -> None:
+    """Print Betas stats
+
+    :param sample: sample to print the stats of
+    :type sample: Sample
+    :param mask: True removes masked probes, False keeps them.  Default False
+    :type mask: bool
+
+    :return: None"""
 
     print_header('Betas', mask)
 

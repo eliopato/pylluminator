@@ -18,8 +18,24 @@ from illuminator.utils import get_chromosome_number, set_level_as_index, get_log
 
 LOGGER = get_logger()
 
-def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_column: str | None, cmap_name: str = 'Spectral'):
-    """Define the colors to use for each sample, depending on the columns used to categorized them."""
+def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_column: str | None,
+                cmap_name: str = 'Spectral') -> (list, dict):
+    """Define the colors to use for each sample, depending on the columns used to categorized them.
+
+    :param sheet: sample sheet data frame
+    :type sheet: pandas.DataFrame
+
+    :param color_column: name of the column of the sample sheet to use for color. If None, the function will return empty objects.
+    :type color_column: str | None
+
+    :param color_group_column: name of the column of the sample sheet to use to group colors together
+    :type color_group_column: str | None
+
+    :param cmap_name: name of the matplotlib color map to use. Default: spectral
+    :type cmap_name: str
+
+    :return: the list of legend handles and a dict of color categories, with keys being the values of color_column
+    :rtype: tuple[list,dict]"""
     legend_handles = []
     color_categories = dict()
     cmap = colormaps[cmap_name]
@@ -52,8 +68,16 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_colum
 
     return legend_handles, color_categories
 
-def _get_linestyles(sheet: pd.DataFrame, column: str | None):
-    """Define the line style to use for each sample, depending on the column used to categorized them."""
+def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict):
+    """Define the line style to use for each sample, depending on the column used to categorized them.
+    :param sheet: sample sheet data frame
+    :type sheet: pandas.DataFrame
+
+    :param column: name of the column of the sample sheet to use. If None, the function will return empty objects.
+    :type column: str | None
+
+    :return: the list of legend handles and a dict of line styles, with keys being the values of column
+    :rtype: tuple[list,dict]"""
 
     linestyle_categories = dict()
     legend_handles = []
@@ -76,19 +100,34 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
                custom_sheet: None | pd.DataFrame = None, mask=True, save_path: None | str=None) -> None:
     """Plot betas values density for each sample
 
-    :param samples : (Samples) with betas already calculated
-    :param n_bins: (int, optional, default 100) number of bins to generate the histogram
-    :param color_column: (str, optional, default None) name of a Sample Sheet column to define which samples get the
-        same color
-    :param color_group_column: (str, optional, default None) name of a Sample Sheet column to categorize samples and
-        give samples from the same category a similar color shade.
-    :param linestyle_column: (str, optional, default None) name of a Sample Sheet column to define which samples get the
-        same line style
-    :param custom_sheet: (pd.DataFrame, optional) a sample sheet to use. By default, use the samples' sheet. Useful if
-        you want to filter the samples to display
-    :param title: (str, optional) custom title for the plot
-    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them."
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :param samples: with betas already calculated
+    :type samples: Samples
+
+    :param n_bins: number of bins to generate the histogram. Default: 100
+    :type n_bins: int
+
+    :param title: custom title for the plot to override generated title. Default: None
+    :type title: str | None
+
+    :param color_column: name of a Sample Sheet column to define which samples get the same color. Default: sample_name
+    :type color_column: str
+
+    :param color_group_column:  name of a Sample Sheet column to categorize samples and give samples from the same
+        category a similar color shade.. Default: None
+    :type color_group_column: str | None
+
+    :param linestyle_column: name of a Sample Sheet column to define which samples get the same line style. Default: None
+    :type linestyle_column: str | None
+
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
+    :type custom_sheet: pandas.DataFrame
+
+    :param mask: rue removes masked probes from betas, False keeps them. Default: True
+    :type mask: bool
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str
+
     :return: None"""
 
     # initialize values
@@ -140,15 +179,28 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
     """Plot betas grouped by one or several sample sheet columns. Display the average beta values per group with a plain
     line, and individual beta values distribution as transparent lines.
 
-    :param samples : (Samples) with betas already calculated
-    :param group_columns: (list of str) name of one or several Sample Sheet column to categorize samples and
-        give samples from the same category a similar color shade.
-    :param n_bins: (int, optional, default 100) number of bins to generate the histogram
-    :param title: (str, optional) custom title for the plot
-    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them.
-    :param custom_sheet: (pd.DataFrame, optional) a sample sheet to use. By default, use the samples' sheet. Useful if
-        you want to filter the samples to display
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :param samples: with betas already calculated
+    :type samples: Samples
+
+    :param group_columns: name of one or several Sample Sheet column to categorize samples and give samples from the
+        same category a similar color shade.
+    :type group_columns: list[str]
+
+    :param n_bins: number of bins to generate the histogram. Default: 100
+    :type n_bins: int
+
+    :param title: custom title for the plot. Default: None
+    :type title: str | None
+
+    :param mask: True removes masked probes from betas, False keeps them. Default: True
+    :type mask: bool
+
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display. Default: None
+    :type custom_sheet: pandas.DataFrame | None
+
+    :param save_path: if set, save the graph to save_path. Default: None.
+    :type save_path: str | None
 
     :return None"""
 
@@ -198,11 +250,19 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
 
 
 def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None, save_path: None | str=None) -> None:
-    """Plot beta values split by infinium design type (I and II)
-    :param betas: pd.DataFrame as output from sample[s].get_betas() - rows are probes and columns sample-s
-    :param n_bins: (int, optional, default 100) number of bins to generate the histogram
-    :param title: (str, optional) custom title for the plot
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    """Plot beta values split by Infinium design type (I and II)
+
+    :param betas: dataframe as output from sample[s].get_betas() - rows are probes and columns sample-s
+    :type betas: pandas.DataFrame
+
+    :param n_bins: number of bins to generate the histogram. Default: 100
+    :type n_bins: int
+
+    :param title: custom title for the plot. Default: None
+    :type title: str
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
 
     :return: None
     """
@@ -227,17 +287,31 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
     """Plot samples in 2D space according to their beta distances.
 
-    :param samples : Samples object, with betas already calculated
-    :param label_column: (str, optional, default sample_name) name of the column containing the labels
-    :param color_group_column: (str, optional, default None) name of a Sample Sheet column to categorize samples and
-        give samples from the same category a similar color shade.
-    :param random_state: (int, optional, default 42) seed for the MDS model. Assigning a seed makes the graphe
-        reproducible across calls.
-    :param title: (str, optional) custom title for the plot
-    :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them.
-    :param custom_sheet: (pd.DataFrame, optional) a sample sheet to use. By default, use the samples' sheet. Useful if
-        you want to filter the samples to display
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :param samples : samples with betas already calculated
+    :type samples: Samples
+
+    :param label_column: name of the column containing the labels
+    :type label_column: str | None
+
+    :param color_group_column: name of a Sample Sheet column to categorize samples and give samples from the same
+        category a similar color shade. Default: None
+    :type color_group_column: str | None
+
+    :param random_state: seed for the MDS model. Assigning a seed makes the graphe reproducible across calls. Default: 42
+    :type random_state: int
+
+    :param title: custom title for the plot. Default: None
+    :type title: str | None
+
+    :param mask: True removes masked probes from betas, False keeps them. Default: True
+    :type mask: bool
+
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display. Default: None
+    :type custom_sheet: pandas.DataFrame | None
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
 
     :return: None"""
 
@@ -283,9 +357,14 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
 def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
-    :param betas: pd.DataFrame as output from sample[s].get_betas() - rows are probes and columns sample-s
-    :param title: custom title for the plot
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :param betas: dataframe as output from sample[s].get_betas() - rows are probes and columns sample-s
+    :type betas: pandas.DataFrame
+
+    :param title: custom title for the plot. Default: None
+    :type title: str | None
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
 
     :return: None"""
 
@@ -318,7 +397,10 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: N
 
 def get_nb_probes_per_chr_and_type(sample: Sample | Samples) -> (pd.DataFrame, pd.DataFrame):
     """Count the number of probes covered by the sample-s per chromosome and design type
+
     :param sample: Sample or Samples to analyze
+    :type sample: Sample | Samples
+
     :return: None"""
 
     chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
@@ -350,8 +432,13 @@ def plot_nb_probes_and_types_per_chr(sample: Sample | Samples, title: None | str
     """Plot the number of probes covered by the sample per chromosome and design type
 
     :param sample: Sample or Samples to be plotted
-    :param title: custom title for the plot
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :type sample: Sample | Samples
+
+    :param title: custom title for the plot. Default: None
+    :type title: str | None
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
 
     :return: None"""
 
@@ -386,12 +473,21 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 10
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
-    :param dmp: (pd.DataFrame) p-values and statistics for each probe, as returned by get_dmp()
-    :param betas: (pd.DataFrame) beta values as output from sample[s].get_betas() rows are probes and columns sample-s
-    :param nb_probes: (optional, int) number of probes to plot (default is 100)
-    :param keep_na: (optional, bool) set to False to drop probes with any NA beta values (default to False). Note that
-        if set to True, the rendered plot won't show the hierarchical clusters
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :param dmp:  p-values and statistics for each probe, as returned by get_dmp()
+    :type dmp: pandas.DataFrame
+
+    :param betas: beta values as output from sample[s].get_betas() rows are probes and columns sample-s
+    :type betas: pandas.DataFrame
+
+    :param nb_probes: number of probes to plot. Default: 100
+    :type nb_probes: int
+
+    :param keep_na: set to False to drop probes with any NA beta values. Note that if set to True, the rendered plot
+        won't show the hierarchical clusters. Default: False
+    :type keep_na: bool
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
 
     :return: None"""
 
@@ -415,28 +511,50 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                     title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given data.
 
-    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
-    :param segments_to_plot: (optional, pd.DataFrame) if set, display the segments using columns "chromosome", "start",
-        "end" and "mean_cnv" of the given dataframe, where start and end are the position on the chromosome (as returned
-        by copy_number_variation())
-    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
-        `data_to_plot` dataframe.
-    :param x_col: (option, string, default 'Start') name of the column to use for X axis, start position of the probe/bin
-    :param y_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
-    :param annotation: (optional, Annotation, default None) Annotation data to use to annotation significant probes.
-        Can be None to remove any annotation.
-    :param annotation_col: (optional, str, default None) the name of a column used to write annotation on the
-        plots for data that is above the significant threshold. Must be a column in the Annotation data
-    :param medium_threshold: (optional, float, default 1e-05) set the threshold used for displaying annotation
-        (and significance line if draw_significance is True)
-    :param high_threshold: (optional, float, default 1e-08) set the threshold for the higher significance line (drawn if
-        draw_significance is True)
-    :param log10: (optional, boolean, default True) apply -log10 on the value column
-    :param draw_significance: (option, boolean, default False) draw p-value significance lines (at 1e-05 and 5e-08)
-    :param title: (optional, string) custom title for the plot
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
+    :type data_to_plot: pandas.DataFrame
 
-    :return: nothing"""
+    :param segments_to_plot: if set, display the segments using columns "chromosome", "start", "end" and "mean_cnv" of
+        the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_variation())
+    :type segments_to_plot: pandas.DataFrame
+
+    :param chromosome_col: the name of the Chromosome column in the `data_to_plot` dataframe. Default: Chromosome
+    :type chromosome_col: str
+
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: Start
+    :type x_col: str
+
+    :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
+    :type y_col: str
+
+    :param annotation: Annotation data to use to annotation significant probes. No annotation if set to None. Default: None
+    :type annotation: Annotations | None
+
+    :param annotation_col: the name of a column used to write annotation on the plots for data that is above the
+        significant threshold. Must be a column in the Annotation data. Default: None
+    :type annotation_col: str | None
+
+    :param medium_threshold: set the threshold used for displaying annotation (and significance line if d
+        raw_significance is True). Default: 1e-05
+    :type medium_threshold: float
+
+    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True).
+        Default: 1e-08
+    :type high_threshold: float
+
+    :param log10: apply -log10 on the value column. Default: True
+    :type log10: bool
+
+    :param draw_significance: draw p-value significance lines (at 1e-05 and 5e-08). Default: False
+    :type draw_significance: bool
+
+    :param title: custom title for the plot. Default: None
+    :type title: str | None
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+
+    :return: None"""
 
     # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
     data_to_plot = data_to_plot.reset_index().dropna(subset=y_col)
@@ -566,23 +684,45 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', 
                        title: None | str = None, save_path: None | str=None):
     """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
 
-    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting.
-    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
-        `data_to_plot` dataframe.
-    :param x_col: (option, string, default 'Start') name of the column to use for X axis, start position of the probe/bin
-    :param y_col: (optional, string, default 'p_value') the name of the value column in the `data_to_plot` dataframe
-    :param annotation: (optional, Annotation, default None) Annotation data to use to annotation significant probes.
-        Can be None to remove any annotation.
-    :param annotation_col: (optional, str, default None) the name of a column used to write annotation on the
-        plots for data that is above the significant threshold. Must be a column in the Annotation data
-    :param medium_threshold: (optional, float, default 1e-05) set the threshold used for displaying annotation
-        (and significance line if draw_significance is True)
-    :param high_threshold: (optional, float, default 1e-08) set the threshold for the higher significance line (drawn if
-        draw_significance is True)
-    :param log10: (optional, boolean, default True) apply -log10 on the value column
-    :param draw_significance: (option, boolean, default True) draw p-value significance lines (at 1e-05 and 5e-08)
-    :param title: (optional, string) custom title for the plot
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+
+    :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
+    :type data_to_plot: pandas.DataFrame
+
+    :param chromosome_col: the name of the Chromosome column in the `data_to_plot` dataframe. Default: Chromosome
+    :type chromosome_col: str
+
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: Start
+    :type x_col: str
+
+    :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
+    :type y_col: str
+
+    :param annotation: Annotation data to use to annotation significant probes. No annotation if set to None. Default: None
+    :type annotation: Annotations | None
+
+    :param annotation_col: the name of a column used to write annotation on the plots for data that is above the
+        significant threshold. Must be a column in the Annotation data. Default: None
+    :type annotation_col: str | None
+
+    :param medium_threshold: set the threshold used for displaying annotation (and significance line if
+        raw_significance is True). Default: 1e-05
+    :type medium_threshold: float
+
+    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True).
+        Default: 1e-08
+    :type high_threshold: float
+
+    :param log10: apply -log10 on the value column. Default: True
+    :type log10: bool
+
+    :param draw_significance: draw p-value significance lines (at 1e-05 and 5e-08). Default: False
+    :type draw_significance: bool
+
+    :param title: custom title for the plot. Default: None
+    :type title: str | None
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
 
     :return: nothing"""
 
@@ -598,17 +738,29 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
 
-    :param data_to_plot: (pd.DataFrame) dataframe to use for plotting. Typically, the bins signal dataframe.
-    :param segments_to_plot: (optional, pd.DataFrame) if set, display the segments using columns "chromosome", "start",
-        "end" and "mean_cnv" of the given dataframe, where start and end are the position on the chromosome.
-    :param chromosome_col: (optional, string, default 'Chromosome') the name of the Chromosome column in the
-        `data_to_plot` dataframe.
-    :param x_col: (option, string, default 'Start_bin') name of the column to use for X axis, start position of the
-        probe/bin
-    :param y_col: (optional, string, default 'cnv') the name of the value column in the `data_to_plot` dataframe
-    :param title: (optional, string) custom title for the plot
+    :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
+    :type data_to_plot: pandas.DataFrame
 
-    :return: nothing"""
+    :param segments_to_plot: if set, display the segments using columns "chromosome", "start", "end" and "mean_cnv" of
+        the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_variation())
+    :type segments_to_plot: pandas.DataFrame
+
+    :param chromosome_col: the name of the Chromosome column in the `data_to_plot` dataframe. Default: Chromosome
+    :type chromosome_col: str
+
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: Start
+    :type x_col: str
+
+    :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
+    :type y_col: str
+
+    :param title: custom title for the plot. Default: None
+    :type title: str | None
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+
+    :return: None"""
 
     _manhattan_plot(data_to_plot=data_to_plot, segments_to_plot=segments_to_plot, x_col=x_col,
                     chromosome_col=chromosome_col, y_col=y_col, title=title,
@@ -620,15 +772,29 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
                    protein_coding_only=True, figsize=(20, 20), save_path: None | str=None) -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
-    :param samples : Samples object, with betas already calculated
-    :param gene_name : (string) name of the gene to visualize
-    :param mask: (bool, default True) True removes masked probes from betas, False keeps them.
-    :param padding: (int, default 1500) length in kb pairs to add at the end and beginning of the transcription
-        zone
-    :param keep_na : (boolean, default False) set to True to only output probes with no NA value for any sample
-    :param protein_coding_only: (boolean, default True) limit displayed transcripts to protein coding ones
-    :param figsize: (tuple, default (20, 20)) size of the whole plot
-    :param save_path: (str, optional, default None) if set, save the graph to save_path
+    :param samples : samples with betas already calculated
+    :type samples: Samples
+
+    :param gene_name : name of the gene to visualize
+    :type gene_name: str
+
+    :param mask: True removes masked probes from betas, False keeps them. Default: True
+    :type mask: bool
+
+    :param padding: length in kb pairs to add at the end and beginning of the transcription zone. Default: 1500
+    :type: int
+
+    :param keep_na : set to True to only output probes with no NA value for any sample. Default: False
+    :type keep_na: bool
+
+    :param protein_coding_only: limit displayed transcripts to protein coding ones. Default: True
+    :type protein_coding_only: bool
+
+    :param figsize: size of the whole plot. Default: (20, 20)
+    :type figsize: tuple[int, int]
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
 
     :return: None"""
 

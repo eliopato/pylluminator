@@ -1,3 +1,7 @@
+"""
+This module defines the functions used to compute DMR (Differentially Methylated Regions) and DMP (Differentially
+Methylated Probes).
+"""
 import numpy as np
 import pandas as pd
 import pyranges as pr
@@ -16,21 +20,29 @@ from illuminator.utils import get_logger
 LOGGER = get_logger()
 
 
-def combine_p_values_stouffer(p_values: pd.Series):
+def combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
     """shortcut to scipy's function, using Stouffer method to combine p-values. Only return the combined p-value
 
-    :param p_values: pd series of p-values to combine
+    :param p_values: p-values to combine
+    :type p_values: pandas.Series
 
-    :return: numpy array of combined p-values"""
+    :return: numpy array of combined p-values
+    :rtype: numpy.ndarray"""
     return combine_pvalues(p_values, method='stouffer')[1]
 
 def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str]) -> list[float]:
     """Create an Ordinary Least Square model for the betas values, using the design matrix provided, fit it and
     extract the required results for DMP detection (p-value, t-value, estimate, standard error)
 
-    :param betas_values: array like : beta values to fit
-    :param design_matrix: pd.DataFrame design matrix for the model
-    :param factor_names: list of factors used in the model"""
+    :param betas_values: beta values to fit
+    :type betas_values: array-like
+    :param design_matrix: design matrix for the model
+    :type design_matrix: pandas.DataFrame
+    :param factor_names: factors used in the model
+    :type factor_names: list[str]
+
+    :return: p-value, t-value, estimate, standard error
+    :rtype: list[float]"""
     fitted_ols = OLS(betas_values, design_matrix, missing='drop').fit()  # drop NA values
     results = [fitted_ols.f_pvalue]
     for factor in factor_names:
@@ -41,17 +53,22 @@ def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names
 def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_na=True) -> pd.DataFrame | None:
     """Find Differentially Methylated Probes (DMP)
 
-    :param betas: (pd.DataFrame) beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
-    :param formula: (string) R-like formula used in the design matrix to describe the statistical model.
-        e.g. '~age + sex'
-        More info on  design matrices and formulas:
-            - https://www.statsmodels.org/devel/gettingstarted.html
-            - https://patsy.readthedocs.io/en/latest/overview.html
-    :param sample_sheet: (pd.DataFrame) metadata used in the model, typically a samplesheet. It must have the samples'
-        names in a column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex']).
-    :param keep_na: (optional, default True) keep probes that have NA values in the beta matrix
+    More info on  design matrices and formulas:
+        - https://www.statsmodels.org/devel/gettingstarted.html
+        - https://patsy.readthedocs.io/en/latest/overview.html
 
-    :return: pd.DataFrame with probes as rows and p_vales and model estimates in columns
+    :param betas: beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
+    :type betas: pandas.DataFrame
+    :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
+    :type formula: str
+    :param sample_sheet: metadata used in the model, typically a samplesheet. It must have the samples' names in a
+        column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex'])
+    :type sample_sheet: pandas.DataFrame
+    :param keep_na: keep probes that have NA values in the beta matrix. Default True
+    :type keep_na: bool
+
+    :return: dataframe with probes as rows and p_vales and model estimates in columns
+    :rtype: pandas.DataFrame
     """
 
     LOGGER.info(f'>>> Start get DMP')
@@ -98,16 +115,22 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
             dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
     """Find Differentially Methylated Regions (DMR) based on euclidian distance between Beta values
 
-    :param betas: (pd.DataFrame) beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
-    :param annotation: (illuminator.Annotations) samples' annotation information
-    :param dmp: (pd.DataFrame) p-values and statistics for each probe, as returned by get_dmp()
-    :param dist_cutoff: (optional, float or None) cutoff used to find change points between DMRs, used on euclidian
-        distance between beta values. If set to None (default) will be calculated depending on `seg_per_locus` parameter
-        value
-    :param seg_per_locus: (optional, float) used if dist_cutoff is not set : defines what quartile should be used as a
-        distance cut-off. Higher values leads to more segments. Should be 0 < seg_per_locus < 1, default is 0.5.
+    :param betas: beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
+    :type betas: pandas.DataFrame
+    :param annotation: samples' annotation information
+    :type annotation: Annotations
+    :param dmp: p-values and statistics for each probe, as returned by get_dmp()
+    :type dmp: pandas.DataFrame
+    :param dist_cutoff: cutoff used to find change points between DMRs, used on euclidian distance between beta values.
+        If set to None (default) will be calculated depending on `seg_per_locus` parameter value. Default: None
+    :type dist_cutoff: float | None
+    :param seg_per_locus: used if dist_cutoff is not set : defines what quartile should be used as a distance cut-off.
+        Higher values leads to more segments. Should be 0 < seg_per_locus < 1. Default: 0.5.
+    :type seg_per_locus: float
+    :type seg_per_locus: float
 
-    :return: pd.DataFrame with DMRs
+    :return: dataframe with DMRs
+    :rtype: pandas.DataFrame
     """
 
     LOGGER.info(f'>>> Start get DMR')

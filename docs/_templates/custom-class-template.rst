@@ -1,4 +1,4 @@
-{{ fullname | escape | underline}}
+{{ name | escape | underline}}
 
 .. currentmodule:: {{ module }}
 
@@ -8,14 +8,12 @@
    :inherited-members:                         
 
    {% block methods %}
-   .. automethod:: __init__
-
    {% if methods %}
    .. rubric:: {{ _('Methods') }}
 
    .. autosummary::
    {% for item in methods %}
-      ~{{ name }}.{{ item }}
+      ~{{name}}.{{ item }}
    {%- endfor %}
    {% endif %}
    {% endblock %}
@@ -30,3 +28,8 @@
    {%- endfor %}
    {% endif %}
    {% endblock %}
+
+   Methods and attributes detail
+   -----------------------------
+
+   .. automethod:: __init__

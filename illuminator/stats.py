@@ -7,8 +7,14 @@ from illuminator.utils import get_logger
 LOGGER = get_logger()
 
 
-def iqr(data: np.array):
-    """get interquartile range, defined by the difference between the 75th percentile (Q3) and the 25th percentile (Q1)
+def iqr(data: np.array) -> float:
+    """Get InterQuartile Range, defined by the difference between the 75th percentile (Q3) and the 25th percentile (Q1)
+
+    :param data: input data
+    :type data: numpy.ndarray
+
+    :return: the IQR value
+    :rtype: float
     """
     quartile_1 = np.percentile(data, 25)
     quartile_3 = np.percentile(data, 75)
@@ -18,16 +24,17 @@ def iqr(data: np.array):
 
 
 def huber(values: np.array, k=1.5, tol=1e-6) -> (float, float):
-    """
-    Perform Huber's M-estimator for robust estimation of mean and scale.
+    """Perform Huber's M-estimator for robust estimation of mean and scale.
 
-    Parameters:
-    - values (np.array): Array of data points.
-    - k (float): Tuning parameter that controls the threshold for outlier rejection (default: 1.5).
-    - tol (float): Convergence tolerance for the mean estimation (default: 1e-6).
+    :param values: Array of data points.
+    :type values: numpy.ndarray
+    :param k: Tuning parameter that controls the threshold for outlier rejection (default: 1.5).
+    :type k: float
+    :param tol: Convergence tolerance for the mean estimation (default: 1e-6).
+    :type tol: float
 
-    Returns:
-    - tuple: A tuple containing the estimated mean and scale (mu, sigma).
+    :return: A tuple containing the estimated mean and scale (mu, sigma).
+    :rtype: tuple[float, float]
     """
     # remove NaN
     values = values[~np.isnan(values)]
@@ -55,12 +62,13 @@ def background_correction_noob_fit(in_band_signal: np.array, out_of_band_signal:
     """
     Perform background correction using the Noob method.
 
-    Parameters:
-    - in_band_signal (np.array): Array of foreground signal intensities.
-    - out_of_band_signal (np.array): Array of background signal intensities.
+    :param in_band_signal: Array of foreground signal intensities.
+    :type in_band_signal: numpy.ndarray
+    :param out_of_band_signal: Array of background signal intensities.
+    :type out_of_band_signal: numpy.ndarray
 
-    Returns:
-    - tuple: estimated background mean (`mu`), background scale (`sigma`), and correction factor (`alpha`)
+    :return: estimated background mean (`mu`), background scale (`sigma`), and correction factor (`alpha`)
+    :rtype: tuple[float, float, float]
     """
     # Calculate robust estimates for background
     background_mean, background_sigma = huber(out_of_band_signal)
@@ -84,13 +92,19 @@ def background_correction_noob_fit(in_band_signal: np.array, out_of_band_signal:
 def norm_exp_convolution(mu: float, sigma: float, alpha: float, signal_values: np.array, offset: int | float) -> np.array:
     """Perform normalization and background correction on signal values using a normal-exponential convolution model.
 
-    :param mu: (float) The mean (mu) of the background signal.
-    :param sigma: (float) The standard deviation (sigma) of the background signal.
-    :param alpha: (float) The correction factor, representing the shift in signal.
-    :param signal_values: (np.array) Array of observed signal values to be corrected.
-    :param offset: (int | float) A constant value to add to the corrected signal for padding.
+    :param mu: The mean (mu) of the background signal.
+    :type mu: float
+    :param sigma: The standard deviation (sigma) of the background signal.
+    :type sigma: float
+    :param alpha: The correction factor, representing the shift in signal.
+    :type alpha: float
+    :param signal_values: Array of observed signal values to be corrected.
+    :type signal_values: numpy.ndarray
+    :param offset: A constant value to add to the corrected signal for padding.
+    :type offset: int | float
 
-    :return: np.array: The background-corrected and normalized signal values.
+    :return: The background-corrected and normalized signal values.
+    :rtype: numpy.ndarray
     """
     # Validate parameters
     if any(param is None for param in (alpha, sigma, mu)):
@@ -128,7 +142,14 @@ def norm_exp_convolution(mu: float, sigma: float, alpha: float, signal_values: n
 def quantile_normalization_using_target(source_array: np.array, target_array: np.array) -> np.array:
     """ Perform quantile normalization on the source_array using target_array as the target distribution, even if the
     arrays have different sizes.
-    return the quantile-normalized array, of the same size as source_array
+
+    :param source_array: array to normalize
+    :type source_array: numpy.ndarray
+    :param target_array: array to use as target distribution
+    :type target_array: numpy.ndarray
+
+    :return: the quantile-normalized array, of the same size as source_array
+    :rtype: numpy.ndarray
     """
 
     target_sorted = np.sort(target_array)

@@ -9,14 +9,27 @@ from illuminator.utils import get_logger
 LOGGER = get_logger()
 
 
-def read_from_file(filepath: str = '', delimiter: str = ',') -> pd.DataFrame | None:
-    """Read sample sheet from the provided filepath. You can define a delimiter.
+def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
+    """Read sample sheet from the provided filepath. The file must be a .csv, but you can define a custom delimiter.
+
     Required columns in input file :
-    - sentrix_id or sentrix_barcode or sentrix_barcode_a
-    - sentrix_position or sentrix_position_a
+        - sentrix_id or sentrix_barcode or sentrix_barcode_a
+        - sentrix_position or sentrix_position_a
+
     Optional :
-    - sample_name : name the sample. If non-existent, the name is the value of sentrix_id
-    Any other column will be left untouched in the sample sheet dataframe (with its name converted to snake case)"""
+        - sample_name : If non-existent, the name is the value of sentrix_id
+
+    Any other column will be left untouched in the sample sheet dataframe (with its name converted to snake case)
+
+    :param filepath: path to the sample sheet.
+    :type filepath: str
+
+    :param delimiter: delimiter used in the file. Default: ','
+    :type delimiter: str
+
+    :return: the sample sheet as a dataframe, or None if the file could not be read
+    :rtype: pandas.DataFrame | None
+    """
 
     extension = filepath.split('.')[-1]
     if extension != 'csv':
@@ -62,12 +75,24 @@ def read_from_file(filepath: str = '', delimiter: str = ',') -> pd.DataFrame | N
 
 
 def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
-                      output_filename='samplesheet.csv', sample_type: str = '') -> (pd.DataFrame, str):
-    """Creates a samplesheet.csv file from a folder containing .IDAT files. Files need to follow a format :
-    either [GSM_id]_[sentrix id]_[sentrix_position]_[Grn|Red].idat
-    or [sentrix id]_[sentrix_position]_[Grn|Red].idat"""
+                      output_filename='samplesheet.csv') -> (pd.DataFrame, str):
+    """Creates a sample sheet file from a folder containing .idat files.
 
-    samples_dict = {'GSM_ID': [], 'sample_name': [], 'sentrix_id': [], 'sentrix_position': [], 'sample_type': []}
+    Files need to follow one of the following formats :
+        - [GSM_id]_[sentrix id]_[sentrix_position]_[Grn|Red].idat
+        - [sentrix id]_[sentrix_position]_[Grn|Red].idat
+
+    :param idat_folder: path to the folder containing all the .idat files
+    :type idat_folder: str |  os.PathLike | MultiplexedPath
+
+    :param output_filename: name of the sample sheet file that will be created. Default: 'samplesheet.csv'
+    :type output_filename: str
+
+    :return: the sample_sheet created for the .idat files as a dataframe, and the filepath of the new file
+    :rtype: tuple[pandas.DataFrame, str]
+    """
+
+    samples_dict = {'GSM_ID': [], 'sample_name': [], 'sentrix_id': [], 'sentrix_position': []}
 
     idat_folder = convert_to_path(idat_folder)
     if not idat_folder.exists():
@@ -94,7 +119,6 @@ def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
         else:
             LOGGER.error(f'The file {filename} does not have the right pattern to auto-generate a sample sheet.')
 
-        samples_dict['sample_type'].append(sample_type)
         samples_dict['sample_name'].append(f'Sample_{idx}')
 
     df = pd.DataFrame(data=samples_dict)

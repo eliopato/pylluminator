@@ -15,12 +15,37 @@ LOGGER = get_logger()
 
 
 class Samples:
-    """Samples contain a collection of Sample objects in a dictionary, with sample names as keys. It also holds the
-    sample sheet information and the annotation object. It is mostly used to apply functions to several samples at a
-    time"""
+    """Samples contain a collection of Sample objects in a dictionary, with sample names as keys.
+
+    It also holds the sample sheet information and the annotation object. It is mostly used to apply functions to
+    several samples at a time
+
+    :ivar annotation: probes metadata. Default: None.
+    :vartype annotation: Annotations | None
+    :ivar sample_sheet: samples information given by the csv sample sheet. Default: None
+    :vartype sample_sheet: pandas.DataFrame | None
+    :ivar samples: the dictionary containing the samples. Default: {}
+    :vartype samples: dict
+
+    The following methods defined in Sample can be directly used on Samples object:
+        - :func:`illuminator.sample.Sample.apply_non_unique_mask`
+        - :func:`illuminator.sample.Sample.apply_quality_mask`
+        - :func:`illuminator.sample.Sample.apply_xy_mask`
+        - :func:`illuminator.sample.Sample.calculate_betas`
+        - :func:`illuminator.sample.Sample.dye_bias_correction`
+        - :func:`illuminator.sample.Sample.dye_bias_correction_nl`
+        - :func:`illuminator.sample.Sample.infer_type1_channel`
+        - :func:`illuminator.sample.Sample.merge_annotation_info`
+        - :func:`illuminator.sample.Sample.noob_background_correction`
+        - :func:`illuminator.sample.Sample.poobah`
+        - :func:`illuminator.sample.Sample.scrub_background_correction`
+    """
 
     def __init__(self, sample_sheet_df: pd.DataFrame | None = None):
-        """Initialize the object with only a sample-sheet (which can be None)"""
+        """Initialize the object with only a sample-sheet.
+
+        :param sample_sheet_df: sample sheet dataframe. Default: None
+        :type sample_sheet_df: pandas.DataFrame | None"""
         self.annotation = None
         self.sample_sheet = sample_sheet_df
         self.samples = {}
@@ -31,6 +56,7 @@ class Samples:
         return self.samples[item]
 
     def keys(self):
+        """Return the names of the samples contained in this object"""
         return self.samples.keys()
 
     def __getattr__(self, method_name):
@@ -61,7 +87,13 @@ class Samples:
 
         LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
 
-    def betas(self, mask: bool = True):
+    def betas(self, mask: bool = True) -> pd.DataFrame | None:
+        """Return the betas dataframe, and applies the current mask if the parameter mask is set to True (default).
+
+       :param mask: True removes masked probes from betas, False keeps them. Default: True
+       :type mask: bool
+       :return: the beta values as a dataframe, or None if the betas have not been calculated yet.
+       :rtype: pandas.DataFrame | None"""
         if mask:
             masked_indexes = [sample.masked_indexes for sample in self.samples.values()]
             return mask_dataframe(self._betas_df, masked_indexes)
@@ -75,7 +107,9 @@ class Samples:
     @property
     def nb_samples(self) -> int:
         """Count the number of samples contained in the object
-        :return: int"""
+
+        :return: number of samples
+        :rtype: int"""
         return len(self.samples)
 
     ####################################################################################################################
@@ -105,12 +139,18 @@ class Samples:
     def save(self, filepath: str) -> None:
         """Save the current Samples object to `filepath`, as a pickle file
 
+        :param filepath: path to the file to create
+        :type filepath: str
+
         :return: None"""
         save_object(self, filepath)
 
     @staticmethod
     def load(filepath: str):
         """Load a pickled Samples object from `filepath`
+
+        :param filepath: path to the file to read
+        :type filepath: str
 
         :return: the loaded object"""
         return load_object(filepath, Samples)
@@ -123,22 +163,36 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
                  max_samples: int | None = None,
                  min_beads=1,
                  keep_idat=False) -> Samples | None:
-    """Search for idat files in the datadir through all sublevels. The idat files are supposed to match the
-    information from the sample sheet and follow this naming convention:
-    `[sentrix ID]*[sentrix position]*[channel].idat` where the `*` can be any characters.
-    `channel` must be spelled `Red` or Grn`.
+    """Search for idat files in the datadir through all sublevels.
 
-    :param datadir: (string or path-like) pointing to the directory where sesame files are
-    :param sample_sheet_df: (optional, pd.DataFrame) samples information. If not given, will be automatically rendered
-    :param sample_sheet_name: (optional, string) name of the csv file containing the samples' information. You cannot
-        provide both a sample sheet dataframe and name.
-    :param annotation: (optional, Annotations) probes information
-    :param max_samples: (optional, int or None, default to None) to only load N samples to speed up the process
-        (useful for testing purposes)
-    :param min_beads: (optional, int, default to 1) filter probes that have less than N beads
-    :param keep_idat: (optional, bool, default False) if set to True, keep idat data after merging the annotations.
+    The idat files are supposed to match the information from the sample sheet and follow this naming convention:
+    `*[sentrix ID]*[sentrix position]*[channel].idat` where `*` can be any characters.
+    `channel` must be spelled `Red` or `Grn`.
 
-    :return: Samples object or None if an error was raised"""
+    :param datadir:  directory where sesame files are
+    :type datadir: str  | os.PathLike | MultiplexedPath
+
+    :param sample_sheet_df: samples information. If not given, will be automatically rendered. Default: None
+    :type sample_sheet_df: pandas.DataFrame | None
+
+    :param sample_sheet_name: name of the csv file containing the samples' information. You cannot provide both a sample
+        sheet dataframe and name. Default: None
+    :type sample_sheet_name: str | None
+
+    :param annotation: probes information. Default None.
+    :type annotation: Annotations | None
+
+    :param max_samples: set it to only load N samples to speed up the process (useful for testing purposes). Default: None
+    :type max_samples: int | None
+
+    :param min_beads: filter probes that have less than N beads. Default: 1
+    :type min_beads: int
+
+    :param keep_idat: if set to True, keep idat data after merging the annotations. Default: False
+    :type: bool
+
+    :return: Samples object or None if an error was raised
+    :rtype: Samples | None"""
 
     LOGGER.info(f'>> start reading sample files from {datadir}')
 
@@ -201,10 +255,14 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
 def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations) -> Samples:
     """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
 
-    :param datadir: string or path-like pointing to the directory where sesame files are
-    :param annotation: Annotations object with genome version and array type corresponding to the data stored
+    :param datadir:  directory where sesame files are
+    :type datadir: str | os.PathLike | MultiplexedPath
 
-    :return: a Samples object"""
+    :param annotation: Annotations object with genome version and array type corresponding to the data stored
+    :type annotation: Annotations
+
+    :return: a Samples object
+    :rtype: Samples"""
     LOGGER.info(f'>> start reading sesame files')
     samples = Samples(None)
     samples.annotation = annotation
