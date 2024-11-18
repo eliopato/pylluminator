@@ -4,6 +4,7 @@ from inspect import signature
 from importlib.resources.readers import MultiplexedPath
 
 import pandas as pd
+from docutils.nodes import description
 
 from illuminator.sample import Sample
 import illuminator.sample_sheet as sample_sheet
@@ -117,23 +118,15 @@ class Samples:
     ####################################################################################################################
 
     def __str__(self):
-        return f'{[sample_name for sample_name in self.samples.keys()]}'
+        return list(self.samples.keys())
 
     def __repr__(self):
-        description = f'<{self.__module__}.{type(self).__name__} object at {hex(id(self))}>\n'
-        description += '\n=====================================================================\n'
-        description += 'Samples object :\n'
-        description += '=====================================================================\n'
-
+        description = 'Samples object\n'
+        description += '--------------\n'
+        description += 'No sample' if self.samples is None else f'{self.nb_samples} samples: {self.__str__()}\n'
         description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
-        description += '\n---------------------------------------------------------------------\n'
-
-        description += 'No sample' if self.samples is None else f'{self.nb_samples} sample(s) :\n{self.__str__()}'
-        description += '\n---------------------------------------------------------------------\n'
-
-        description += 'No sample sheet' if self.sample_sheet is None else (f'Sample sheet first items : \n '
+        description += 'No sample sheet' if self.sample_sheet is None else (f'Sample sheet head: \n '
                                                                             f'{self.sample_sheet.head(3)}')
-        description += '\n=====================================================================\n'
         return description
 
     def save(self, filepath: str) -> None:
@@ -218,7 +211,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
 
         # read each channel file
         for channel in Channel:
-            pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat*'
+            pattern = f'*{line.sample_id}*{channel}*.idat*'
             paths = [str(p) for p in get_files_matching(datadir, pattern)]
             if len(paths) == 0:
                 LOGGER.error(f'no paths found matching {pattern}')
@@ -226,6 +219,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
             if len(paths) > 1:
                 LOGGER.error(f'Too many files found matching {pattern} : {paths}')
                 continue
+
             LOGGER.debug(f'reading file {paths[0]}')
             # set the sample's idata for this channel
             sample.set_idata(channel, IdatDataset(paths[0]))

@@ -173,6 +173,10 @@ def load_object(filepath: str, object_type=None):
     :rtype: Any"""
     filepath = os.path.expanduser(filepath)
 
+    if not os.path.exists(filepath):
+        LOGGER.error(f'File {filepath} doesn\'t exist')
+        return None
+
     LOGGER.info(f'Loading {object_type if object_type is not None else ""} object from {filepath}')
     with open(filepath, 'rb') as f:
         loaded_object = pickle.load(f)
@@ -375,7 +379,7 @@ def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: st
         # check that it doesn't already exist :
         matching_files = get_files_matching(target_directory, f'{gsm_id}*idat*')
         if len(matching_files) >= 2:
-            LOGGER.debug(f'idat files already exist for {gsm_id} in {target_directory}, skipping. ({matching_files}')
+            LOGGER.info(f'idat files already exist for {gsm_id} in {target_directory}, skipping.')
             continue
 
         # if not, download and un-tar them
@@ -409,7 +413,7 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
 
     try:
         urllib.request.urlretrieve(dl_link, target_filepath)
-        LOGGER.debug(f'download successful')
+        LOGGER.info(f'{filename} download successful')
     except:
         LOGGER.info(f'download of {filename} from {dl_link} failed, try downloading it manually and save it in {output_folder}')
         return -1

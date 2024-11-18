@@ -69,7 +69,7 @@ class ArrayType(Enum):
         return self.value
 
 
-class   GenomeInfo:
+class GenomeInfo:
     """Additional genome information provided by external files, downloaded from illumina-data.
 
     :ivar gap_info: contains information on gaps in the genomic sequence. These gaps represent regions that are not
@@ -112,7 +112,7 @@ class   GenomeInfo:
 
             filepath = folder_genome.joinpath(f'{info}.csv')
             if filepath.exists():
-                df = pd.read_csv(str(filepath))
+                df = pd.read_csv(str(filepath), dtype={'chromosome': 'category'})
             elif name == 'default':
                 df = get_or_download_data(folder_genome, f'{info}.csv', dl_link)
             else:
@@ -124,17 +124,18 @@ class   GenomeInfo:
                 continue
 
             if info == 'gap_info':
-                df.End = df.End.astype('int')
-                df.Start = df.Start.astype('int')
-                gen_info = pr.PyRanges(df)
+                df.end = df.end.astype('int')
+                df.start = df.start.astype('int')
+                gen_info = pr.PyRanges(df.rename(columns={'chromosome':'Chromosome', 'end': 'End', 'start': 'Start',
+                                                          'strand': 'Strand'}))
             elif info == 'seq_length':
-                gen_info = dict(zip(df.Chromosome, df.SeqLength))
+                gen_info = dict(zip(df.chromosome, df.seq_length))
             elif info == 'transcripts_list':
                 gen_info = df.set_index('group_name')
             elif info == 'transcripts_exons':
                 gen_info = df.set_index('transcript_id')
             elif info == 'chromosome_regions':
-                gen_info = df.set_index('Chromosome')
+                gen_info = df.set_index('chromosome')
             else:
                 gen_info = df
 
@@ -190,26 +191,43 @@ class Annotations:
 
         data_folder = get_resource_folder(f'annotations.{self.name}.{self.genome_version}.{self.array_type}')
 
-        for info in ['probe_infos', 'genomic_ranges']:
-            df = None
-            filepath = data_folder.joinpath(f'{info}.csv')
+        df = None
+        filepath = data_folder.joinpath('probe_infos.csv')
 
-            # read or download data file
-            if filepath.exists():
-                LOGGER.debug(f'reading csv {filepath}')
-                df = pd.read_csv(filepath, index_col=0)
-            elif self.name == 'default':
-                dl_link = f'{ILLUMINA_DATA_LINK}/annotations/{self.genome_version}/{self.array_type}/'
-                df = get_or_download_data(data_folder, f'{info}.csv', dl_link)
+        # read or download data file
+        if filepath.exists():
+            LOGGER.debug(f'reading csv {filepath}')
+            df = pd.read_csv(filepath, index_col=0)
+        elif self.name == 'default':
+            dl_link = f'{ILLUMINA_DATA_LINK}/annotations/{self.genome_version}/{self.array_type}/'
+            df = get_or_download_data(data_folder, f'probe_infos.csv', dl_link)
 
-            if df is None:
-                LOGGER.error(f'No {info}.csv input file found for {self.name}, {self.genome_version}, {self.array_type}')
-                continue
+        if df is None:
+            LOGGER.error(f'No probe_infos.csv input file found for {self.name}, {self.genome_version}, {self.array_type}')
+            return
 
-            if info == 'probe_infos':
-                df[['type', 'probe_type', 'channel']] = df[['type', 'probe_type', 'channel']].astype('category')
+        categories_columns = ['type', 'probe_type', 'channel', 'chromosome']
+        df[categories_columns] = df[categories_columns].astype('category')
 
-            self.__setattr__(info, df)
+        self.probe_infos = df
+        self.genomic_ranges = self.make_genomic_ranges()
+
+    def make_genomic_ranges(self) -> pd.DataFrame | None:
+        """Extract genomic ranges information from manifest dataframe"""
+        # rename column to fit pyRanges naming convention
+        if self.probe_infos is None:
+            LOGGER.warning('Make genomic ranges : provide a manifest first')
+            return None
+
+        genomic_ranges = self.probe_infos.rename(columns={'map_yd_a': 'strand', 'probe_strand': 'strand'}, errors='ignore')
+        genomic_ranges = genomic_ranges[['probe_id', 'chromosome', 'start', 'end', 'strand']].drop_duplicates()
+        genomic_ranges = genomic_ranges.set_index('probe_id')
+
+        genomic_ranges['strand'] = genomic_ranges.strand.replace({'f': '-', 'r': '+', 'u': '*'}).fillna('*')
+        genomic_ranges['chromosome'] = genomic_ranges.chromosome.cat.add_categories('*').fillna('*')
+        genomic_ranges['start'] = genomic_ranges.start.fillna(0).astype(int)
+        genomic_ranges['end'] = genomic_ranges.end.fillna(0).astype(int)
+        return genomic_ranges
 
     @property
     def non_unique_mask_names(self) -> str:
@@ -245,5 +263,5 @@ class Annotations:
         return f'{self.name} annotation - {self.array_type} - {self.genome_version} '
 
     def __repr__(self):
-        return f'Annotation {self.name} : \nArray type : {self.array_type} - Genome version : {self.genome_version}\n'
+        return f'{self.name} annotation: {self.array_type} array - Genome version {self.genome_version}\n'
 

@@ -48,7 +48,7 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_colum
         nb_colors = len(sheet[color_column])
         if color_group_column is None:
             for i, category in enumerate(categories):
-                color_categories[category] = cmap(i / (nb_colors - 1))
+                color_categories[category] = cmap(i / max(1, nb_colors - 1))
         else:
             grouped_sheet = sheet.groupby(color_group_column)
             nb_categories = len(grouped_sheet)
@@ -162,7 +162,7 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
             linestyle = linestyles[sample_sheet_row[linestyle_column].iloc[0]]
         plt.plot(histogram_x[:-1], histogram_y, label=label, linewidth=1, color=color, linestyle=linestyle)
 
-    title = title if title is not None else f'Beta values of {len(betas.columns)} samples on {len(betas)} probes'
+    title = title if title is not None else f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes'
     plt.title(title)
 
     if len(legend_handles) > 0:
@@ -242,7 +242,7 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1), title=group_columns)
 
     if title is None:
-        title = f'Beta values of {len(betas.columns)} samples on {len(betas)} probes, grouped by {group_columns}'
+        title = f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes, grouped by {group_columns}'
     plt.title(title)
 
     if save_path is not None:
@@ -274,7 +274,7 @@ def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | 
             histogram_values = np.histogram(row.dropna().values, bins=n_bins, density=False)
             plt.plot(histogram_values[1][:-1], histogram_values[0], label=index, linewidth=1)
 
-    title = title if title is not None else f'Beta values per design type on {len(betas)} probes'
+    title = title if title is not None else f'Beta values per design type on {len(betas):,} probes'
     plt.title(title)
     plt.legend()
 
@@ -285,7 +285,7 @@ def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | 
 
 
 def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column: str | None = None,
-              random_state: int = 42, title: None | str = None, mask=True,
+              nb_probes: int=1000, random_state: int = 42, title: None | str = None, mask=True,
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
     """Plot samples in 2D space according to their beta distances.
 
@@ -298,6 +298,9 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     :param color_group_column: name of a Sample Sheet column to categorize samples and give samples from the same
         category a similar color shade. Default: None
     :type color_group_column: str | None
+
+    :param nb_probes: number of probes to use for the model. Default: 1000
+    :type nb_probes: int
 
     :param random_state: seed for the MDS model. Assigning a seed makes the graphe reproducible across calls. Default: 42
     :type random_state: int
@@ -327,9 +330,9 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     betas = betas[filtered_samples]
     sheet = sheet[sheet.sample_name.isin(filtered_samples)]
 
-    # get betas with the most variance across samples (top 1000)
+    # get betas with the most variance across samples
     betas_variance = np.var(betas, axis=1)
-    indexes_most_variance = betas_variance.sort_values(ascending=False)[:1000].index
+    indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
     betas_most_variance = betas.loc[indexes_most_variance].dropna()  # MDS doesn't support NAs
 
     # perform MDS
@@ -345,7 +348,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     for index, name in enumerate(labels):
         plt.annotate(name, (fit[index, 0], fit[index, 1]), fontsize=9)
 
-    title = title if title is not None else f'MDS of the 1000 most variable probes'
+    title = title if title is not None else f'MDS of the {nb_probes} most variable probes'
     plt.title(title)
 
     plt.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1, 1))
@@ -385,7 +388,7 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: N
     # colnames(M) < - paste("Component", c(1: k))
     # hc < - hclust(dist(M))
 
-    title = title if title is not None else f'Samples\' beta values distances on {len(betas.dropna())} probes'
+    title = title if title is not None else f'Samples\' beta values distances on {len(betas.dropna()):,} probes'
     plt.title(title)
 
     if save_path is not None:
@@ -506,8 +509,8 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 10
         plot.get_figure().savefig(os.path.expanduser(save_path))
 
 
-def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='Chromosome',
-                    x_col='Start', y_col='p_value', log10=False,
+def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
+                    x_col='start', y_col='p_value', log10=False,
                     annotation: Annotations | None = None, annotation_col: str = 'genes',
                     medium_threshold=1e-05, high_threshold=5e-08,
                     title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
@@ -520,10 +523,10 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_variation())
     :type segments_to_plot: pandas.DataFrame
 
-    :param chromosome_col: the name of the Chromosome column in the `data_to_plot` dataframe. Default: Chromosome
+    :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
     :type chromosome_col: str
 
-    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: Start
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: start
     :type x_col: str
 
     :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
@@ -662,13 +665,13 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     ax.set_xticks(x_major_ticks, labels=x_labels)
     ax.set_xticks(x_minor_ticks, minor=True)  # show ticks for chromosomes limits
     ax.tick_params(axis='x', length=0)  # hide ticks for chromosomes labels
-    ax.set_xlabel('Chromosome')
+    ax.set_xlabel('chromosome')
 
     # define y label and graph title
     ax.set_ylabel(f'log10({y_col})' if log10 else y_col)
     if title is None:
         if 'probe_id' in data_to_plot.columns:
-            title = f'Manhattan plot of {len(data_to_plot)} probes'
+            title = f'Manhattan plot of {len(data_to_plot):,} probes'
         else:
             title = f'Manhattan plot of {len(data_to_plot)} bins'
     plt.title(title)
@@ -679,7 +682,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     plt.show()
 
 
-def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', x_col='Start', y_col='p_value',
+def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation: Annotations | None = None, annotation_col='genes', log10=True,
                        draw_significance=True,
                        medium_threshold=1e-05, high_threshold=5e-08,
@@ -690,10 +693,10 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', 
     :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
     :type data_to_plot: pandas.DataFrame
 
-    :param chromosome_col: the name of the Chromosome column in the `data_to_plot` dataframe. Default: Chromosome
+    :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
     :type chromosome_col: str
 
-    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: Start
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: start
     :type x_col: str
 
     :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
@@ -735,7 +738,7 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='Chromosome', 
 
 
 def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
-                       x_col='Start_bin', chromosome_col='Chromosome', y_col='cnv',
+                       x_col='start_bin', chromosome_col='chromosome', y_col='cnv',
                        title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
@@ -747,13 +750,13 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
         the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_variation())
     :type segments_to_plot: pandas.DataFrame
 
-    :param chromosome_col: the name of the Chromosome column in the `data_to_plot` dataframe. Default: Chromosome
+    :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
     :type chromosome_col: str
 
-    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: Start
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: start_bin
     :type x_col: str
 
-    :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
+    :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: cnv
     :type y_col: str
 
     :param title: custom title for the plot. Default: None
@@ -813,16 +816,14 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
     if protein_coding_only:
         gene_data = gene_data[gene_data.transcript_type == 'protein_coding']
 
-    chromosome = gene_data.iloc[0].chrm
-
+    chromosome = str(gene_data.iloc[0].chromosome)
     chr_df = genome_info.chromosome_regions.loc[chromosome]
-
     gene_transcript_start = gene_data.transcript_start.min() - padding
     gene_transcript_end = gene_data.transcript_end.max() + padding
     gene_transcript_length = gene_transcript_end - gene_transcript_start
 
     txns = genome_info.transcripts_exons
-    gene_data = txns[(txns.chrm == chromosome)
+    gene_data = txns[(txns.chromosome == chromosome)
                      &
                      (((txns.transcript_start >= gene_transcript_start) & (txns.transcript_start <= gene_transcript_end))
                       | ((txns.transcript_end >= gene_transcript_start) & (txns.transcript_end <= gene_transcript_end)))
@@ -866,13 +867,13 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
 
     # make rectangles of different colors depending on the chromosome region
     for _, row in chr_df.iterrows():
-        chr_ax.add_patch(mpatches.Rectangle((row.Start, 0), row.End - row.Start, 0.5, color=color_map[row.gieStain]))
+        chr_ax.add_patch(mpatches.Rectangle((row.start, 0), row.end - row.start, 0.5, color=color_map[row.giemsa_staining]))
 
     # red lines showing the beginning and end of the gene region
     chr_ax.plot([gene_transcript_start, gene_transcript_start], [-1, 1], **links_args)
     chr_ax.plot([gene_transcript_end, gene_transcript_end], [-1, 1], **links_args)
 
-    chr_length = chr_df['End'].max()
+    chr_length = chr_df['end'].max()
     chr_ax.set_xlim(0, chr_length)
     chr_ax.set_ylim(0, 0.5)
     chr_ax.axis('off')
@@ -914,7 +915,7 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
 
             # # if a probe intersects with a transcript, draw a colored patch
             # for beta_row in betas_data.itertuples():
-            #     if (row.Start <= beta_row.start <= row.End) or (row.Start <= beta_row.end <= row.End):
+            #     if (row.start <= beta_row.start <= row.End) or (row.Start <= beta_row.end <= row.End):
             #         rec_coords = (beta_row.start, i*3+0.2), beta_row.end - beta_row.start
             #         trans_ax.add_patch(mpatches.Rectangle(*rec_coords, 0.6, color='limegreen', zorder=2))
 

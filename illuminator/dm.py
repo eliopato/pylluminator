@@ -140,8 +140,8 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
     betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
     # get genomic range information (for chromosome id and probe position)
-    probe_coords_df = annotation.genomic_ranges.drop(columns='Strand', errors='ignore')
-    non_empty_coords_df = probe_coords_df[probe_coords_df.End > probe_coords_df.Start]  # remove 0-width ranges
+    probe_coords_df = annotation.genomic_ranges.drop(columns='strand', errors='ignore')
+    non_empty_coords_df = probe_coords_df[probe_coords_df.end > probe_coords_df.start]  # remove 0-width ranges
 
     betas_no_na = betas.dropna()  # remove probes with missing values
     cpg_ids = non_empty_coords_df.join(betas_no_na, how='inner')
@@ -157,7 +157,8 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
 
     # sort ranges and identify last probe of each chromosome
     # cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges(natsorting=True)  # to have the same sorting as sesame
-    cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges()
+    cpg_ranges = pr.PyRanges(cpg_ids.rename(columns={'chromosome':'Chromosome', 'end': 'End', 'start': 'Start',
+                                                          'strand': 'Strand'})).sort_ranges()
     next_chromosome = cpg_ranges['Chromosome'].shift(-1)
     last_probe_in_chromosome = cpg_ranges['Chromosome'] != next_chromosome
 
@@ -207,8 +208,8 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
     segments_grouped = dmr.groupby('segment_id')
 
     # get each segment's start and end
-    dmr['segment_start'] = segments_grouped['Start'].transform('min')
-    dmr['segment_end'] = segments_grouped['End'].transform('max')
+    dmr['segment_start'] = segments_grouped['start'].transform('min')
+    dmr['segment_end'] = segments_grouped['end'].transform('max')
 
     # calculate each segment's p-values
     LOGGER.info('combining p-values, it might take a few minutes...')

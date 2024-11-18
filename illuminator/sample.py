@@ -400,7 +400,7 @@ class Sample:
     def reset_mask(self, names_to_mask: str | None = None, quiet=False):
         """Reset the mask to None (=no probe masked) and optionally set it to a new mask if `names_to_mask` is set.
 
-        :param names_to_mask: None or string with a list of names of probes to mask, separated by \|. Default: None
+        :param names_to_mask: None or string with a list of names of probes to mask, separated by a pipe. Default: None
         :type names_to_mask: str | None
 
         :param quiet: if set to True, don't print INFO logs for this function. Default: False
@@ -1045,24 +1045,19 @@ class Sample:
         return sample
 
     def __str__(self):
-        description = '\n=====================================================================\n'
-        description += f'Sample {self.name} :\n'
-        description += '=====================================================================\n'
-
+        description = f'Sample {self.name} :\n'
         description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
-        description += '---------------------------------------------------------------------\n'
 
         if self._signal_df is None:
             if self.idata is None:
                 description += 'No data\n'
             else:
-                description += 'Probes raw information : (dict self.idata)\n'
+                description += 'Probes raw data:\n'
                 for channel, dataset in self.idata.items():
-                    description += f'\nChannel {channel} head data:\n {dataset}\n'
+                    description += f'\nChannel {channel}:\n {dataset}\n'
         else:
-            description += 'Signal dataframe first items (self.get_signal_df(mask=True|False)): \n'
+            description += 'Methylation dataframe: \n'
             description += f'{self._signal_df.head(3)}\n'
-        description += '=====================================================================\n'
         return description
 
     def __repr__(self):

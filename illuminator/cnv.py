@@ -46,11 +46,6 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
                      'Sample object or a Samples object and a sample name.')
         return None
 
-    # if isinstance(samples, Sample) and normalization_samples_names is not None and len(normalization_samples_names) > 0:
-    #     LOGGER.error(f'The normalization samples names {normalization_samples_names} can`t be found as you provided'
-    #                  f'a single Sample object. Please provide the Samples object that contains these samples.')
-    #     return None
-
     if isinstance(samples, Sample) and sample_name is not None:
         LOGGER.warning('When a single Sample object is passed to the function, parameter `sample_name` is ignored.')
 
@@ -83,7 +78,7 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
     if isinstance(samples, Samples):
         samples = samples[sample_name]
 
-    target_intensity = samples[sample_name].get_total_ib_intensity()
+    target_intensity = samples.get_total_ib_intensity()
     target_intensity = target_intensity.reset_index(['channel', 'type', 'probe_type'], drop=True).dropna()
 
     norm_intensities_list = [s.get_total_ib_intensity() for s in normal_samples]
@@ -111,29 +106,39 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
     diff_tiles = tiles.subtract_ranges(genome_info.gap_info).reset_index(drop=True)
 
     # make bins
-    non_empty_coords = probe_coords_df[probe_coords_df.End > probe_coords_df.Start]  # remove 0-width ranges
-    probe_coords = pr.PyRanges(non_empty_coords)
+    non_empty_coords = probe_coords_df[probe_coords_df.end > probe_coords_df.start]  # remove 0-width ranges
+    probe_coords = pr.PyRanges(non_empty_coords.rename(columns={'chromosome':'Chromosome', 'end': 'End', 'start': 'Start',
+                                                          'strand': 'Strand'}))
     diff_tiles = diff_tiles.count_overlaps(probe_coords.reset_index())
+
+    if len(diff_tiles) == 0:
+        LOGGER.error('No diff tiles')
+        return None, None, None
 
     # merge small bins together, until they reach a minimum of 20 overlapping probes #todo optimize (10sec)
     bins = merge_bins_to_minimum_overlap(diff_tiles, probe_coords, 20, 1)
 
     # segment the signal
+    if len(bins) == 0:
+        LOGGER.error('No bins')
+        return None, None, None
+
     joined_pr = probe_coords.reset_index().join_ranges(bins, suffix='_bin')
     signal_bins = joined_pr.groupby(['Chromosome', 'Start_bin', 'End_bin'])['cnv'].median().reset_index()
-    signal_bins['map_loc'] = ((signal_bins['Start_bin'] + signal_bins['End_bin']) / 2).astype(int)
+    signal_bins = signal_bins.rename(columns={'Chromosome': 'chromosome', 'Start_bin': 'start_bin', 'End_bin': 'end_bin'})
+    signal_bins['map_loc'] = ((signal_bins['start_bin'] + signal_bins['end_bin']) / 2).astype(int)
 
     # todo : improve this method (and optimize : 15sec)
     cn_seg = linear_segment.segment(signal_bins.cnv.values.astype('double'),
-                                    labels=signal_bins.Chromosome.values,
+                                    labels=signal_bins.chromosome.astype(str).values,
                                     method='cbs', shuffles=10000, p=0.0001)
 
     # merge the segmentation information with the signal info
     df_seg = pd.DataFrame(zip(cn_seg.starts, cn_seg.ends, cn_seg.labels), columns=['start', 'end', 'chromosome'])
     seg_values = []
 
-    for chromosome in set(signal_bins.Chromosome):
-        chrom_df = signal_bins[signal_bins.Chromosome == chromosome].reset_index()
+    for chromosome in set(signal_bins.chromosome):
+        chrom_df = signal_bins[signal_bins.chromosome == chromosome].reset_index()
         chrom_segs = df_seg[df_seg.chromosome == chromosome]
         for seg_id, seg_value in chrom_segs.iterrows():
             start_pos = chrom_df.loc[seg_value.start].map_loc

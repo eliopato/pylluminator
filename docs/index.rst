@@ -9,8 +9,7 @@ Contents
 --------
 
 .. toctree::
-
    Home <self>
-   usage
+   tutorials
    annotations
    api

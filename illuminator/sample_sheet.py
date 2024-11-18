@@ -1,3 +1,4 @@
+import re
 import os.path
 import pandas as pd
 from importlib.resources.readers import MultiplexedPath
@@ -13,11 +14,13 @@ def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
     """Read sample sheet from the provided filepath. The file must be a .csv, but you can define a custom delimiter.
 
     Required columns in input file :
+        - sample_id
+
+    Recommended :
         - sentrix_id or sentrix_barcode or sentrix_barcode_a
         - sentrix_position or sentrix_position_a
-
-    Optional :
-        - sample_name : If non-existent, the name is the value of sentrix_id
+        - sample_name: For display purposes. If non-existent, the name is the value of sample_id
+        - and any other metadata you'd like to use
 
     Any other column will be left untouched in the sample sheet dataframe (with its name converted to snake case)
 
@@ -55,22 +58,13 @@ def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
     df = df.rename(columns={'sentrixposition_a': 'sentrix_position',
                             'sentrixbarcode': 'sentrix_id', 'sentrixbarcode_a': 'sentrix_id'})
 
-    # check that we have the 3 required columns
+    if 'sample_id' not in df.columns:
+        LOGGER.error(f'Column sample_id not found in {df.columns}')
+        return None
+
     if 'sample_name' not in df.columns:
-        if 'sample_id' in df.columns:
-            df['sample_name'] = df['sample_id']
-            LOGGER.info(f'Column sample_name not found in {df.columns}, taking name from column sample_id')
-        else:
-            LOGGER.error(f'Column sample_name not found in {df.columns}')
-            return None
-
-    if 'sentrix_id' not in df.columns:
-        LOGGER.error(f'Column sentrix_id or sentrix_barcode not found in {df.columns}')
-        return None
-
-    if 'sentrix_position' not in df.columns:
-        LOGGER.error(f'Column sentrix_position not found in {df.columns}')
-        return None
+        df['sample_name'] = df['sample_id']
+        LOGGER.info(f'Column sample_name not found in {df.columns}, taking name from column sample_id')
 
     return df
 
@@ -93,7 +87,7 @@ def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
     :rtype: tuple[pandas.DataFrame, str]
     """
 
-    samples_dict = {'GSM_ID': [], 'sample_name': [], 'sentrix_id': [], 'sentrix_position': []}
+    samples_dict = {'sample_id': [], 'sample_name': [], 'sentrix_id': [], 'sentrix_position': []}
 
     idat_folder = convert_to_path(idat_folder)
 
@@ -108,20 +102,29 @@ def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
         filename = str(idat).split('/')[-1]
         split_filename = filename.split('_')
 
-        # file name formated as [GSM_id]_[sentrix id]_[sentrix_position]_[Grn|Red].idat
+        # file name formated as [GSM_id]_[sentrix id]_[sentrix_position]_[Grn|Red].idat[.gz]
         if len(split_filename) == 4 and split_filename[0].startswith('GSM'):
-            samples_dict['GSM_ID'].append(split_filename[0])
             samples_dict['sentrix_id'].append(split_filename[1])
             samples_dict['sentrix_position'].append(split_filename[2])
-        # file name formated as [sentrix id]_[sentrix_position]_[Grn|Red].idat
+            samples_dict['sample_id'].append(split_filename[0])
+            samples_dict['sample_name'].append(split_filename[0])
+        # file name formated as [sentrix id]_[sentrix_position]_[Grn|Red].idat[.gz]
         elif len(split_filename) == 3:
-            samples_dict['GSM_ID'].append('')
             samples_dict['sentrix_id'].append(split_filename[0])
             samples_dict['sentrix_position'].append(split_filename[1])
+            samples_dict['sample_id'].append(f'{split_filename[0]}_{split_filename[1]}')
+            samples_dict['sample_name'].append(f'{split_filename[0]}_{split_filename[1]}')
+        # file name formated as [GSM_id]-bliblablou-[Grn|Red].idat[.gz]
         else:
-            LOGGER.error(f'The file {filename} does not have the right pattern to auto-generate a sample sheet.')
-
-        samples_dict['sample_name'].append(f'Sample_{idx}')
+            matched = re.match(r'(GSM\d+).(.*).?(Grn|Red)\.idat', filename)
+            if matched is not None:
+                samples_dict['sentrix_id'].append('')
+                samples_dict['sentrix_position'].append('')
+                samples_dict['sample_id'].append(matched[1])
+                samples_dict['sample_name'].append(matched[2] if len(matched[2]) <= 1 else matched[2][:-1])
+            else:
+                LOGGER.error(f'The file {filename} does not have the right pattern to auto-generate a sample sheet. '
+                             f'Please create a sample sheet file manually')
 
     df = pd.DataFrame(data=samples_dict)
     filepath = f'{idat_folder}/{output_filename}'
