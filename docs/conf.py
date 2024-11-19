@@ -37,7 +37,7 @@ intersphinx_mapping = {
 }
 intersphinx_disabled_domains = ["std"]
 
-templates_path = ["_templates"]
+templates_path = ["templates"]
 
 autosummary_generate = True  # Enable autosummary to generate pages
 autodoc_default_flags = ['members']  # Automatically document class members
