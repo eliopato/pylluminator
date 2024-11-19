@@ -16,6 +16,10 @@ project = "illuminator"
 copyright = "2024"
 author = "MMG"
 
+import sys
+import os
+sys.path.insert(0, os.path.abspath('../'))
+
 
 # -- General configuration ---------------------------------------------------
 # -- General configuration
@@ -28,8 +32,6 @@ extensions = [
     "sphinx.ext.intersphinx",
     "nbsphinx"
 ]
-
-autosummary_generate = True
 
 intersphinx_mapping = {
     "rtd": ("https://docs.readthedocs.io/en/stable/", None),
