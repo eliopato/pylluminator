@@ -1,5 +1,5 @@
 """
-The Quality Control (QC) module gives an insight on a single Sample object probes values by calculating and printing some
+Functions to give an insight on a single Sample object probes values by calculating and printing some
 reference statistics.
 """
 import pandas as pd

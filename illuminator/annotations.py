@@ -1,5 +1,4 @@
-"""
-The Annotations module provides classes and methods to handle genome metadata : Illumina manifest with probes information,
+"""Classes and methods to handle genome metadata : Illumina manifest with probes information,
 Genome version (hg38, mm10...), Array types (EPIC, MSA...), Channels (Red/Green).
 
 The default annotation data is read from illuminator-data package, but you can add your own annotations.
@@ -7,7 +6,6 @@ The default annotation data is read from illuminator-data package, but you can a
 from enum import Enum, unique
 import pandas as pd
 import pyranges as pr
-from pathlib import Path
 from importlib.resources.readers import MultiplexedPath
 import os
 from illuminator.utils import get_resource_folder, get_logger, convert_to_path, download_from_link

@@ -1,6 +1,8 @@
 """
-The Sample class is the
+Class that holds the methylation information of a sample parsed from an idat file, as well as mask information
+and annotation metadata
 """
+
 import gc
 import re
 import os

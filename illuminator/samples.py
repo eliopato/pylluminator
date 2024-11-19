@@ -1,10 +1,11 @@
+"""Class that holds a collection of Sample objects and defines methods for batch processing."""
+
 import os
 from inspect import signature
 
 from importlib.resources.readers import MultiplexedPath
 
 import pandas as pd
-from docutils.nodes import description
 
 from illuminator.sample import Sample
 import illuminator.sample_sheet as sample_sheet
@@ -213,6 +214,10 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
         for channel in Channel:
             pattern = f'*{line.sample_id}*{channel}*.idat*'
             paths = [str(p) for p in get_files_matching(datadir, pattern)]
+            if len(paths) == 0:
+                if line.sentrix_id != '' and line.sentrix_position != '':
+                    pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat*'
+                    paths = [str(p) for p in get_files_matching(datadir, pattern)]
             if len(paths) == 0:
                 LOGGER.error(f'no paths found matching {pattern}')
                 continue

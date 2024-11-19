@@ -1,7 +1,7 @@
 """
-This module defines the functions used to compute DMR (Differentially Methylated Regions) and DMP (Differentially
-Methylated Probes).
+Functions used to compute DMR (Differentially Methylated Regions) and DMP (Differentially Methylated Probes).
 """
+
 import numpy as np
 import pandas as pd
 import pyranges as pr

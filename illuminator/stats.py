@@ -1,3 +1,5 @@
+"""Mathematical tools for samples processing """
+
 import numpy as np
 from statsmodels.robust import mad
 from scipy.stats import norm

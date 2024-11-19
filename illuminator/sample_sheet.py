@@ -1,3 +1,5 @@
+"""Functions to generate sample sheets from idat files, or parse a provided sample sheet"""
+
 import re
 import os.path
 import pandas as pd

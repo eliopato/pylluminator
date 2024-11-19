@@ -1,3 +1,5 @@
+"""Methods to plot data, usually from Sample(s) objects or beta values dataframe"""
+
 import os.path
 
 import matplotlib.pyplot as plt

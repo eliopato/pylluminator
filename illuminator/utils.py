@@ -1,3 +1,5 @@
+"""Tools for file handling, logger parametrization, dataframe manipulation..."""
+
 import os
 import pickle
 import tarfile

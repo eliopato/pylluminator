@@ -1,5 +1,4 @@
-"""
-The Copy Number Variations (CNV) module defines the functions to detect changes in the number of copies on a particular
+"""Functions to compute the Copy Number Variation (CNV), ie detect changes in the number of copies on a particular
 region of the genome, and splits the genome in segments with similar CNV.
 """
 
