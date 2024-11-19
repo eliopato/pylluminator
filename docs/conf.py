@@ -16,13 +16,7 @@ project = "illuminator"
 copyright = "2024"
 author = "MMG"
 
-import sys
-import os
-sys.path.insert(0, os.path.abspath('../'))
-
-
 # -- General configuration ---------------------------------------------------
-# -- General configuration
 
 extensions = [
     "sphinx.ext.duration",
