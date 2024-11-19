@@ -18,4 +18,5 @@ sphinx:
 python:
    install:
       - requirements: docs/requirements.txt  # to install sphinx, nbsphinx..
-      - pip install . # install the package locally
+      - method: pip
+        path: . # install the package locally
