@@ -7,11 +7,56 @@ The default annotation data is read from illuminator-data package, but you can a
 from enum import Enum, unique
 import pandas as pd
 import pyranges as pr
-
-from illuminator.utils import get_resource_folder, get_logger, get_or_download_data
+from pathlib import Path
+from importlib.resources.readers import MultiplexedPath
+import os
+from illuminator.utils import get_resource_folder, get_logger, convert_to_path, download_from_link
 
 LOGGER = get_logger()
 ILLUMINA_DATA_LINK = 'https://github.com/eliopato/illuminator-data/raw/main/'
+
+
+def get_or_download_annotation_data(annotation_name: str, data_type:str,  output_folder: str | MultiplexedPath | os.PathLike, dl_link: str) -> pd.DataFrame | None:
+    """Check if the csv file exists, and if not download it from the given link and save it in the output folder under
+    the same name.
+
+    Read the file as a pandas dataframe, with the first column being the index, and return it.
+    Return None if no file was found
+
+    :param annotation_name: custom annotation name or 'default' for illuminator-data annotations
+    :type annotation_name: str
+
+    :param data_type: data to download (probe_infos, seq_length...). Must match the file name
+    :type data_type: str
+
+    :param output_folder: where to locally save the file
+    :type output_folder:  str | MultiplexedPath | os.PathLike
+
+    :param dl_link: link to download the file from
+    :type dl_link: str
+
+    :return: a dataframe or None if no file was downloaded
+    :rtype: pandas.DataFrame | None """
+
+    filename = f'{data_type}.csv'
+    filepath = convert_to_path(output_folder).joinpath(filename)
+
+    if not filepath.exists():
+        filename = f'{data_type}.csv.zip'
+        filepath = convert_to_path(output_folder).joinpath(filename)
+
+    if not filepath.exists():
+        if annotation_name == 'default':
+            dl_link = dl_link + filename
+            download_from_link(dl_link, output_folder, filename)
+
+    # download failed
+    if not filepath.exists():
+        LOGGER.error(f"File {filepath} doesn't exist for {annotation_name} annotation info, please add it manually")
+        return None
+
+    return pd.read_csv(str(filepath), dtype={'chromosome': 'category'})
+
 
 @unique
 class Channel(Enum):
@@ -110,17 +155,9 @@ class GenomeInfo:
         # read all the csv files
         for info in ['gap_info', 'seq_length', 'chromosome_regions', 'transcripts_exons', 'transcripts_list']:
 
-            filepath = folder_genome.joinpath(f'{info}.csv')
-            if filepath.exists():
-                df = pd.read_csv(str(filepath), dtype={'chromosome': 'category'})
-            elif name == 'default':
-                df = get_or_download_data(folder_genome, f'{info}.csv', dl_link)
-            else:
-                LOGGER.error(f'File {filepath} doesn\'t exist for custom annotation info {name}, please add it')
-                continue
+            df = get_or_download_annotation_data(name, info, folder_genome, dl_link)
 
             if df is None:
-                LOGGER.error(f'not able to get {info}')
                 continue
 
             if info == 'gap_info':
@@ -140,6 +177,7 @@ class GenomeInfo:
                 gen_info = df
 
             self.__setattr__(info, gen_info)
+
 
 
 class Annotations:
@@ -190,22 +228,15 @@ class Annotations:
         # load probe_info and genomic_ranges files
 
         data_folder = get_resource_folder(f'annotations.{self.name}.{self.genome_version}.{self.array_type}')
+        dl_link = f'{ILLUMINA_DATA_LINK}/annotations/{self.genome_version}/{self.array_type}/'
 
-        df = None
-        filepath = data_folder.joinpath('probe_infos.csv')
-
-        # read or download data file
-        if filepath.exists():
-            LOGGER.debug(f'reading csv {filepath}')
-            df = pd.read_csv(filepath, index_col=0)
-        elif self.name == 'default':
-            dl_link = f'{ILLUMINA_DATA_LINK}/annotations/{self.genome_version}/{self.array_type}/'
-            df = get_or_download_data(data_folder, f'probe_infos.csv', dl_link)
+        df = get_or_download_annotation_data(name, 'probe_infos', data_folder, dl_link)
 
         if df is None:
             LOGGER.error(f'No probe_infos.csv input file found for {self.name}, {self.genome_version}, {self.array_type}')
             return
 
+        df = df.set_index('illumina_id')
         categories_columns = ['type', 'probe_type', 'channel', 'chromosome']
         df[categories_columns] = df[categories_columns].astype('category')
 

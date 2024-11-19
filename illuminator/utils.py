@@ -5,7 +5,7 @@ import logging
 import urllib.request
 from pathlib import Path, PosixPath
 import zipfile
-from importlib.resources import files, as_file
+from importlib.resources import files
 from importlib.resources.readers import MultiplexedPath
 
 import numpy as np
@@ -325,32 +325,6 @@ def set_level_as_index(df: pd.DataFrame, level: str, drop_others=False) -> pd.Da
     else:
         return df.reset_index().set_index(level)
 
-def get_or_download_data(output_folder: str | MultiplexedPath | os.PathLike, filename: str, dl_link: str) -> pd.DataFrame | None:
-    """Check if the file exists, and if not download it from the given link and save it in the output folder under the
-    same name.
-
-    Read the file as a pandas dataframe, with the first column being the index, and return it.
-    Return None if no file was found
-
-     :param output_folder: where to locally save the file
-     :type output_folder:  str | MultiplexedPath | os.PathLike
-
-     :param filename: name of the file to download - will be added at the end of the download link
-     :type filename: str
-
-     :param dl_link: link to download the file from
-     :type dl_link: str
-
-     :return: a dataframe or None if no file was downloaded
-     :rtype: pandas.DataFrame | None """
-    filepath = convert_to_path(output_folder).joinpath(filename)
-
-    if not filepath.exists():
-        dl_link = dl_link + filename
-        if download_from_link(dl_link, output_folder, filename) == -1:
-            return None
-
-    return pd.read_csv(str(filepath))
 
 
 def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: str | os.PathLike | MultiplexedPath) -> None:
@@ -384,10 +358,10 @@ def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: st
 
         # if not, download and un-tar them
         dl_link = f'https://www.ncbi.nlm.nih.gov/geo/download/?acc={gsm_id}&format=file'
-        download_from_link(dl_link, target_directory, f'{gsm_id}.tar')
+        download_from_link(dl_link, target_directory, f'{gsm_id}.tar', decompress=True)
 
 
-def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str) -> int:
+def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str, decompress=False) -> int:
     """Download a file and save it to the target.
 
     Unzip or un-tar the file if it is compressed.
@@ -402,12 +376,19 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
     :param filename: name of the file to download
     :type filename: str
 
+    :param decompress: set to True to decompress the output and delete the compressed file (works with .zip and .tar). Default: False
+    :type decompress: bool
+
     :return: exit status
     :rtype: int"""
 
-    LOGGER.debug(f'file {filename} not found in {output_folder}, trying to download it from {dl_link}')
     output_folder = convert_to_path(output_folder)
     target_filepath = output_folder.joinpath(filename)
+
+    if target_filepath.exists():
+        return 1
+
+    LOGGER.debug(f'file {filename} not found in {output_folder}, trying to download it from {dl_link}')
 
     os.makedirs(output_folder, exist_ok=True)  # create destination directory
 
@@ -418,16 +399,17 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
         LOGGER.info(f'download of {filename} from {dl_link} failed, try downloading it manually and save it in {output_folder}')
         return -1
 
-    if filename.endswith('.zip'):
-        LOGGER.debug(f'unzip downloaded file {target_filepath}')
-        with zipfile.ZipFile(target_filepath, 'r') as zip_ref:
-            zip_ref.extractall(convert_to_path(output_folder))
-        os.remove(target_filepath)  # remove archive
-    elif filename.endswith('.tar'):
-        LOGGER.debug(f'untar downloaded file {target_filepath}')
-        # if the download succeeded, untar the file
-        with tarfile.TarFile(target_filepath, 'r') as tar_ref:
-            tar_ref.extractall(output_folder, filter='data')
-        os.remove(target_filepath)  # remove archive
+    if decompress:
+        if filename.endswith('.zip'):
+            LOGGER.debug(f'unzip downloaded file {target_filepath}')
+            with zipfile.ZipFile(target_filepath, 'r') as zip_ref:
+                zip_ref.extractall(convert_to_path(output_folder))
+            os.remove(target_filepath)  # remove archive
+        elif filename.endswith('.tar'):
+            LOGGER.debug(f'untar downloaded file {target_filepath}')
+            # if the download succeeded, untar the file
+            with tarfile.TarFile(target_filepath, 'r') as tar_ref:
+                tar_ref.extractall(output_folder, filter='data')
+            os.remove(target_filepath)  # remove archive
 
     return 1
