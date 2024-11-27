@@ -1,12 +1,12 @@
 Annotations
 ===========
 
-Manifests and other annotation files are built from `SeSAMe package <https://zwdzwd.github.io/InfiniumAnnotation>`_ and illumina (cf `illumina docs <https://support.illumina.com.cn/downloads/infinium-methylationepic-v2-0-product-files.html>`_)
+Manifests and other annotation files are built from the `SeSAMe package <https://zwdzwd.github.io/InfiniumAnnotation>`_ and illumina (cf `illumina docs <https://support.illumina.com.cn/downloads/infinium-methylationepic-v2-0-product-files.html>`_)
 
 Manifest columns meaning
 ------------------------
 
-Colums of file `probe_infos.csv`.
+Columns of the file `probe_infos.csv`.
 
 * ``illumina_id`` : ID that matches probe IDs in .idat files
 * ``probe_id`` : probe ID used in annotation files :
@@ -59,9 +59,9 @@ Genome information
 ------------------
 
 ``genome_info/gap_info.csv``: contains information on gaps in the genomic sequence. These gaps represent regions
-that are not sequenced or are known to be problematic in the data, such as areas that may have low coverage or difficult-to-sequence regions.
+that are not sequenced or that are known to be problematic in the data, such as areas that may have low coverage or difficult-to-sequence regions.
 
-``genome_info/seq_length.csv``: keys are chromosome identifiers (e.g., 1, 2, ... X, etc.), and the values are the corresponding sequence lengths (in base pairs).
+``genome_info/seq_length.csv``: keys are chromosome identifiers (e.g., 1, 2, ... X, etc.), and values are the corresponding sequence lengths (in base pairs).
 
 ``genome_info/transcripts_list.csv``: high-level overview of the transcripts and their boundaries (start and end positions).
 
