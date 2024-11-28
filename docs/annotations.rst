@@ -24,8 +24,7 @@ Columns of the file `probe_infos.csv`.
 * ``chromosome``: chromosome number/letter
 * ``mask_info``: name of the masks for this probe. Multiple masks are separated by semicolons. (details below)
 * ``genes``: genes encoded by this sequence. Multiple gene names are separated by semicolons.
-* ``transcript_types``: The types of transcripts linked to the probe's genomic location. These might indicate whether the region corresponds to protein_coding, nonsense_mediated_decay, retained_intron, or other annotations. \
-Multiple transcript types are separated by semicolons.
+* ``transcript_types``: The types of transcripts linked to the probe's genomic location. These might indicate whether the region corresponds to protein_coding, nonsense_mediated_decay, retained_intron, or other annotations. Multiple transcript types are separated by semicolons.
 
 
 Common masks

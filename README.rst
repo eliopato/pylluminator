@@ -1,5 +1,5 @@
 |logo| Welcome to illuminator
-======================
+=============================
 
 Illuminator is a Python package designed to provide an efficient workflow for processing and analyzing DNA
 methylation data, mirroring the functionalities of the popular R package `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_.
@@ -10,7 +10,7 @@ It supports the following Illumina's Infinium array versions :
 * mouse : MM285
 * mammalian: Mammal40
 
-.. |logo| image:: docs/images/logo.png
+.. |logo| image:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/logo.png
     :width: 100px
 
 .. note::
@@ -38,23 +38,29 @@ Main functionalities
 
 * quality control
 
+Visualization examples:
+
 .. list-table::
 
-    * - .. figure:: docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
+    * - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
+            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
 
-           Fig 1. Beta values
+            Fig 1. Beta values
 
-      - .. figure:: docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
+      - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
+            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
 
-           Fig 2. Differentially methylated regions (DMRs)
+            Fig 2. Differentially methylated regions (DMRs)
 
-    * - .. figure:: docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
+    * - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
+            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
 
-           Fig 3. Gene visualization
+            Fig 3. Gene visualization
 
-      - .. figure:: docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
+      - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
+            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
 
-           Fig 4. Copy number variations (CNVs)
+            Fig 4. Copy number variations (CNVs)
 
 
 Installation
