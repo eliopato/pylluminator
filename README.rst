@@ -6,9 +6,9 @@ methylation data, mirroring the functionalities of the popular R package `SeSAMe
 
 It supports the following Illumina's Infinium array versions :
 
-    - human : 27k, 450k, MSA, EPIC, EPIC+, EPICv2
-    - mouse : MM285
-    - mammalian: Mammal40
+* human : 27k, 450k, MSA, EPIC, EPIC+, EPICv2
+* mouse : MM285
+* mammalian: Mammal40
 
 .. |logo| image:: docs/images/logo.png
     :width: 100px
