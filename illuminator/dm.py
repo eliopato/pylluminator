@@ -31,7 +31,7 @@ def combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
     return combine_pvalues(p_values, method='stouffer')[1]
 
 def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str]) -> list[float]:
-    """Create an Ordinary Least Square model for the betas values, using the design matrix provided, fit it and
+    """Create an Ordinary Least Square model for the beta values, using the design matrix provided, fit it and
     extract the required results for DMP detection (p-value, t-value, estimate, standard error)
 
     :param betas_values: beta values to fit
@@ -64,7 +64,7 @@ def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_
     :param sample_sheet: metadata used in the model, typically a samplesheet. It must have the samples' names in a
         column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex'])
     :type sample_sheet: pandas.DataFrame
-    :param keep_na: keep probes that have NA values in the beta matrix. Default True
+    :param keep_na: keep probes that have NA values in the beta values matrix. Default True
     :type keep_na: bool
 
     :return: dataframe with probes as rows and p_vales and model estimates in columns
@@ -113,7 +113,7 @@ def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_
 
 def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
             dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
-    """Find Differentially Methylated Regions (DMR) based on euclidian distance between Beta values
+    """Find Differentially Methylated Regions (DMR) based on euclidian distance between beta values
 
     :param betas: beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
     :type betas: pandas.DataFrame
@@ -152,7 +152,7 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
         cpg_ids = non_empty_coords_df.join(betas_no_na)
 
     if len(cpg_ids) == 0:
-        LOGGER.error('No match found between genomic probe coordinates and beta probe IDs')
+        LOGGER.error('No match found between genomic probe coordinates and beta values probe IDs')
         return pd.DataFrame()
 
     # sort ranges and identify last probe of each chromosome

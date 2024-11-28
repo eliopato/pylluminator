@@ -372,8 +372,8 @@ class Sample:
             return None
 
     def betas(self, mask: bool = True)-> pd.DataFrame | None:
-        """Return the betas dataframe of the sample, and applies the current mask if the parameter mask is set to True
-        (default). Return None if the betas have not been calculated yet.
+        """Return the beta values dataframe of the sample, and applies the current mask if the parameter mask is set to True
+        (default). Return None if the beta values have not been calculated yet.
 
        :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them. Default: False
        :type mask: bool
@@ -696,7 +696,7 @@ class Sample:
         """Calculate beta values for all probes. Values are stored in a dataframe and can be accessed via the betas()
         function
 
-        :param include_out_of_band: is set to true, the Type 1 probes Beta values will be calculated on
+        :param include_out_of_band: is set to true, the Type 1 probes beta values will be calculated on
             in-band AND out-of-band signal values. If set to false, they will be calculated on in-band values only.
             equivalent to sumTypeI in sesame. Default: False
         :type include_out_of_band: bool

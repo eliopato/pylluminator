@@ -102,9 +102,9 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict):
 def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
                color_column='sample_name', color_group_column: None | str = None, linestyle_column=None,
                custom_sheet: None | pd.DataFrame = None, mask=True, save_path: None | str=None) -> None:
-    """Plot betas values density for each sample
+    """Plot beta values density for each sample
 
-    :param samples: with betas already calculated
+    :param samples: with beta values already calculated
     :type samples: Samples
 
     :param n_bins: number of bins to generate the histogram. Default: 100
@@ -180,10 +180,10 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
 
 def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=100, title: str | None=None, mask=True,
                        custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
-    """Plot betas grouped by one or several sample sheet columns. Display the average beta values per group with a plain
+    """Plot beta values grouped by one or several sample sheet columns. Display the average beta values per group with a plain
     line, and individual beta values distribution as transparent lines.
 
-    :param samples: with betas already calculated
+    :param samples: with beta values already calculated
     :type samples: Samples
 
     :param group_columns: name of one or several Sample Sheet column to categorize samples and give samples from the
@@ -241,6 +241,8 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
 
         plt.plot(bins[:-1], mean_histo, label=group_name, linewidth=1, color=color)
 
+        # plt.plot(bins[:-1], mean_histo, label=group_name, linewidth=min(10, len(sub_sheet)/2),
+        #          alpha=min(1, 0.5+1/len(sub_sheet)), color=color, zorder=len(grouped_sheet) - i_group) #, alpha=0.5) #, linestyle=':')
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1), title=group_columns)
 
     if title is None:
@@ -291,7 +293,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
     """Plot samples in 2D space according to their beta distances.
 
-    :param samples : samples with betas already calculated
+    :param samples : samples with beta values already calculated
     :type samples: Samples
 
     :param label_column: name of the column containing the labels
@@ -779,7 +781,7 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
                    protein_coding_only=True, figsize=(20, 20), save_path: None | str=None) -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
-    :param samples : samples with betas already calculated
+    :param samples : samples with beta values already calculated
     :type samples: Samples
 
     :param gene_name : name of the gene to visualize

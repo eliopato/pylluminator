@@ -75,7 +75,7 @@ class Samples:
 
                 # if the method called updated the beta values, update the dataframe
                 if method_name == 'calculate_betas':
-                    LOGGER.info(f'concatenating betas dataframes')
+                    LOGGER.info(f'concatenating beta values dataframes')
                     self._betas_df = pd.concat([sample.betas(False) for sample in self.samples.values()], axis=1)
                 elif method_name not in ['apply_quality_mask', 'apply_non_unique_mask', 'apply_xy_mask']:
                     self._betas_df = None
@@ -90,11 +90,11 @@ class Samples:
         LOGGER.error(f'Undefined attribute/method {method_name} for class Samples')
 
     def betas(self, mask: bool = True) -> pd.DataFrame | None:
-        """Return the betas dataframe, and applies the current mask if the parameter mask is set to True (default).
+        """Return the beta values dataframe, and applies the current mask if the parameter mask is set to True (default).
 
        :param mask: True removes masked probes from betas, False keeps them. Default: True
        :type mask: bool
-       :return: the beta values as a dataframe, or None if the betas have not been calculated yet.
+       :return: the beta values as a dataframe, or None if the beta values have not been calculated yet.
        :rtype: pandas.DataFrame | None"""
         if mask:
             masked_indexes = [sample.masked_indexes for sample in self.samples.values()]
