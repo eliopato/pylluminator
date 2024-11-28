@@ -58,7 +58,9 @@ def get_or_download_annotation_data(annotation_name: str, data_type:str,  output
 
 @unique
 class Channel(Enum):
-    """Probes measure either a red or green fluorescence. This class defines their names and values."""
+    """Probes measure either a red or green fluorescence. This class defines their names and values.
+
+    Possible values are: RED, GREEN"""
     RED = 'Red' #: red channel
     GREEN = 'Grn'  #: green channel
 
@@ -84,7 +86,9 @@ class Channel(Enum):
 
 @unique
 class GenomeVersion(Enum):
-    """Names of the different genome versions supported"""
+    """Names of the different genome versions supported.
+
+    Possible values are : HG38, HG19, MM10, MM39"""
     HG38 = 'hg38'  #: Human Genome, build 38
     HG19 = 'hg19'  #: Human Genome, build 19
     MM10 = 'mm10'  #: Mouse (Mus Musculus) Genome, build 10
@@ -96,7 +100,9 @@ class GenomeVersion(Enum):
 
 @unique
 class ArrayType(Enum):
-    """Names of the different array types supported"""
+    """Names of the different array types supported.
+
+    Possible values are : HUMAN_27K, HUMAN_450K, HUMAN_MSA, HUMAN_EPIC, HUMAN_EPIC_PLUS, HUMAN_EPIC_V2, MOUSE_MM285, MAMMAL_40"""
     HUMAN_27K = 'HM27'  #: Human Methylation 27K, CpG sites
     HUMAN_450K = 'HM450'  #: Human Methylation 450K, CpG sites
     HUMAN_MSA = 'MSA'  #: Human Methylation MSA (>450K CpG sites)
