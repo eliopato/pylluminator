@@ -12,7 +12,7 @@
 
 # -- Project information -----------------------------------------------------
 
-project = "illuminator"
+project = "pylluminator"
 copyright = "2024"
 author = "MMG"
 
@@ -61,3 +61,5 @@ html_theme = "sphinx_rtd_theme"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = []
+
+# html_logo = " https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png"

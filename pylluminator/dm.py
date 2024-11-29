@@ -12,10 +12,10 @@ from statsmodels.api import OLS
 from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
-from illuminator.annotations import Annotations
-from illuminator.utils import remove_probe_suffix, set_level_as_index
+from pylluminator.annotations import Annotations
+from pylluminator.utils import remove_probe_suffix, set_level_as_index
 
-from illuminator.utils import get_logger
+from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
 

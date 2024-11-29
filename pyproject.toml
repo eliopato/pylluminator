@@ -3,10 +3,10 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["illuminator"]
+packages = ["pylluminator"]
 
 [project]
-name = "illuminator"
+name = "pylluminator"
 version = "0.2"
 authors = [{name = "Elio", email = "eliof@posteo.net"}]
 maintainers = [{name = "Elio", email = "eliof@posteo.net"}]
@@ -29,6 +29,6 @@ classifiers = [
 [project.urls]
 #Homepage = "https://example.com"
 #Documentation = "https://readthedocs.org"
-Repository = "https://github.com/eliopato/illuminator"
-Issues = "https://github.com/eliopato/illuminator/issues"
+Repository = "https://github.com/eliopato/pylluminator"
+Issues = "https://github.com/eliopato/pylluminator/issues"
 #Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"

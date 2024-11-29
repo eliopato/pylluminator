@@ -5,9 +5,9 @@ import os.path
 import pandas as pd
 from importlib.resources.readers import MultiplexedPath
 
-from illuminator.utils import column_names_to_snake_case, get_files_matching, convert_to_path
+from pylluminator.utils import column_names_to_snake_case, get_files_matching, convert_to_path
 
-from illuminator.utils import get_logger
+from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
 

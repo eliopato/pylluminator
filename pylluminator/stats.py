@@ -4,7 +4,7 @@ import numpy as np
 from statsmodels.robust import mad
 from scipy.stats import norm
 
-from illuminator.utils import get_logger
+from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
 

@@ -193,7 +193,7 @@ def load_object(filepath: str, object_type=None):
 def get_resource_folder(module_path: str, create_if_not_exist=True) -> Path | None:
     """Find the resource folder, and creates it if it doesn't exist and if the parameter is set to True (default)
 
-    :param module_path: path in a module format (e.g. "illuminator.data.genomes")
+    :param module_path: path in a module format (e.g. "pylluminator.data.genomes")
     :type module_path: str
 
     :param create_if_not_exist: if the module directory doesn't exist, create it and its parents if necessary. Default: True
@@ -203,12 +203,12 @@ def get_resource_folder(module_path: str, create_if_not_exist=True) -> Path | No
     :rtype: MultiplexedPath | None"""
 
     # asking for the root directory
-    if module_path == 'illuminator':
+    if module_path == 'pylluminator':
         return files(module_path)
 
     # check that the input module path is OK
-    if not module_path.startswith('illuminator.data'):
-        module_path = 'illuminator.data.' + module_path
+    if not module_path.startswith('pylluminator.data'):
+        module_path = 'pylluminator.data.' + module_path
 
     # find the data folder in the package
     try:

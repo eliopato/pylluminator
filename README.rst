@@ -1,5 +1,5 @@
-|logo| Welcome to illuminator
-=============================
+|logo| Welcome to pylluminator
+==============================
 
 Illuminator is a Python package designed to provide an efficient workflow for processing and analyzing DNA
 methylation data, mirroring the functionalities of the popular R package `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_.
@@ -10,7 +10,7 @@ It supports the following Illumina's Infinium array versions :
 * mouse : MM285
 * mammalian: Mammal40
 
-.. |logo| image:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/logo.png
+.. |logo| image:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png
     :width: 100px
 
 .. note::
@@ -42,23 +42,23 @@ Visualization examples:
 
 .. list-table::
 
-    * - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
-            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
+    * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
 
             Fig 1. Beta values
 
-      - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
-            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
+      - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
 
             Fig 2. Differentially methylated regions (DMRs)
 
-    * - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
-            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
+    * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
 
             Fig 3. Gene visualization
 
-      - .. figure:: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
-            :target: https://raw.githubusercontent.com/eliopato/illuminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
+      - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
 
             Fig 4. Copy number variations (CNVs)
 
@@ -75,7 +75,7 @@ TODO
 From source
 ~~~~~~~~~~~
 
-We recommend using a virtual environment with Python 3.12 to build illuminator from source. Here is an example using Conda.
+We recommend using a virtual environment with Python 3.12 to build pylluminator from source. Here is an example using Conda.
 
 Setup the virtual environment (optional)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -87,35 +87,35 @@ After installing it, make sure you have Pip installed by running the following c
 
     conda install anaconda::pip
 
-Now you can create a Conda environment named "illuminator" and activate it. You can change the name to your liking ;)
+Now you can create a Conda environment named "pylluminator" and activate it. You can change the name to your liking ;)
 
 .. code-block:: shell
 
-    conda create -n illuminator python=3.12
-    conda activate illuminator
+    conda create -n pylluminator python=3.12
+    conda activate pylluminator
 
 
-Install illuminator
+Install pylluminator
 ^^^^^^^^^^^^^^^^^^^^^
 
 You can download the latest source from github, or clone the repository with this command:
 
 .. code-block:: shell
 
-    git clone https://github.com/eliopato/illuminator.git
+    git clone https://github.com/eliopato/pylluminator.git
 
 Your are now ready to install the dependencies and the package :
 
 .. code-block:: shell
 
-    cd illuminator
+    cd pylluminator
     pip install .
 
 
 Usage
 -----
 
-Refer to https://illuminator.readthedocs.io/ for step-by-step tutorials and detailed documentation.
+Refer to https://pylluminator.readthedocs.io/ for step-by-step tutorials and detailed documentation.
 
 Contributing
 ------------
@@ -129,7 +129,7 @@ We welcome contributions! If you'd like to help improve the package, please foll
 Bug reports / new features suggestion
 -------------------------------------
 
-If you encounter any bugs, have questions, or feel like the package is missing a very important feature, please open an issue on the `GitHub Issues <https://github.com/eliopato/illuminator/issues>`_ page.
+If you encounter any bugs, have questions, or feel like the package is missing a very important feature, please open an issue on the `GitHub Issues <https://github.com/eliopato/pylluminator/issues>`_ page.
 
 When opening an issue, please provide as much detail as possible, including:
 

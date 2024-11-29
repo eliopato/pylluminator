@@ -7,11 +7,11 @@ from importlib.resources.readers import MultiplexedPath
 
 import pandas as pd
 
-from illuminator.sample import Sample
-import illuminator.sample_sheet as sample_sheet
-from illuminator.read_idat import IdatDataset
-from illuminator.annotations import Annotations, Channel
-from illuminator.utils import save_object, load_object, get_files_matching, mask_dataframe, get_logger, convert_to_path
+from pylluminator.sample import Sample
+import pylluminator.sample_sheet as sample_sheet
+from pylluminator.read_idat import IdatDataset
+from pylluminator.annotations import Annotations, Channel
+from pylluminator.utils import save_object, load_object, get_files_matching, mask_dataframe, get_logger, convert_to_path
 
 LOGGER = get_logger()
 
@@ -30,17 +30,17 @@ class Samples:
     :vartype samples: dict
 
     The following methods defined in Sample can be directly used on Samples object:
-        - :func:`illuminator.sample.Sample.apply_non_unique_mask`
-        - :func:`illuminator.sample.Sample.apply_quality_mask`
-        - :func:`illuminator.sample.Sample.apply_xy_mask`
-        - :func:`illuminator.sample.Sample.calculate_betas`
-        - :func:`illuminator.sample.Sample.dye_bias_correction`
-        - :func:`illuminator.sample.Sample.dye_bias_correction_nl`
-        - :func:`illuminator.sample.Sample.infer_type1_channel`
-        - :func:`illuminator.sample.Sample.merge_annotation_info`
-        - :func:`illuminator.sample.Sample.noob_background_correction`
-        - :func:`illuminator.sample.Sample.poobah`
-        - :func:`illuminator.sample.Sample.scrub_background_correction`
+        - :func:`pylluminator.sample.Sample.apply_non_unique_mask`
+        - :func:`pylluminator.sample.Sample.apply_quality_mask`
+        - :func:`pylluminator.sample.Sample.apply_xy_mask`
+        - :func:`pylluminator.sample.Sample.calculate_betas`
+        - :func:`pylluminator.sample.Sample.dye_bias_correction`
+        - :func:`pylluminator.sample.Sample.dye_bias_correction_nl`
+        - :func:`pylluminator.sample.Sample.infer_type1_channel`
+        - :func:`pylluminator.sample.Sample.merge_annotation_info`
+        - :func:`pylluminator.sample.Sample.noob_background_correction`
+        - :func:`pylluminator.sample.Sample.poobah`
+        - :func:`pylluminator.sample.Sample.scrub_background_correction`
     """
 
     def __init__(self, sample_sheet_df: pd.DataFrame | None = None):

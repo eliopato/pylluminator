@@ -5,7 +5,7 @@ reference statistics.
 import pandas as pd
 import numpy as np
 
-from illuminator.sample import Sample as Sample
+from pylluminator.sample import Sample as Sample
 
 
 def print_header(title: str, mask=False) -> None:

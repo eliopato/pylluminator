@@ -12,13 +12,13 @@ import pandas as pd
 import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
-from illuminator.read_idat import IdatDataset
-from illuminator.annotations import Annotations, Channel, ArrayType
-from illuminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
-from illuminator.stats import iqr
-from illuminator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix
+from pylluminator.read_idat import IdatDataset
+from pylluminator.annotations import Annotations, Channel, ArrayType
+from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
+from pylluminator.stats import iqr
+from pylluminator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix
 
-from illuminator.utils import get_logger
+from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
 

@@ -14,10 +14,10 @@ from sklearn.manifold import MDS
 from scipy.cluster.hierarchy import linkage, dendrogram
 import seaborn as sns
 
-from illuminator.sample import Sample
-from illuminator.samples import Samples
-from illuminator.annotations import Annotations
-from illuminator.utils import get_chromosome_number, set_level_as_index, get_logger
+from pylluminator.sample import Sample
+from pylluminator.samples import Samples
+from pylluminator.annotations import Annotations
+from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger
 
 
 LOGGER = get_logger()

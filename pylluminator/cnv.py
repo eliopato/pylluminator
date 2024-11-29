@@ -10,11 +10,11 @@ import numpy as np
 import linear_segment
 from sklearn.linear_model import LinearRegression
 
-from illuminator.sample import Sample
-from illuminator.samples import Samples, read_samples
-from illuminator.annotations import ArrayType, Annotations
-from illuminator.utils import get_resource_folder, get_files_matching, download_from_geo
-from illuminator.utils import set_logger, get_logger, get_logger_level
+from pylluminator.sample import Sample
+from pylluminator.samples import Samples, read_samples
+from pylluminator.annotations import ArrayType, Annotations
+from pylluminator.utils import get_resource_folder, get_files_matching, download_from_geo
+from pylluminator.utils import set_logger, get_logger, get_logger_level
 
 LOGGER = get_logger()
 

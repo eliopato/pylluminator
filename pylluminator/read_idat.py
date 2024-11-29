@@ -13,7 +13,7 @@ from pathlib import PurePath
 import gzip
 import os
 
-from illuminator.utils import get_logger
+from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
 

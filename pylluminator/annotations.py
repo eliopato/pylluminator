@@ -1,17 +1,17 @@
 """Classes and methods to handle genome metadata : Illumina manifest with probes information,
 Genome version (hg38, mm10...), Array types (EPIC, MSA...), Channels (Red/Green).
 
-The default annotation data is read from illuminator-data package, but you can add your own annotations.
+The default annotation data is read from pylluminator-data package, but you can add your own annotations.
 """
 from enum import Enum, unique
 import pandas as pd
 import pyranges as pr
 from importlib.resources.readers import MultiplexedPath
 import os
-from illuminator.utils import get_resource_folder, get_logger, convert_to_path, download_from_link
+from pylluminator.utils import get_resource_folder, get_logger, convert_to_path, download_from_link
 
 LOGGER = get_logger()
-ILLUMINA_DATA_LINK = 'https://github.com/eliopato/illuminator-data/raw/main/'
+ILLUMINA_DATA_LINK = 'https://github.com/eliopato/pylluminator-data/raw/main/'
 
 
 def get_or_download_annotation_data(annotation_name: str, data_type:str,  output_folder: str | MultiplexedPath | os.PathLike, dl_link: str) -> pd.DataFrame | None:
@@ -21,7 +21,7 @@ def get_or_download_annotation_data(annotation_name: str, data_type:str,  output
     Read the file as a pandas dataframe, with the first column being the index, and return it.
     Return None if no file was found
 
-    :param annotation_name: custom annotation name or 'default' for illuminator-data annotations
+    :param annotation_name: custom annotation name or 'default' for pylluminator-data annotations
     :type annotation_name: str
 
     :param data_type: data to download (probe_infos, seq_length...). Must match the file name
@@ -196,7 +196,7 @@ class Annotations:
     :ivar genome_version: version of the genome (HG38, MM10...)
     :vartype genome_version: GenomeVersion
 
-    :ivar name: name of the annotation: default for illuminator-data annotations, or the name of your custom data.
+    :ivar name: name of the annotation: default for pylluminator-data annotations, or the name of your custom data.
     :vartype name: str
 
     :ivar genome_info: genome metadata for the given genome version

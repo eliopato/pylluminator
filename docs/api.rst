@@ -6,15 +6,15 @@ API
     :template: custom-module-template.rst
     :recursive: 
 
-    illuminator.annotations
-    illuminator.cnv
-    illuminator.dm
-    illuminator.quality_control
-    illuminator.read_idat
-    illuminator.sample
-    illuminator.sample_sheet
-    illuminator.samples
-    illuminator.stats
-    illuminator.utils
-    illuminator.visualizations
+    pylluminator.annotations
+    pylluminator.cnv
+    pylluminator.dm
+    pylluminator.quality_control
+    pylluminator.read_idat
+    pylluminator.sample
+    pylluminator.sample_sheet
+    pylluminator.samples
+    pylluminator.stats
+    pylluminator.utils
+    pylluminator.visualizations
 
