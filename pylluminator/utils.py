@@ -265,6 +265,42 @@ def get_files_matching(root_path: str | os.PathLike | MultiplexedPath, pattern: 
     return [p for p in convert_to_path(root_path).rglob(pattern)]
 
 
+def merge_alt_chromosomes(chromosome_id: str | list[str] | pd.Series) -> list[str] | str | None:
+    """Merges the alternative chromosomes with their respective reference chromosome, e.g. 22_KI270928V1_ALT-> 22
+
+    :param chromosome_id: chromosome ID(s) to merge
+    :type chromosome_id: str |̀ list[str] | pandas.Series
+
+    :return: merged ID(s)
+    :rtype: list[str] | str | None"""
+
+    # for list and series, call the function on each member
+    if isinstance(chromosome_id, list) or isinstance(chromosome_id, pd.Series):
+        return [merge_alt_chromosomes(chr_id) for chr_id in chromosome_id]
+
+    # juste checking that it's not already an int to avoid a useless error...
+    if isinstance(chromosome_id, int) or isinstance(chromosome_id, float):
+        if np.isnan(chromosome_id):
+            return '*'
+        return str(chromosome_id)
+
+    trimmed_str = str(chromosome_id).lower().replace('chr', '')
+
+    # if the remaining string only contains digits, we're good !
+    if trimmed_str.isdigit():
+        return trimmed_str
+
+    if trimmed_str in ['x', 'y', 'm', '*']:
+        return trimmed_str
+
+    first_str_part = trimmed_str.split('_')[0]
+    if first_str_part.isdigit() or first_str_part in ['x', 'y', 'm', '*']:
+        return first_str_part
+
+    LOGGER.warning(f'Can`t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
+    return chromosome_id
+
+
 def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_string=False) -> list[int] | int | None:
     """From a string representing the chromosome ID, get the chromosome number. E.g. 'chr22' -> 22. If the input
     is not a numbered chromosome, return np.nan. The string part has to be only 'chr', not case-sensitive

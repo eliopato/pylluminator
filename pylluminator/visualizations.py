@@ -17,8 +17,7 @@ import seaborn as sns
 from pylluminator.sample import Sample
 from pylluminator.samples import Samples
 from pylluminator.annotations import Annotations
-from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger
-
+from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes
 
 LOGGER = get_logger()
 
@@ -206,7 +205,7 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
     :param save_path: if set, save the graph to save_path. Default: None.
     :type save_path: str | None
 
-    :return None"""
+    :return: None"""
 
     cmap = colormaps['Spectral']
     plt.style.use('ggplot')
@@ -414,7 +413,8 @@ def get_nb_probes_per_chr_and_type(sample: Sample | Samples) -> (pd.DataFrame, p
 
     chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
     type_df = pd.DataFrame(columns=['not masked', 'masked'])
-    manifest = sample.annotation.probe_infos
+    manifest = sample.annotation.probe_infos.copy()
+    manifest['chromosome'] = merge_alt_chromosomes(manifest['chromosome'])
 
     for name, masked in [('not masked', True), ('masked', False)]:
         probes = set()
@@ -568,9 +568,11 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
     data_to_plot = data_to_plot.reset_index().dropna(subset=y_col)
 
+    data_to_plot['merged_chr'] = merge_alt_chromosomes(data_to_plot[chromosome_col])
+
     # convert the chromosome column to int values
     if data_to_plot.dtypes[chromosome_col] != int:
-        data_to_plot['chr_id'] = get_chromosome_number(data_to_plot[chromosome_col], True)
+        data_to_plot['chr_id'] = get_chromosome_number(data_to_plot['merged_chr'], True)
         data_to_plot = data_to_plot.astype({'chr_id': 'int'})
     else:
         data_to_plot['chr_id'] = data_to_plot[chromosome_col]
@@ -621,13 +623,13 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         # build the chromosomes scatter plot
         ax.scatter(group[x_col], group[y_col], c=group[y_col], vmin=v_min, vmax=v_max, cmap=cmap, alpha=0.9)
         # save chromosome's name and limits for x-axis
-        x_labels.append(' '.join(set(group[chromosome_col])).replace('chr', ''))
+        x_labels.append(' '.join(set(group['merged_chr'])).replace('chr', ''))
         x_minor_ticks.append(chrom_end)  # chromosome limits
         x_major_ticks.append(chrom_start + (chrom_end - chrom_start) / 2)  # label position]
 
         # plot segments if a segment df is provided
         if segments_to_plot is not None:
-            for chromosomes in set(group[chromosome_col]):
+            for chromosomes in set(group['merged_chr']):
                 chrom_segments = segments_to_plot[segments_to_plot.chromosome == chromosomes]
                 for segment in chrom_segments.itertuples(index=False):
                     plt.plot([chrom_start + segment.start, chrom_start + segment.end],
