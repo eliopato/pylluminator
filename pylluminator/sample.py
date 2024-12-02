@@ -372,8 +372,8 @@ class Sample:
             return None
 
     def betas(self, mask: bool = True)-> pd.DataFrame | None:
-        """Return the beta values dataframe of the sample, and applies the current mask if the parameter mask is set to True
-        (default). Return None if the beta values have not been calculated yet.
+        """Return the beta values dataframe of the sample, and applies the current mask if the parameter mask is set to
+            True (default). Return None if the beta values have not been calculated yet.
 
        :param mask: (bool, optional, default True) True removes masked probes from betas, False keeps them. Default: False
        :type mask: bool
