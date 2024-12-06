@@ -89,6 +89,11 @@ def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_
     sample_info = sample_sheet.set_index('sample_name')
     design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
 
+    # check that the design matrix is not empty (it happens for example if the variable used in the formula is constant)
+    if len(design_matrix. columns) < 2:
+        LOGGER.error('The design matrix is empty. Please make sure the formula you provided is correct.')
+        return None
+
     # remove the intercept from the factors if it exists
     factor_names = [f for f in design_matrix.columns if 'intercept' not in f.lower()]
 

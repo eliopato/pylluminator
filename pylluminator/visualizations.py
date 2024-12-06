@@ -500,6 +500,9 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 10
 
     :return: None"""
 
+    if dmp is None or len(dmp) == 0:
+        return
+
     # sort betas per p-value
     sorted_probes = dmp.sort_values('p_value').index
     sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes]
@@ -564,6 +567,9 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     :type save_path: str | None
 
     :return: None"""
+
+    if data_to_plot is None or len(data_to_plot) == 0:
+        return
 
     # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
     data_to_plot = data_to_plot.reset_index().dropna(subset=y_col)
