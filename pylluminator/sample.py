@@ -13,7 +13,7 @@ import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
 from pylluminator.read_idat import IdatDataset
-from pylluminator.annotations import Annotations, Channel, ArrayType
+from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
 from pylluminator.utils import get_column_as_flat_array, mask_dataframe, save_object, load_object, remove_probe_suffix
@@ -93,6 +93,15 @@ class Sample:
         :return: None"""
 
         LOGGER.info(f'merging sample {self.name} with manifest {annotation}')
+
+        if annotation is None:
+            probe_count = len(self.idata[Channel.RED].probes_df)
+            array_type = detect_array(probe_count)
+            if array_type.is_human():
+                annotation = Annotations(array_type, genome_version=GenomeVersion.HG38)
+            else:
+                annotation = Annotations(array_type, genome_version=GenomeVersion.MM39)
+
         self.annotation = annotation
         self.min_beads = min_beads
 

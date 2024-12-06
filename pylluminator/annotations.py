@@ -97,6 +97,9 @@ class GenomeVersion(Enum):
     def __str__(self):
         return self.value
 
+    def is_human(self):
+        """Returns True if the genome version is human (HG38 or HG19)."""
+        return self in {GenomeVersion.HG38, GenomeVersion.HG19}
 
 @unique
 class ArrayType(Enum):
@@ -117,6 +120,9 @@ class ArrayType(Enum):
     def __str__(self):
         return self.value
 
+    def is_human(self):
+        """Returns True if the array type is not a mouse array."""
+        return self != ArrayType.MOUSE_MM285
 
 class GenomeInfo:
     """Additional genome information provided by external files, downloaded from illumina-data.
@@ -181,7 +187,6 @@ class GenomeInfo:
                 gen_info = df
 
             self.__setattr__(info, gen_info)
-
 
 
 class Annotations:
@@ -300,3 +305,38 @@ class Annotations:
     def __repr__(self):
         return f'{self.name} annotation: {self.array_type} array - Genome version {self.genome_version}\n'
 
+
+def detect_array(probe_count: int) -> ArrayType:
+    """Auto-detect the type of array of a sample, depending on the number of probes in the .idat files. If the number
+    of probes doesn't match a know type, return the latest human array and shows a warning.
+
+    :param probe_count: number of probes in the idat file
+    :type probe_count: int
+
+    :return: the array type
+    :rtype: ArrayType"""
+
+    if probe_count > 1060000:
+        return ArrayType.HUMAN_EPIC_V2
+
+    if probe_count == 1055583 or probe_count == 868578:
+        return ArrayType.HUMAN_EPIC_PLUS
+
+    if 1050000 <= probe_count <= 1053000:
+        return ArrayType.HUMAN_EPIC
+
+    if 622000 <= probe_count <= 623000:
+        return ArrayType.HUMAN_450K
+
+    if 54000 <= probe_count <= 56000:
+        return ArrayType.HUMAN_27K
+
+    # if  <= probe_count <= :
+    #     return ArrayType.HUMAN_MSA
+
+    if 315000 <= probe_count <= 362000:
+        return ArrayType.MOUSE_MM285
+
+    LOGGER.warning(f'Could not detect array type from probe count ({probe_count}). '
+                   f'Setting it to the most recent human type, EPIC v2')
+    return ArrayType.HUMAN_EPIC_V2

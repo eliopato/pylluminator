@@ -243,9 +243,20 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     samples = Samples(sample_sheet_df)
     samples.samples = samples_dict
 
-    if annotation is not None:
+    samples.merge_annotation_info(annotation, min_beads, keep_idat)
+
+    # if annotations were automatically detected, check that they all match
+    if annotation is None:
+        annotations = {(s.annotation.array_type, s.annotation.genome_version) for s in samples}
+        if len(annotations) > 1:
+            LOGGER.error(f'Found different annotations in the samples : {annotations}')
+        else:
+            at, gv = annotations.pop()
+            samples.annotation = Annotations(at, gv)
+            LOGGER.warning(f'Samples were automatically detected to be {samples.annotation}. Please make sure it\'s '
+                           f'consistent with your data.')
+    else:
         samples.annotation = annotation
-        samples.merge_annotation_info(annotation, min_beads, keep_idat)
 
     LOGGER.info(f'reading sample files done\n')
     return samples
