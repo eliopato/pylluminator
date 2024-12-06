@@ -246,6 +246,13 @@ class Annotations:
             return
 
         df = df.set_index('illumina_id')
+
+        # don't keep probes that don't have a set design type, or are type I but don't have a set channel
+        idx_to_drop = df.type.isna() | ((df.type == 'I') & df.channel.isna())
+        if sum(idx_to_drop) > 0:
+            LOGGER.info(f'Dropping {sum(idx_to_drop)} probes with missing design type or channel')
+            df = df[~idx_to_drop]
+
         categories_columns = ['type', 'probe_type', 'channel', 'chromosome']
         df[categories_columns] = df[categories_columns].astype('category')
 
