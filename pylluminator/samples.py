@@ -203,6 +203,10 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     if sample_sheet_df is None:
         return None
 
+    # only load the N first samples
+    if max_samples is not None:
+        sample_sheet_df = sample_sheet_df.head(max_samples)
+
     samples_dict = {}
 
     # for each sample
@@ -235,10 +239,6 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
 
         # add the sample to the dictionary
         samples_dict[line.sample_name] = sample
-
-        # only load the N first samples
-        if max_samples is not None and len(samples_dict) == max_samples:
-            break
 
     samples = Samples(sample_sheet_df)
     samples.samples = samples_dict
