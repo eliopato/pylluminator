@@ -14,7 +14,6 @@ from sklearn.manifold import MDS
 from scipy.cluster.hierarchy import linkage, dendrogram
 import seaborn as sns
 
-from pylluminator.sample import Sample
 from pylluminator.samples import Samples
 from pylluminator.annotations import Annotations
 from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes
@@ -403,11 +402,11 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: N
 ########################################################################################################################
 
 
-def get_nb_probes_per_chr_and_type(sample: Sample | Samples) -> (pd.DataFrame, pd.DataFrame):
+def get_nb_probes_per_chr_and_type(sample: Samples) -> (pd.DataFrame, pd.DataFrame):
     """Count the number of probes covered by the sample-s per chromosome and design type
 
-    :param sample: Sample or Samples to analyze
-    :type sample: Sample | Samples
+    :param sample: Samples to analyze
+    :type sample: Samples
 
     :return: None"""
 
@@ -418,11 +417,8 @@ def get_nb_probes_per_chr_and_type(sample: Sample | Samples) -> (pd.DataFrame, p
 
     for name, masked in [('not masked', True), ('masked', False)]:
         probes = set()
-        if isinstance(sample, Sample):
-            probes = sample.get_signal_df(masked).reset_index().probe_id
-        elif isinstance(sample, Samples):
-            for current_sample in sample.samples.values():
-                probes.update(current_sample.get_signal_df(masked).reset_index().probe_id)
+        for current_sample in sample.samples.values():
+            probes.update(current_sample.get_signal_df(masked).reset_index().probe_id)
         chrm_and_type = manifest.loc[manifest.probe_id.isin(probes), ['probe_id', 'chromosome', 'type']].drop_duplicates()
         chromosome_df[name] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
         type_df[name] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
@@ -437,11 +433,11 @@ def get_nb_probes_per_chr_and_type(sample: Sample | Samples) -> (pd.DataFrame, p
     return chromosome_df, type_df
 
 
-def plot_nb_probes_and_types_per_chr(sample: Sample | Samples, title: None | str = None, save_path: None | str=None) -> None:
+def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, save_path: None | str=None) -> None:
     """Plot the number of probes covered by the sample per chromosome and design type
 
-    :param sample: Sample or Samples to be plotted
-    :type sample: Sample | Samples
+    :param sample: Samples to be plotted
+    :type sample: Samples
 
     :param title: custom title for the plot. Default: None
     :type title: str | None
@@ -465,10 +461,7 @@ def plot_nb_probes_and_types_per_chr(sample: Sample | Samples, title: None | str
         axes[1].bar_label(container, label_type='center', fmt='{:,.0f}')
 
     if title is None:
-        if isinstance(sample, Sample):
-            title = f'Number of probes per chromosome and type for sample {sample}'
-        if isinstance(sample, Samples):
-            title = f'Number of probes per chromosome and type for {sample.nb_samples} samples'
+        title = f'Number of probes per chromosome and type for {sample.nb_samples} samples'
 
     fig.suptitle(title)
 
