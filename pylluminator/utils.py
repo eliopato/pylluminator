@@ -107,7 +107,7 @@ def get_column_as_flat_array(df: pd.DataFrame, column: str | list, remove_na: bo
     return values.flatten()
 
 
-def mask_dataframe(df: pd.DataFrame, indexes_to_mask: pd.MultiIndex | list) -> pd.DataFrame:
+def mask_dataframe(df: pd.DataFrame, indexes_to_mask: pd.MultiIndex | list ) -> pd.DataFrame:
     """Mask given indexes from the dataframe, and return the dataframe masked
 
      :param df: input dataframe
@@ -394,12 +394,19 @@ def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: st
             LOGGER.info(f'idat files already exist for {gsm_id} in {target_directory}, skipping.')
             continue
 
-        # if not, download and un-tar them
-        dl_link = f'https://www.ncbi.nlm.nih.gov/geo/download/?acc={gsm_id}&format=file'
-        download_from_link(dl_link, target_directory, f'{gsm_id}.tar', decompress=True)
+        # check if the archive already exists
+        tar_file = target_directory.joinpath(f'{gsm_id}.tar')
+        if tar_file.exists():
+            with tarfile.TarFile(tar_file, 'r') as tar_ref:
+                tar_ref.extractall(target_directory, filter='data')
+        else:
+            # if not, download and un-tar them
+            dl_link = f'https://www.ncbi.nlm.nih.gov/geo/download/?acc={gsm_id}&format=file'
+            download_from_link(dl_link, target_directory, f'{gsm_id}.tar', decompress=True)
 
 
-def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str, decompress=False) -> int:
+def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str,
+                       decompress=False, delete_archive=False) -> int:
     """Download a file and save it to the target.
 
     Unzip or un-tar the file if it is compressed.
@@ -416,6 +423,9 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
 
     :param decompress: set to True to decompress the output and delete the compressed file (works with .zip and .tar). Default: False
     :type decompress: bool
+
+    :param delete_archive: set to True to delete the archive after decompressing it. Default: False
+    :type delete_archive: bool
 
     :return: exit status
     :rtype: int"""
@@ -442,12 +452,14 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
             LOGGER.debug(f'unzip downloaded file {target_filepath}')
             with zipfile.ZipFile(target_filepath, 'r') as zip_ref:
                 zip_ref.extractall(convert_to_path(output_folder))
-            os.remove(target_filepath)  # remove archive
+            if delete_archive:
+                os.remove(target_filepath)  # remove archive
         elif filename.endswith('.tar'):
             LOGGER.debug(f'untar downloaded file {target_filepath}')
             # if the download succeeded, untar the file
             with tarfile.TarFile(target_filepath, 'r') as tar_ref:
                 tar_ref.extractall(output_folder, filter='data')
-            os.remove(target_filepath)  # remove archive
+            if delete_archive:
+                os.remove(target_filepath)  # remove archive
 
     return 1

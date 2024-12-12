@@ -3,17 +3,17 @@
 import os
 import re
 import gc
-from inspect import signature
 from importlib.resources.readers import MultiplexedPath
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from more_itertools.more import sample
 from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
-from pylluminator.utils import get_column_as_flat_array, remove_probe_suffix #, mask_dataframe, save_object, load_object,
+from pylluminator.utils import get_column_as_flat_array
 from pylluminator.utils import save_object, load_object, get_files_matching, mask_dataframe, get_logger, convert_to_path
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
@@ -22,30 +22,7 @@ LOGGER = get_logger()
 
 
 class Samples:
-    """Samples contain a collection of Sample objects in a dictionary, with sample names as keys.
-
-    It also holds the sample sheet information and the annotation object. It is mostly used to apply functions to
-    several samples at a time
-
-    :ivar annotation: probes metadata. Default: None.
-    :vartype annotation: Annotations | None
-    :ivar sample_sheet: samples information given by the csv sample sheet. Default: None
-    :vartype sample_sheet: pandas.DataFrame | None
-    :ivar samples: the dictionary containing the samples. Default: {}
-    :vartype samples: dict
-
-    The following methods defined in Sample can be directly used on Samples object:
-        - :func:`pylluminator.sample.Sample.apply_non_unique_mask`
-        - :func:`pylluminator.sample.Sample.apply_quality_mask`
-        - :func:`pylluminator.sample.Sample.apply_xy_mask`
-        - :func:`pylluminator.sample.Sample.calculate_betas`
-        - :func:`pylluminator.sample.Sample.dye_bias_correction`
-        - :func:`pylluminator.sample.Sample.dye_bias_correction_nl`
-        - :func:`pylluminator.sample.Sample.infer_type1_channel`
-        - :func:`pylluminator.sample.Sample.merge_annotation_info`
-        - :func:`pylluminator.sample.Sample.noob_background_correction`
-        - :func:`pylluminator.sample.Sample.poobah`
-        - :func:`pylluminator.sample.Sample.scrub_background_correction`
+    """
     """
 
     def __init__(self, sample_sheet_df: pd.DataFrame | None = None):
@@ -55,11 +32,14 @@ class Samples:
         :type sample_sheet_df: pandas.DataFrame | None"""
         self.annotation = None
         self.sample_sheet = sample_sheet_df
-        self.samples = {}
+        self.min_beads = None
+        self._masked_indexes_per_sample = {}  # dict of indexes specifically masked for each sample
+        self._common_masked_indexes = set()  # set of indexes masked for all samples
+        # self.samples = {}
         self.idata = {}
         self._signal_df = None
         self._betas_df = None
-        self.min_beads = None
+        self._poobah_df = None
 
     def __getitem__(self, item: int | str) -> pd.DataFrame | None:
         if self._signal_df is not None:
@@ -73,9 +53,23 @@ class Samples:
             LOGGER.error('No signal dataframe')
         return None
 
-    def keys(self):
+    def sample_names(self):
         """Return the names of the samples contained in this object"""
-        return self.samples.keys()
+        return self._masked_indexes_per_sample.keys()
+
+    def get_masked_indexes(self, sample_name: str | None = None) -> pd.MultiIndex | None:
+        """Return the masked indexes for a specific sample or for all samples if no sample name is provided.
+
+        :param sample_name: The name of the sample to get masked indexes for. If None, returns masked indexes for all samples.
+        :type sample_name: str | None
+        :return: The masked indexes for the specified sample or for all samples.
+        :rtype: pd.MultiIndex | None
+        """
+        if sample_name is None:
+            samples_masked_indexes = set().union(*self._masked_indexes_per_sample.values())
+            return samples_masked_indexes | self._common_masked_indexes
+        if sample_name in self._masked_indexes_per_sample:
+            return self._masked_indexes_per_sample.get(sample_name, set()) | self._common_masked_indexes
 
     def betas(self, mask: bool = True) -> pd.DataFrame | None:
         """Return the beta values dataframe, and applies the current mask if the parameter mask is set to True (default).
@@ -84,8 +78,9 @@ class Samples:
        :type mask: bool
        :return: the beta values as a dataframe, or None if the beta values have not been calculated yet.
        :rtype: pandas.DataFrame | None"""
+        # todo
         if mask:
-            masked_indexes = [sample.masked_indexes for sample in self.samples.values()]
+            masked_indexes = [sample.masked_indexes for sample in self.masked_indexes.values()]
             return mask_dataframe(self._betas_df, masked_indexes)
         else:
             return self._betas_df
@@ -100,7 +95,7 @@ class Samples:
 
         :return: number of samples
         :rtype: int"""
-        return len(self.samples)
+        return len(self._masked_indexes_per_sample)
 
     def type1(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of Infinium type I probes, and apply the mask if `mask` is True
@@ -122,7 +117,33 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(mask).xs('II', level='type', drop_level=False)[[['R', 'U'], ['G', 'M']]]
+        # idx = pd.IndexSlice
+        type_ii_df = self.get_signal_df(mask).xs('II', level='type', drop_level=False)  # get only type II probes
+        # return type_ii_df.loc[[idx[:, 'R', 'U'], idx[:, 'G', 'M']]]  # select non-NAN columns  # todo
+        return type_ii_df
+
+    def oob(self, mask: bool = True, channel=None) -> pd.DataFrame | None:
+        """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `mask` is True
+
+        :param mask: True removes masked probes, False keeps them. Default: True
+        :type mask: bool
+
+        :param channel: specify a channel to return probes from this channel only. 'R' for red or 'G' for green. Default
+            to None (return both channels)
+        :type channel: str | None
+
+        :return: methylation signal dataframe
+        :rtype: pandas.DataFrame | None
+        """
+        if channel is None:
+            return pd.concat([self.oob_green(mask), self.oob_red(mask)])
+        elif channel == 'R':
+            return self.oob_red(mask)
+        elif channel == 'G':
+            return self.oob_green(mask)
+        else:
+            LOGGER.error(f'Unknown channel {channel}. Must be any of : None, R or G.')
+            return None
 
     def oob_red(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of out-of-band red probes (for type I probes only), and apply the mask if `mask` is True
@@ -133,7 +154,8 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(mask).xs(('I', 'G'), level=['type', 'channel'], drop_level=False)[['R']]
+        green_probes = self.get_signal_df(mask).xs('G', level='channel', drop_level=False)
+        return green_probes.loc[:, (slice(None), 'R')]
 
     def oob_green(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of out-of-band green probes (for type I probes only), and apply the mask if `mask` is True
@@ -144,7 +166,8 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(mask).xs(('I', 'R'), level=['type', 'channel'], drop_level=False)[['G']]
+        red_probes = self.get_signal_df(mask).xs('R', level='channel', drop_level=False)
+        return red_probes.loc[:, (slice(None), 'G')]
 
     def ib_red(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of in-band red probes (for type I probes only), and apply the mask if `mask` is True
@@ -155,7 +178,8 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(mask).xs('G', level='channel', drop_level=False)[['G']]
+        green_probes = self.get_signal_df(mask).xs('G', level='channel', drop_level=False)
+        return green_probes.loc[:, (slice(None), 'G')]
 
     def ib_green(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of in-band green probes (for type I probes only), and apply the mask if `mask` is True
@@ -166,7 +190,8 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(mask).xs('R', level='channel', drop_level=False)[['R']]
+        red_probes = self.get_signal_df(mask).xs('R', level='channel', drop_level=False)
+        return red_probes.loc[:, (slice(None), 'R')]
 
     def ib(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of in-band probes (for type I probes only), and apply the mask if `mask` is True
@@ -261,8 +286,12 @@ class Samples:
         """Select probes by probe type, meaning e.g. CG, Control, SNP... (not infinium type I/II type), and apply the
         mask if `mask` is True
 
+        :param probe_type: the type of probe to select (e.g. 'cg', 'snp'...)
+        :type probe_type: str
+
         :param mask: True removes masked probes, False keeps them. Default: True
         :type mask: bool
+
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
@@ -270,15 +299,19 @@ class Samples:
             LOGGER.warning(f'no {probe_type} probes found')
             return pd.DataFrame()
 
-        return self.get_signal_df(mask).xs(probe_type, level='probe_type', drop_level=False)[['R', 'G']]
+        return self.get_signal_df(mask).xs(probe_type, level='probe_type', drop_level=False)#[['R', 'G']]
 
     def get_probes_with_probe_ids(self, probe_ids: list[str], mask: bool = True) -> pd.DataFrame | None:
         """Returns the probes dataframe filtered on a list of probe IDs
 
+        :param probe_ids: the IDs of the probes to select
+        :type probe_ids: list[str]
+
         :param mask: True removes masked probes, False keeps them. Default: True
         :type mask: bool
+
         :return: methylation signal dataframe
-        :rtype: pandas.DataFrame
+        :rtype: pandas.DataFrame | None
         """
         if probe_ids is None or len(probe_ids) == 0:
             return None
@@ -286,41 +319,18 @@ class Samples:
         probes_mask = self.get_signal_df(mask).index.get_level_values('probe_id').isin(probe_ids)
         return self.get_signal_df(mask)[probes_mask]
 
-    def oob(self, mask: bool = True, channel=None) -> pd.DataFrame | None:
-        """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `mask` is True
-
-        :param mask: True removes masked probes, False keeps them. Default: True
-        :type mask: bool
-
-        :param channel: specify a channel to return probes from this channel only. 'R' for red or 'G' for green. Default
-            to None (return both channels)
-        :type channel: str | None
-
-        :return: methylation signal dataframe
-        :rtype: pandas.DataFrame | None
-        """
-        if channel is None:
-            return pd.concat([self.oob_green(mask), self.oob_red(mask)])
-        elif channel == 'R':
-            return self.oob_red(mask)
-        elif channel == 'G':
-            return self.oob_green(mask)
-        else:
-            LOGGER.error(f'Unknown channel {channel}. Must be any of : None, R or G.')
-            return None
-
 
     ####################################################################################################################
     # Description, saving & loading
     ####################################################################################################################
 
     def __str__(self):
-        return list(self.samples.keys())
+        return list(self._masked_indexes_per_sample.keys())
 
     def __repr__(self):
         description = 'Samples object\n'
         description += '--------------\n'
-        description += 'No sample' if self.samples is None else f'{self.nb_samples} samples: {self.__str__()}\n'
+        description += 'No sample' if self._signal_df is None else f'{self.nb_samples} samples: {self.__str__()}\n'
         description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
         description += 'No sample sheet' if self.sample_sheet is None else (f'Sample sheet head: \n '
                                                                             f'{self.sample_sheet.head(3)}')
@@ -345,38 +355,12 @@ class Samples:
         :return: the loaded object"""
         return load_object(filepath, Samples)
 
-    def set_idata(self, sample_name: str, channel: Channel, dataset: IdatDataset, min_beads=1) -> None:
-        """Add idata dataset to the sample idat dictionary, for the channel key passed in the argument
-
-        :param channel: channel corresponding to the dataset
-        :type channel: Channel
-
-        :param dataset: dataset with .idat data
-        :type dataset: IdatDataset
-
-        :return: None
-        """
-        df = dataset.probes_df.copy()
-        df.loc[df.n_beads < min_beads, 'mean_value'] = pd.NA
-        df['channel'] = str(channel)[0]
-        df = df[['channel', 'mean_value']]
-        df = df.reset_index().set_index(['illumina_id', 'channel'])
-        df.columns = [sample_name]
-        # df.columns = pd.MultiIndex.from_product([[sample_name]] + [df.columns.tolist()], names=['sample_name', 'values'])
-        # df.columns = pd.MultiIndex.from_product([[sample_name], [str(channel)[0]]] + [df.columns.tolist()],
-        #                                         names= ['sample_name', 'channel', 'values'])
-        if sample_name in self.idata.keys():
-            self.idata[sample_name] = pd.concat([self.idata[sample_name], df])
-        else:
-            self.idata[sample_name] = df
-
-    def merge_annotation_info(self, annotation: Annotations, keep_idat=False) -> None:
-        """Merge manifest and mask dataframes to idat information to get the methylation signal dataframe, adding
+    def merge_annotation_info(self, annotation: Annotations, keep_idat=False, min_beads=1) -> None:
+        """Merge manifest dataframe with probe signal values read from idat files to build the signal dataframe, adding
         channel information, methylation state and mask names for each probe.
 
         For manifest file, merging is done on `Illumina IDs`, contained in columns `address_a` and `address_b` of the
-        manifest file. For the mask file, we use the `Probe IDs` to merge. We further use `Probe IDs` as an index
-        throughout the code.
+        manifest file.
 
         :param annotation: annotation data corresponding to the sample
         :type annotation: Annotations
@@ -387,8 +371,27 @@ class Samples:
 
         :return: None"""
 
+        self.min_beads = min_beads
+
+        # select probes signal values from idat dataframe, filtering by the minimum number of beads required
+        probe_df_list = []
+        for sample_name, channel_dict in self.idata.items():
+            sample_dfs = []
+            for channel, channel_df in channel_dict.items():
+                df = channel_df.copy()
+                df.loc[df.n_beads < min_beads, 'mean_value'] = pd.NA
+                df['channel'] = str(channel)[0]
+                df = df[['channel', 'mean_value']]
+                df = df.reset_index().set_index(['illumina_id', 'channel'])
+                df.columns = [sample_name]
+                sample_dfs.append(df)
+            probe_df_list.append(pd.concat(sample_dfs))
+
+        probe_df = pd.concat(probe_df_list, axis=1)
+
+        # auto detect annotation if not provided
         if annotation is None:
-            probe_count = len(self.samples)  // 2 # nb of rows in the df = nb of rows in the idat file = nb of probes
+            probe_count = len(probe_df)  // 2 # nb of rows in the df = nb of rows in the idat file = nb of probes
             array_type = detect_array(probe_count)
             if array_type.is_human():
                 annotation = Annotations(array_type, genome_version=GenomeVersion.HG38)
@@ -397,20 +400,17 @@ class Samples:
 
         self.annotation = annotation
 
-        # pivot table column names
+        # prepare dataframes for merge
         indexes = ['type', 'channel', 'probe_type', 'probe_id', 'mask_info']
         probe_info = annotation.probe_infos[indexes + ['address_a', 'address_b']]
-        # probe_info.columns = pd.MultiIndex.from_product([probe_info.columns.tolist()] +[[''], ['']], names = self.samples.columns.names)
-        nb_probes_before_merge = len(self.samples)
-        # sample_df = pd.merge(self.samples.reset_index('channel', drop=False), probe_info, how='inner', on='illumina_id')
-        # sample_df = self.samples.join(probe_info, on='illumina_id')
-        sample_df = pd.merge(self.samples.reset_index().rename(columns={'channel': 'signal_channel'}), probe_info, how='inner', on='illumina_id')
+        probe_df = probe_df.reset_index().rename(columns={'channel': 'signal_channel'})
+        nb_probes_before_merge = len(probe_df)
+        sample_df = pd.merge(probe_df, probe_info, how='inner', on='illumina_id')
 
-        # check the number of lost probes
+        # check the number of probes lost in the merge
         lost_probes = nb_probes_before_merge - len(sample_df)
         pct_lost = 100 * lost_probes / nb_probes_before_merge
         LOGGER.info(f'Lost {lost_probes:,} illumina probes ({pct_lost:.2f}%) while merging information with Manifest')
-        print(f'Lost {lost_probes:,} illumina probes ({pct_lost:.2f}%) while merging information with Manifest')
 
         # deduce methylation state (M = methylated, U = unmethylated) depending on infinium type
         sample_df['methylation_state'] = '?'
@@ -419,10 +419,10 @@ class Samples:
         sample_df.loc[(sample_df.type == 'I') & (sample_df.illumina_id == sample_df.address_b), 'methylation_state'] = 'M'
         sample_df.loc[(sample_df.type == 'I') & (sample_df.illumina_id == sample_df.address_a), 'methylation_state'] = 'U'
         # remove probes in unknown state (missing information in manifest)
-        nb_unknown_states = sum(sample_df.methylation_state == '?')
+        # nb_unknown_states = sum(sample_df.methylation_state == '?')
+        nb_unknown_states = sample_df.methylation_state.value_counts().get('?', 0)
         if nb_unknown_states > 0:
             LOGGER.info(f'Dropping {nb_unknown_states} probes with unknown methylation state')
-            print(f'Dropping {nb_unknown_states} probes with unknown methylation state')
             sample_df = sample_df[sample_df.methylation_state != '?']
 
         # drop columns that we don't need anymore
@@ -458,7 +458,7 @@ class Samples:
         :rtype: pandas.DataFrame
         """
         if mask:
-            return mask_dataframe(self._signal_df, self.masked_indexes)
+            return mask_dataframe(self._signal_df, self.get_masked_indexes())
         else:
             return self._signal_df
 
@@ -467,38 +467,46 @@ class Samples:
     # Mask functions
     ####################################################################################################################
 
-    @property
-    def nb_probes_masked(self) -> int:
-        """Count the number of probes currently masked
+    def nb_probes_masked(self, sample_name: str | None = None) -> int:
+        """Return the number or masked probes for a specific sample or for all samples if no sample name is provided.
 
+        :param sample_name: The name of the sample to get masked indexes for. If None, returns masked indexes for all samples.
+        :type sample_name: str | None
         :return: number of masked probes
         :rtype: int"""
-        if self.masked_indexes is None:
-            return 0
-        return len(self.masked_indexes)
+        masked_indexes = self.get_masked_indexes(sample_name)
+        return len(masked_indexes)
 
-    def reset_mask(self, names_to_mask: str | None = None, quiet=False):
+    def reset_mask(self, names_to_mask: str | None = None, sample_name: str | None = None, quiet=False) -> None:
         """Reset the mask to None (=no probe masked) and optionally set it to a new mask if `names_to_mask` is set.
 
         :param names_to_mask: None or string with a list of names of probes to mask, separated by a pipe. Default: None
         :type names_to_mask: str | None
-
+        :param sample_name: The name of the sample to get masked indexes for. If None, returns masked indexes for all samples.
+        :type sample_name: str | None
         :param quiet: if set to True, don't print INFO logs for this function. Default: False
         :type quiet: bool
 
         :return: None"""
         if not quiet:
             LOGGER.debug('Resetting mask')
-        self.masked_indexes = None
-        if names_to_mask is not None:
-            self.mask_names(names_to_mask)
 
-    def mask_names(self, names_to_mask: str, quiet=False) -> None:
+        if sample_name is not None:
+            self._masked_indexes_per_sample[sample_name] = set()
+        else:
+            self._common_masked_indexes = set()
+
+        if names_to_mask is not None:
+            self.mask_names(names_to_mask, sample_name, quiet)
+
+    def mask_names(self, names_to_mask: str, sample_name: str | None = None, quiet=False) -> None:
         """Match the names provided in `names_to_mask` with the probes mask info and mask these probes, adding them to
         the current mask if there is any.
 
         :param names_to_mask: can be a regex
         :type names_to_mask: str
+        :param sample_name: The name of the sample to get masked indexes for. If None, returns masked indexes for all samples.
+        :type sample_name: str | None
         :param quiet: if set to True, don't print INFO logs for this function. Default: False
         :type quiet: bool
 
@@ -508,55 +516,66 @@ class Samples:
             LOGGER.warning('No mask is defined')
             return None
 
-        nb_masked_before_add = self.nb_probes_masked
-        masked_signal_df = self.get_signal_df(True)
-        to_mask = masked_signal_df.mask_info.str.contains(names_to_mask)
+        to_mask = self._signal_df.mask_info.str.contains(names_to_mask)
 
-        if len(to_mask) == 0:
-            if not quiet:
-                LOGGER.info(f'No new probes masked, {nb_masked_before_add} are already masked')
-            return
+        self.mask_indexes(to_mask[to_mask].index, sample_name, quiet)
 
-        self.mask_indexes(to_mask[to_mask].index, quiet)
-
-    def mask_indexes(self, indexes_to_mask: pd.MultiIndex, quiet=False) -> None:
+    def mask_indexes(self, indexes_to_mask: pd.MultiIndex, sample_name: str | None = None, quiet=False) -> None:
         """Add a list of indexes to the current mask
 
         :param indexes_to_mask: list of indexes to mask
         :type indexes_to_mask: pandas.MultiIndex
+        :param sample_name: The name of the sample to get masked indexes for. If None, returns masked indexes for all samples.
+        :type sample_name: str | None
         :param quiet: if set to True, don't print INFO logs for this function. Default: False
         :type quiet: bool
 
         :return: None"""
-        nb_masked_before_add = self.nb_probes_masked
         # no indexes to mask, nothing to do
         if indexes_to_mask is None or len(indexes_to_mask) == 0:
             return
-        # no previously masked indexes, just set the property
-        elif self.masked_indexes is None or nb_masked_before_add == 0:
-            self.masked_indexes = indexes_to_mask
-        # previously existing masked indexes, append the new ones
+
+        nb_masked_before_add = self.nb_probes_masked(sample_name)
+
+        if sample_name is None:
+            if len(self._common_masked_indexes) == 0:
+                self._common_masked_indexes = indexes_to_mask
+            else:
+                self._common_masked_indexes |= indexes_to_mask
         else:
-            self.masked_indexes = self.masked_indexes.append(indexes_to_mask).drop_duplicates()
+            if len(self._masked_indexes_per_sample) == 0:
+                self._masked_indexes_per_sample[sample_name] = indexes_to_mask
+            else:
+                self._masked_indexes_per_sample[sample_name] |= indexes_to_mask
+
         if not quiet:
-            LOGGER.info(f'masking {self.nb_probes_masked - nb_masked_before_add:,} probes')
+            LOGGER.info(f'masking {self.nb_probes_masked(sample_name) - nb_masked_before_add:,} probes')
 
-    def apply_quality_mask(self) -> None:
+    def apply_quality_mask(self, sample_name: str | None = None) -> None:
         """Shortcut to apply quality mask on this sample
-        :return: None"""
-        self.mask_names(self.annotation.quality_mask_names)
 
-    def apply_non_unique_mask(self) -> None:
+        :param sample_name: The name of the sample to mask. If None, mask indexes for all samples.
+        :type sample_name: str | None
+        :return: None"""
+        self.mask_names(self.annotation.quality_mask_names, sample_name)
+
+    def apply_non_unique_mask(self, sample_name: str | None = None) -> None:
         """Shortcut to apply non-unique probes mask on this sample
-        :return: None"""
-        self.mask_names(self.annotation.non_unique_mask_names)
 
-    def apply_xy_mask(self) -> None:
+        :param sample_name: The name of the sample to mask. If None, mask indexes for all samples.
+        :type sample_name: str | None
+        :return: None"""
+        self.mask_names(self.annotation.non_unique_mask_names, sample_name)
+
+    def apply_xy_mask(self, sample_name: str | None = None) -> None:
         """Shortcut to mask probes from XY chromosome
+
+        :param sample_name: The name of the sample to mask. If None, mask indexes for all samples.
+        :type sample_name: str | None
         :return: None"""
         xy_probes_ids = self.annotation.probe_infos[self.annotation.probe_infos.chromosome.isin(['X', 'Y'])].probe_id
         xy_probes_indexes = self.get_probes_with_probe_ids(xy_probes_ids).index
-        self.mask_indexes(xy_probes_indexes)
+        self.mask_indexes(xy_probes_indexes, sample_name)
 
     ####################################################################################################################
     # Control functions
@@ -782,22 +801,26 @@ class Samples:
         :return: None"""
 
         df = self.get_signal_df(False).sort_index()
+        idx = pd.IndexSlice
         # set NAs for Type II probes to 0, only where no methylation signal is expected
-        df.loc['II', [['R', 'M']]] = 0
-        df.loc['II', [['G', 'U']]] = 0
+        df.loc['II', idx[:, 'R', 'M']] = 0
+        df.loc['II', idx[:, 'G', 'U']] = 0
         # set out-of-band signal to 0 if the option include_out_of_band is not activated
         if not include_out_of_band:
-            idx = pd.IndexSlice
-            df.loc[idx['I', 'G'], 'R'] = 0
-            df.loc[idx['I', 'R'], 'G'] = 0
-        # now we can calculate beta values
-        methylated_signal = df['R', 'M'] + df['G', 'M']
-        unmethylated_signal = df['R', 'U'] + df['G', 'U']
+            df.loc[idx['I', 'G'], idx[:, 'R']] = 0
+            df.loc[idx['I', 'R'], idx[:, 'G']] = 0
 
-        # use clip function to set minimum values for each term as set in sesame
-        beta_values = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
+        def get_beta_for_sample(sample_name):
+            sample_df = df[sample_name]
+            # now we can calculate beta values
+            methylated_signal = sample_df['R', 'M'] + sample_df['G', 'M']
+            unmethylated_signal = sample_df['R', 'U'] + sample_df['G', 'U']
 
-        self._betas_df = pd.DataFrame(beta_values, columns=[self.name])
+            # use clip function to set minimum values for each term as set in sesame
+            beta_serie = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
+            return beta_serie.rename(sample_name)
+
+        self._betas_df = pd.concat([get_beta_for_sample(sample_name) for sample_name in self.sample_names()], axis=1)
 
     def dye_bias_correction(self, mask: bool = True, reference: float | None = None) -> None:
         """Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If
@@ -983,14 +1006,14 @@ class Samples:
                 idx = [[channel, methylation_state]]
                 self._signal_df.loc[:, idx] = np.clip(self._signal_df[idx] - median_bg[channel], a_min=1, a_max=None)
 
-    def poobah(self, mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
+    def poobah(self, sample_name: str | None = None, mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
         """Detection P-value based on empirical cumulative distribution function (ECDF) of out-of-band signal
         aka pOOBAH (p-vals by Out-Of-Band Array Hybridization).
 
         Adds two columns in the signal dataframe, 'p_value' and 'poobah_mask'. Add probes that are (strictly) above the
         defined threshold to the mask.
 
-        :param mask: True removes masked probes, False keeps them. Default: True
+        :param mask: True removes masked probes from background, False keeps them. Default: True
         :type mask: bool
 
         :param use_negative_controls: add negative controls as part of the background. Default True
@@ -1001,14 +1024,15 @@ class Samples:
 
         :return: None"""
 
-        # reset betas as we are modifying the signal dataframe
-        self._betas_df = None
+        if sample_name is None:
+            for sample_name in self.sample_names():
+                self.poobah(sample_name, mask, use_negative_controls, threshold)
+            return
 
         # mask non-unique probes - but first save previous mask to reset it afterward
-        previous_masked_indexes = None if self.masked_indexes is None else self.masked_indexes.copy()
+        previous_masked_indexes = set() if self._common_masked_indexes is None else self._common_masked_indexes.copy()
         if not mask:
             self.reset_mask(quiet=True)
-
         # quiet = true because we don't want to log the mask change as it will be reset at the end
         self.mask_names(self.annotation.non_unique_mask_names, quiet=True)
 
@@ -1030,118 +1054,74 @@ class Samples:
             bg_green = [n for n in range(1000)]
 
         # reset mask
-        self.masked_indexes = previous_masked_indexes
+        self._common_masked_indexes = previous_masked_indexes
 
         pval_green = 1 - ecdf(bg_green)(self._signal_df[['G']].max(axis=1))
         pval_red = 1 - ecdf(bg_red)(self._signal_df[['R']].max(axis=1))
 
         # set new columns with pOOBAH values
-        self._signal_df['p_value'] = np.min([pval_green, pval_red], axis=0)
-        self._signal_df['poobah_mask'] = self._signal_df['p_value'] > threshold
+        self._signal_df[[sample_name, 'p_value']] = np.min([pval_green, pval_red], axis=0)
+        self.mask_indexes(self._signal_df.loc[self._signal_df['p_value'] > threshold].index, sample_name)
+        # todo make a different mask for poobah ?
 
-        # add pOOBAH mask to masked indexes
-        self.mask_indexes(self._signal_df.loc[self._signal_df['poobah_mask']].index)
 
     ####################################################################################################################
     # Description, saving & loading
     ####################################################################################################################
 
-    # def save(self, filepath: str):
-    #     """Save the current Sample object to `filepath`, as a pickle file
-    #
-    #     :param filepath: path to the file to create
-    #     :type filepath: str
-    #
-    #     :return: None"""
-    #     save_object(self, filepath)
-    #
-    # @staticmethod
-    # def load(filepath: str):
-    #     """Load a pickled Sample object from `filepath`
-    #
-    #     :param filepath: path to the file to read
-    #     :type filepath: str
-    #
-    #     :return: None"""
-    #     return load_object(filepath, Sample)
 
-    @staticmethod
-    def from_sesame(filepath: str | os.PathLike, annotation: Annotations, name: str | None = None):
-        """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object.
+def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> dict:
+    """
+    Reads IDAT files for each sample in the provided sample sheet, organizes the data by sample name and channel,
+    and returns a dictionary with the IDAT data.
 
-         :param filepath: file containing the sigdf to read
-         :type filepath: str | os.PathLike
+    :param sample_sheet_df: A DataFrame containing sample information, including columns for 'sample_name', 'sample_id',
+        'sentrix_id', and 'sentrix_position'. Each row corresponds to a sample in the experiment.
+    :type  sample_sheet_df: pandas.DataFrame
 
-        :param annotation: annotation data corresponding to the sample
-        :type annotation: Annotations
+    :param datadir: The directory where the IDAT files are located.
+    :type datadir: str
 
-        :param name: sample name
-        :type name: str
+    :return: A dictionary where the keys are sample names (from the 'sample_name' column in `sample_sheet_df`), and the
+        values are dictionaries mapping channel names (from `Channel`) to their respective IDAT data (as DataFrame
+        objects, derived from the `IdatDataset` class).
+    :rtype: dict
 
-        :return: None"""
-        filepath = os.path.expanduser(filepath)
+    Notes:
+        - The function searches for IDAT files by sample ID and channel. If no files are found, it attempts to search
+          using the Sentrix ID and position.
+        - If multiple files match the search pattern, an error is logged.
+        - If no matching files are found, an error is logged and the sample is skipped.
 
-        LOGGER.debug(f'read {filepath}')
+    Example:
+        idata = read_idata(sample_sheet_df, '/path/to/data')
+    """
+    idata = {}
 
-        if name is None:
-            name = Path(filepath).stem
+    for _, line in sample_sheet_df.iterrows():
 
-        sample = Sample(name)
-        sample.annotation = annotation
+        idata[line.sample_name] = dict()
 
-        # read input file
-        sig_df = pd.read_csv(filepath, low_memory=False)
-        sig_df = sig_df.rename(columns={'col': 'channel', 'Probe_ID': 'probe_id'})
+        # read each channel file
+        for channel in Channel:
+            pattern = f'*{line.sample_id}*{channel}*.idat*'
+            paths = [str(p) for p in get_files_matching(datadir, pattern)]
+            if len(paths) == 0:
+                if line.sentrix_id != '' and line.sentrix_position != '':
+                    pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat*'
+                    paths = [str(p) for p in get_files_matching(datadir, pattern)]
+            if len(paths) == 0:
+                LOGGER.error(f'no paths found matching {pattern}')
+                continue
+            if len(paths) > 1:
+                LOGGER.error(f'Too many files found matching {pattern} : {paths}')
+                continue
 
-        # prepare manifest for merge
-        manifest = annotation.probe_infos.loc[:, ['probe_id', 'type', 'probe_type', 'channel']]
-        manifest = manifest.rename(columns={'channel': 'manifest_channel'})
-        # remove probe suffix from manifest as they are not in SigDF files
-        manifest['probe_id_to_join'] = manifest.probe_id.apply(remove_probe_suffix)
-        manifest = manifest.set_index('probe_id_to_join')
-        sig_df = sig_df.set_index('probe_id')
+            idat_filepath = paths[0]
+            LOGGER.debug(f'reading file {idat_filepath}')
+            idata[line.sample_name][channel] = IdatDataset(idat_filepath).probes_df
 
-        # merge manifest and mask
-        sample_df = sig_df.join(manifest, how='inner').set_index('probe_id')
-
-        # move Green type II probes values to MG column
-        sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']
-        sample_df.loc[sample_df.type == 'II', 'UG'] = np.nan
-
-        # set signal channel for type II probes
-        sample_df.loc[(sample_df.type == 'II') & (sample_df.MG.isna()), 'channel'] = 'R'
-        sample_df.loc[(sample_df.type == 'II') & (sample_df.UR.isna()), 'channel'] = 'G'
-
-        # make multi-index for rows and columns
-        sample_df = sample_df.reset_index().set_index(['type', 'channel', 'probe_type', 'probe_id'])
-        sample_df = sample_df.loc[:, ['UR', 'MR', 'MG', 'UG', 'mask', 'manifest_channel', 'mask_info']]  # order columns
-        sample_df.columns = pd.MultiIndex.from_tuples([('R', 'U'), ('R', 'M'), ('G', 'M'), ('G', 'U'),
-                                                       ('mask', ''), ('manifest_channel', ''), ('mask_info', '')])
-
-        # set mask as specified in the input file, then drop the mask column
-        sample.mask_indexes(sample_df[sample_df['mask']].index)
-        sample.signal_df = sample_df.drop(columns=('mask', ''))
-
-        return sample
-    #
-    # def __str__(self):
-    #     description = f'Sample {self.name} :\n'
-    #     description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
-    #
-    #     if self._signal_df is None:
-    #         if self.idata is None:
-    #             description += 'No data\n'
-    #         else:
-    #             description += 'Probes raw data:\n'
-    #             for channel, dataset in self.idata.items():
-    #                 description += f'\nChannel {channel}:\n {dataset}\n'
-    #     else:
-    #         description += 'Methylation dataframe: \n'
-    #         description += f'{self._signal_df.head(3)}\n'
-    #     return description
-    #
-    # def __repr__(self):
-    #     return self.__str__()
+    return idata
 
 
 def read_samples(datadir: str | os.PathLike | MultiplexedPath,
@@ -1201,90 +1181,103 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     if max_samples is not None:
         sample_sheet_df = sample_sheet_df.head(max_samples)
 
-    # samples_dict = {}
     samples = Samples(sample_sheet_df)
+    samples.idata = read_idata(sample_sheet_df, datadir)
+    samples._masked_indexes_per_sample = {sample_name: set() for sample_name in samples.idata.keys()}
 
-    # for each sample
-    for _, line in sample_sheet_df.iterrows():
-
-        # sample = Sample(line.sample_name)
-
-        # read each channel file
-        for channel in Channel:
-            pattern = f'*{line.sample_id}*{channel}*.idat*'
-            paths = [str(p) for p in get_files_matching(datadir, pattern)]
-            if len(paths) == 0:
-                if line.sentrix_id != '' and line.sentrix_position != '':
-                    pattern = f'*{line.sentrix_id}*{line.sentrix_position}*{channel}*.idat*'
-                    paths = [str(p) for p in get_files_matching(datadir, pattern)]
-            if len(paths) == 0:
-                LOGGER.error(f'no paths found matching {pattern}')
-                continue
-            if len(paths) > 1:
-                LOGGER.error(f'Too many files found matching {pattern} : {paths}')
-                continue
-
-            LOGGER.debug(f'reading file {paths[0]}')
-            # set the sample's idata for this channel
-            samples.set_idata(line.sample_name, channel, IdatDataset(paths[0]))  # read idata from file path
-
-        # if sample.idata is None:
-        #     LOGGER.error(f'no idat files found for sample {line.sample_name}, skipping it')
-        #     continue
-
-        # add the sample to the dictionary
-        # samples_dict[line.sample_name] = sample
-
-    if len(samples.idata) == 0:
-        LOGGER.warning('No idata found')
+    if samples.idata is None or len(samples.idata) == 0:
+        LOGGER.error('no idat files found')
         return None
 
-    samples.samples = pd.concat(samples.idata.values(), axis=1)
-
-    # samples = Samples(sample_sheet_df)
-    # samples.samples = samples_dict
-
-    samples.merge_annotation_info(annotation, keep_idat)
-
-    # if annotations were automatically detected, check that they all match
-    # if annotation is None:
-    #     annotations = {(s.annotation.array_type, s.annotation.genome_version) for s in samples}
-    #     if len(annotations) > 1:
-    #         LOGGER.error(f'Found different annotations in the samples : {annotations}')
-    #     else:
-    #         at, gv = annotations.pop()
-    #         samples.annotation = Annotations(at, gv)
-    #         LOGGER.warning(f'Samples were automatically detected to be {samples.annotation}. Please make sure it\'s '
-    #                        f'consistent with your data.')
-    # else:
-    #     samples.annotation = annotation
+    samples.merge_annotation_info(annotation, keep_idat, min_beads)
 
     LOGGER.info('reading sample files done\n')
     return samples
 
-
-def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations) -> Samples:
-    """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
-
-    :param datadir:  directory where sesame files are
-    :type datadir: str | os.PathLike | MultiplexedPath
-
-    :param annotation: Annotations object with genome version and array type corresponding to the data stored
-    :type annotation: Annotations
-
-    :return: a Samples object
-    :rtype: Samples"""
-    LOGGER.info('>> start reading sesame files')
-    samples = Samples(None)
-    samples.annotation = annotation
-
-    # fin all .csv files in the subtree depending on datadir type
-    file_list = get_files_matching(datadir, '*.csv')
-
-    # load all samples
-    for csv_file in file_list:
-        sample = Sample.from_sesame(csv_file, annotation)
-        samples.samples[sample.name] = sample
-
-    LOGGER.info(f'done reading sesame files\n')
-    return samples
+#
+#     @staticmethod
+#     def from_sesame(filepath: str | os.PathLike, annotation: Annotations, name: str | None = None):
+#         """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object.
+#
+#          :param filepath: file containing the sigdf to read
+#          :type filepath: str | os.PathLike
+#
+#         :param annotation: annotation data corresponding to the sample
+#         :type annotation: Annotations
+#
+#         :param name: sample name
+#         :type name: str
+#
+#         :return: None"""
+#         filepath = os.path.expanduser(filepath)
+#
+#         LOGGER.debug(f'read {filepath}')
+#
+#         if name is None:
+#             name = Path(filepath).stem
+#
+#         sample = Sample(name)
+#         sample.annotation = annotation
+#
+#         # read input file
+#         sig_df = pd.read_csv(filepath, low_memory=False)
+#         sig_df = sig_df.rename(columns={'col': 'channel', 'Probe_ID': 'probe_id'})
+#
+#         # prepare manifest for merge
+#         manifest = annotation.probe_infos.loc[:, ['probe_id', 'type', 'probe_type', 'channel']]
+#         manifest = manifest.rename(columns={'channel': 'manifest_channel'})
+#         # remove probe suffix from manifest as they are not in SigDF files
+#         manifest['probe_id_to_join'] = manifest.probe_id.apply(remove_probe_suffix)
+#         manifest = manifest.set_index('probe_id_to_join')
+#         sig_df = sig_df.set_index('probe_id')
+#
+#         # merge manifest and mask
+#         sample_df = sig_df.join(manifest, how='inner').set_index('probe_id')
+#
+#         # move Green type II probes values to MG column
+#         sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']
+#         sample_df.loc[sample_df.type == 'II', 'UG'] = np.nan
+#
+#         # set signal channel for type II probes
+#         sample_df.loc[(sample_df.type == 'II') & (sample_df.MG.isna()), 'channel'] = 'R'
+#         sample_df.loc[(sample_df.type == 'II') & (sample_df.UR.isna()), 'channel'] = 'G'
+#
+#         # make multi-index for rows and columns
+#         sample_df = sample_df.reset_index().set_index(['type', 'channel', 'probe_type', 'probe_id'])
+#         sample_df = sample_df.loc[:, ['UR', 'MR', 'MG', 'UG', 'mask', 'manifest_channel', 'mask_info']]  # order columns
+#         sample_df.columns = pd.MultiIndex.from_tuples([('R', 'U'), ('R', 'M'), ('G', 'M'), ('G', 'U'),
+#                                                        ('mask', ''), ('manifest_channel', ''), ('mask_info', '')])
+#
+#         # set mask as specified in the input file, then drop the mask column
+#         sample.mask_indexes(sample_df[sample_df['mask']].index)
+#         sample.signal_df = sample_df.drop(columns=('mask', ''))
+#
+#         return sample
+#
+#
+#
+# def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations) -> Samples:
+#     """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
+#
+#     :param datadir:  directory where sesame files are
+#     :type datadir: str | os.PathLike | MultiplexedPath
+#
+#     :param annotation: Annotations object with genome version and array type corresponding to the data stored
+#     :type annotation: Annotations
+#
+#     :return: a Samples object
+#     :rtype: Samples"""
+#     LOGGER.info('>> start reading sesame files')
+#     samples = Samples(None)
+#     samples.annotation = annotation
+#
+#     # fin all .csv files in the subtree depending on datadir type
+#     file_list = get_files_matching(datadir, '*.csv')
+#
+#     # load all samples
+#     for csv_file in file_list:
+#         sample = Sample.from_sesame(csv_file, annotation)
+#         samples.samples[sample.name] = sample
+#
+#     LOGGER.info('done reading sesame files\n')
+#     return samples

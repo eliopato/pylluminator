@@ -323,7 +323,7 @@ def detect_array(probe_count: int) -> ArrayType:
     :return: the array type
     :rtype: ArrayType"""
 
-    if probe_count > 1060000:
+    if 1060000 < probe_count < 1200000 :
         return ArrayType.HUMAN_EPIC_V2
 
     if probe_count == 1055583 or probe_count == 868578:
@@ -344,6 +344,6 @@ def detect_array(probe_count: int) -> ArrayType:
     if 315000 <= probe_count <= 362000:
         return ArrayType.MOUSE_MM285
 
-    LOGGER.warning(f'Could not detect array type from probe count ({probe_count}). '
-                   f'Setting it to the most recent human type, EPIC v2')
+    LOGGER.warning(f'Could not detect array type from probe count ({probe_count:.}). It could be due to having samples '
+                    'of mixed array types. Setting it to the most recent human type, EPIC v2')
     return ArrayType.HUMAN_EPIC_V2

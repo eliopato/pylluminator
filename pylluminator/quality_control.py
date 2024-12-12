@@ -5,7 +5,7 @@ reference statistics.
 import pandas as pd
 import numpy as np
 
-from pylluminator.sample import Sample as Sample
+from pylluminator.samples import Samples as Samples
 
 
 def print_header(title: str, mask=False) -> None:
@@ -53,18 +53,18 @@ def print_pct(name: str, value) -> None:
     print(f'{name:<55} {100*value:.2f} %')
 
 
-def detection_stats(sample: Sample, mask=False) -> None:
+def detection_stats(samples: Samples, sample_name: str, mask=False) -> None:
     """Print detection statistics of the given sample.
 
-    :param sample: sample to print the stats of
-    :type sample: Sample
+    :param samples: Samples object containing the sample to check
+    :type samples: Samples
     :param mask: True removes masked probes, False keeps them. Default False
     :type mask: bool
 
     :return: None"""
     print_header('Detection', mask)
 
-    sample.poobah(mask, True, threshold=0.05)
+    samples.poobah(mask, True, threshold=0.05)
     p_values_df = sample.get_signal_df(mask)[['p_value', 'poobah_mask']]
 
     sample_probe_ids = sample.get_signal_df(mask).index.get_level_values('probe_id')
