@@ -107,29 +107,6 @@ def get_column_as_flat_array(df: pd.DataFrame, column: str | list, remove_na: bo
     return values.flatten()
 
 
-def mask_dataframe(df: pd.DataFrame, indexes_to_mask: pd.MultiIndex | list ) -> pd.DataFrame:
-    """Mask given indexes from the dataframe, and return the dataframe masked
-
-     :param df: input dataframe
-     :type df: pandas.DataFrame
-     :param indexes_to_mask: index or list of indexes to mask
-     :type indexes_to_mask: pandas.MultiIndex | list[pandas.MultiIndex]
-
-     :return: the dataframe with the masked rows filtered out
-     :rtype: pandas.DataFrame"""
-    if indexes_to_mask is None or len(indexes_to_mask) == 0:
-        return df
-
-    if isinstance(indexes_to_mask, list):
-        all_masked_indexes = set()
-        for masked_indexes in indexes_to_mask:
-            if masked_indexes is not None:
-                all_masked_indexes.update(masked_indexes)
-        return df[~df.index.isin(all_masked_indexes)]
-
-    return df[~df.index.isin(indexes_to_mask)]
-
-
 def remove_probe_suffix(probe_id: str) -> str:
     """Remove the last part of a probe ID, split by underscore.
 

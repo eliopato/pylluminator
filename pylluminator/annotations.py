@@ -307,10 +307,12 @@ class Annotations:
         return '|'.join(names)
 
     def __str__(self):
+        if self.name == 'default':
+            return f'{self.array_type} - {self.genome_version} '
         return f'{self.name} annotation - {self.array_type} - {self.genome_version} '
 
     def __repr__(self):
-        return f'{self.name} annotation: {self.array_type} array - Genome version {self.genome_version}\n'
+        return self.__str__()
 
 
 def detect_array(probe_count: int) -> ArrayType:
