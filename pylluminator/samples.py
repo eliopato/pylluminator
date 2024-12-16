@@ -36,13 +36,22 @@ class Samples:
         self.masks = MaskCollection()
         self._signal_df = None
 
-    def __getitem__(self, item: int | str) -> pd.DataFrame | None:
+    def __getitem__(self, item: int | str | list[str]) -> pd.DataFrame | None:
         if self._signal_df is not None:
             columns = self._signal_df.columns
             if isinstance(item, int) and item < len(columns):
                 return self._signal_df[columns[item]].copy()
             elif isinstance(item, str) and item in self.sample_names:
                 return self._signal_df[item].copy()
+            elif isinstance(item, list):
+                samples_names = []
+                for sample in item:
+                    if sample not in self.sample_names:
+                        LOGGER.warning(f'Could not find sample {sample} in {self.sample_names}')
+                    else:
+                        samples_names.append(sample)
+                if len(samples_names) > 0:
+                    return self._signal_df[samples_names].copy()
             LOGGER.error(f'Could not find item {item} in {columns}')
         else:
             LOGGER.error('No signal dataframe')
@@ -688,10 +697,8 @@ class Samples:
 
         :return: the total in-band intensity values
         :rtype: pandas.DataFrame"""
-        if isinstance(sample_name, str):
-            sample_names = [sample_name]
-        else:
-            sample_names = self.sample_names
+
+        sample_names = [sample_name] if isinstance(sample_name, str) else self.sample_names
 
         series = []
 
@@ -741,6 +748,31 @@ class Samples:
 
         :return: None"""
         self._signal_df = self._signal_df.drop('beta', level='signal_channel', axis=1, errors='ignore')
+
+    def has_betas(self) -> bool:
+        return 'beta' in self._signal_df.columns.get_level_values('signal_channel')
+
+    def get_betas(self, sample_name: str | None = None, drop_na: bool = False) -> pd.DataFrame:
+        """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
+
+        :param sample_name: the name of the sample to get beta values for. If None, return beta values for all samples.
+        :type sample_name: str | None
+
+        :return: beta values
+        :rtype: pandas.DataFrame"""
+
+        if not self.has_betas():
+            self.calculate_betas()
+
+        betas = self._signal_df.xs('beta', level='signal_channel', axis=1).droplevel('methylation_state', axis=1)
+
+        if sample_name is not None:
+            betas = betas[sample_name]
+
+        if drop_na:
+            betas = betas.dropna()
+
+        return betas
 
     def dye_bias_correction(self, sample_name: str | None = None, mask: bool = True, reference: dict | None = None) -> None:
         """Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If

@@ -12,10 +12,8 @@ from statsmodels.api import OLS
 from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
-from pylluminator.annotations import Annotations
-from pylluminator.utils import remove_probe_suffix, set_level_as_index
-
-from pylluminator.utils import get_logger
+from pylluminator.utils import remove_probe_suffix, set_level_as_index, get_logger
+from pylluminator.samples import Samples
 
 LOGGER = get_logger()
 
@@ -29,6 +27,7 @@ def combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
     :return: numpy array of combined p-values
     :rtype: numpy.ndarray"""
     return combine_pvalues(p_values, method='stouffer')[1]
+
 
 def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str]) -> list[float]:
     """Create an Ordinary Least Square model for the beta values, using the design matrix provided, fit it and
@@ -50,47 +49,40 @@ def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names
     return results
 
 
-def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_na=True) -> pd.DataFrame | None:
+def get_dmp(samples: Samples, formula: str, drop_na=False) -> pd.DataFrame | None:
     """Find Differentially Methylated Probes (DMP)
 
     More info on  design matrices and formulas:
         - https://www.statsmodels.org/devel/gettingstarted.html
         - https://patsy.readthedocs.io/en/latest/overview.html
 
-    :param betas: beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
-    :type betas: pandas.DataFrame
     :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
     :type formula: str
-    :param sample_sheet: metadata used in the model, typically a samplesheet. It must have the samples' names in a
-        column called `sample_name` and the column(s) used in the formula (e.g. ['age', 'sex'])
-    :type sample_sheet: pandas.DataFrame
-    :param keep_na: keep probes that have NA values in the beta values matrix. Default True
-    :type keep_na: bool
+    :param drop_na: drop probes that have NA values. Default: False
+    :type drop_na: bool
 
     :return: dataframe with probes as rows and p_vales and model estimates in columns
     :rtype: pandas.DataFrame
     """
 
-    LOGGER.info(f'>>> Start get DMP')
+    LOGGER.info('>>> Start get DMP')
 
     # check the input
-    if 'sample_name' not in sample_sheet.columns:
+    if 'sample_name' not in samples.sample_sheet.columns:
         LOGGER.error('get_dmp() :  dataframe sample_sheet must have a sample_name column')
         return None
 
-    # drop any probe that has a NA beta value
-    if not keep_na:
-        betas = betas.dropna()
+    betas = samples.get_betas(drop_na=drop_na)
 
     # data init.
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     # make the design matrix
-    sample_info = sample_sheet.set_index('sample_name')
+    sample_info = samples.sample_sheet.set_index('sample_name')
     design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
 
     # check that the design matrix is not empty (it happens for example if the variable used in the formula is constant)
-    if len(design_matrix. columns) < 2:
+    if len(design_matrix.columns) < 2:
         LOGGER.error('The design matrix is empty. Please make sure the formula you provided is correct.')
         return None
 
@@ -111,19 +103,16 @@ def get_dmp(betas: pd.DataFrame, formula: str, sample_sheet: pd.DataFrame, keep_
             return get_model_parameters(row, design_matrix, factor_names)
         result_array = Parallel(n_jobs=-1)(delayed(wrapper_get_model_parameters)(row[1:]) for row in betas.itertuples())
 
-    LOGGER.info(f'get DMP done')
+    LOGGER.info('get DMP done')
 
     return pd.DataFrame(result_array, index=betas.index, columns=column_names, dtype='float64')
 
 
-def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
-            dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
+def get_dmr(samples: Samples, dmp: pd.DataFrame, dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
     """Find Differentially Methylated Regions (DMR) based on euclidian distance between beta values
 
     :param betas: beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
     :type betas: pandas.DataFrame
-    :param annotation: samples' annotation information
-    :type annotation: Annotations
     :param dmp: p-values and statistics for each probe, as returned by get_dmp()
     :type dmp: pandas.DataFrame
     :param dist_cutoff: cutoff used to find change points between DMRs, used on euclidian distance between beta values.
@@ -138,14 +127,14 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
     :rtype: pandas.DataFrame
     """
 
-    LOGGER.info(f'>>> Start get DMR')
+    LOGGER.info('>>> Start get DMR')
 
-    # data init.
+    # data initialization
+    betas = samples.get_betas(drop_na=False)
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
-    betas = betas.drop(columns=['type', 'channel', 'probe_type', 'index'], errors='ignore')
 
     # get genomic range information (for chromosome id and probe position)
-    probe_coords_df = annotation.genomic_ranges.drop(columns='strand', errors='ignore')
+    probe_coords_df = samples.annotation.genomic_ranges.drop(columns='strand', errors='ignore')
     non_empty_coords_df = probe_coords_df[probe_coords_df.end > probe_coords_df.start]  # remove 0-width ranges
 
     betas_no_na = betas.dropna()  # remove probes with missing values
@@ -163,7 +152,7 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
     # sort ranges and identify last probe of each chromosome
     # cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges(natsorting=True)  # to have the same sorting as sesame
     cpg_ranges = pr.PyRanges(cpg_ids.rename(columns={'chromosome':'Chromosome', 'end': 'End', 'start': 'Start',
-                                                          'strand': 'Strand'})).sort_ranges()
+                                                     'strand': 'Strand'})).sort_ranges()
     next_chromosome = cpg_ranges['Chromosome'].shift(-1)
     last_probe_in_chromosome = cpg_ranges['Chromosome'] != next_chromosome
 
@@ -182,7 +171,7 @@ def get_dmr(betas: pd.DataFrame, annotation: Annotations, dmp: pd.DataFrame,
         LOGGER.debug(f'Segments per locus : {seg_per_locus}')
 
     if dist_cutoff <= 0:
-        LOGGER.warning(f'Euclidian distance cutoff for DMP should be > 0')
+        LOGGER.warning('Euclidian distance cutoff for DMP should be > 0')
     LOGGER.debug(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
 
     # find change points

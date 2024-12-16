@@ -10,7 +10,6 @@ import numpy as np
 import linear_segment
 from sklearn.linear_model import LinearRegression
 
-from pylluminator.sample import Sample
 from pylluminator.samples import Samples, read_samples
 from pylluminator.annotations import ArrayType, Annotations
 from pylluminator.utils import get_resource_folder, get_files_matching, download_from_geo
@@ -19,37 +18,38 @@ from pylluminator.utils import set_logger, get_logger, get_logger_level
 LOGGER = get_logger()
 
 
-def copy_number_variation(samples: Samples | Sample, sample_name: str | None = None, normalization_samples_names: list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
+def copy_number_variation(samples: Samples, sample_name: str, normalization_samples_names: str | list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
     """Perform copy number variation (CNV) and copy number segmentation for a sample
 
-    :param samples: sample(s) to be analyzed
-    :type samples: Sample | Samples
+    :param samples: samples to be analyzed
+    :type samples: Samples
 
-    :param sample_name: name of the Sample to calculate CNV of. Necessary if you provide a Samples object as first
-        parameter, ignored if you provide a single Sample. Default None
-    :type sample_name: str | None
+    :param sample_name: name of the samples to calculate CNV of.
+    :type sample_name: str
 
     :param normalization_samples_names: names of the samples to use for normalization, that have to be part of the passed
         Samples object. If empty (default), default normalization samples will be loaded from a database - but this only
         work for EPIC/hg38 and EPICv2/hg38; for other array versions, you **need** to provide samples. Default []
-    :type normalization_samples_names: list[str]
+    :type normalization_samples_names: str | list[str]
 
     :return: a tuple with : the bins coordinates, the bins signal, the segments
     :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
     """
 
-    # check input parameters
+    available_samples = samples.sample_names
+    if sample_name not in available_samples:
+        LOGGER.error(f'Sample {sample_name} not found in the Samples object')
 
-    if isinstance(samples, Samples) and sample_name is None:
-        LOGGER.error('You can\'t calculate the copy number variation of several samples. Please provide either a single '
-                     'Sample object or a Samples object and a sample name.')
-        return None
+    # make sure it's a list
+    if isinstance(normalization_samples_names, str):
+        normalization_samples_names = [normalization_samples_names]
 
-    if isinstance(samples, Sample) and sample_name is not None:
-        LOGGER.warning('When a single Sample object is passed to the function, parameter `sample_name` is ignored.')
+    for norm_sample_name in normalization_samples_names:
+        if norm_sample_name not in available_samples:
+            LOGGER.error(f'Normalization sample {norm_sample_name} not found in the Samples object')
 
     # get normalization samples
-    if normalization_samples_names is None or len(normalization_samples_names) == 0 or isinstance(samples, Sample):
+    if normalization_samples_names is None or len(normalization_samples_names) == 0:
         # load default normalization samples for the given array version
         normal_samples = get_normalization_samples(samples.annotation)
 
@@ -57,32 +57,20 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
             LOGGER.error('Please provide samples to use as normalization')
             return None
 
-        normal_samples = normal_samples.samples.values()
+        norm_intensities = normal_samples.get_total_ib_intensity()
+
     else:
-        # extract normalization samples from the samples object
-        normal_samples = [samples[key] for key in normalization_samples_names if key in samples.keys()]
-
-        if len(normal_samples) == 0:
-            LOGGER.error(f'The normalization samples {normalization_samples_names} were not found in the Samples object')
-            return None
-
-        if len(normal_samples) != len(normalization_samples_names):
-            LOGGER.warning(f'These normalization samples were not found in the Samples object provided : '
-                           f'{[name for name in normalization_samples_names if name not in samples.keys()]}')
+        # extract normalization samples from the samples object.
+        norm_intensities = samples.get_total_ib_intensity()[normalization_samples_names]
 
     genome_info = samples.annotation.genome_info
     probe_coords_df = samples.annotation.genomic_ranges
 
     # get total intensity per probe and drop unnecessary indexes
-    if isinstance(samples, Samples):
-        samples = samples[sample_name]
+    target_intensity = samples.get_total_ib_intensity(sample_name)
+    target_intensity = target_intensity.droplevel(['channel', 'type', 'probe_type']).dropna()
 
-    target_intensity = samples.get_total_ib_intensity()
-    target_intensity = target_intensity.reset_index(['channel', 'type', 'probe_type'], drop=True).dropna()
-
-    norm_intensities_list = [s.get_total_ib_intensity() for s in normal_samples]
-    norm_intensities = pd.concat(norm_intensities_list, axis=1)
-    norm_intensities = norm_intensities.reset_index(['channel', 'type', 'probe_type'], drop=True).dropna()
+    norm_intensities = norm_intensities.droplevel(['channel', 'type', 'probe_type']).dropna()
 
     # keep only probes that are in all 3 files (target methylation, normalization methylation and genome ranges)
     overlapping_probes = target_intensity.index.intersection(norm_intensities.index).intersection(probe_coords_df.index)
@@ -91,7 +79,7 @@ def copy_number_variation(samples: Samples | Sample, sample_name: str | None = N
     norm_intensities = norm_intensities.loc[overlapping_probes]
     probe_coords_df = probe_coords_df.loc[overlapping_probes]
 
-    LOGGER.info(f'Fitting the linear regression on normalization intensities')
+    LOGGER.info('Fitting the linear regression on normalization intensities')
 
     X = norm_intensities.values
     y = target_intensity.values
