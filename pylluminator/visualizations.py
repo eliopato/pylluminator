@@ -135,7 +135,7 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     # initialize values
     plt.style.use('ggplot')
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.betas(mask)  # get betas with or without masked probes
+    betas = samples.get_betas(mask = mask)  # get betas with or without masked probes
 
     # keep only samples that are both in sample sheet and betas columns
     filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
@@ -211,7 +211,7 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
     bins = [n*1/n_bins for n in range(0, n_bins+1)]
 
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.betas(mask)  # get betas with or without masked probes
+    betas = samples.get_betas(mask = mask)  # get betas with or without masked probes
 
     # keep only samples that are both in sample sheet and betas columns
     filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
@@ -291,7 +291,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
     """Plot samples in 2D space according to their beta distances.
 
-    :param samples : samples with beta values already calculated
+    :param samples : samples to plot
     :type samples: Samples
 
     :param label_column: name of the column containing the labels
@@ -325,7 +325,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     plt.style.use('ggplot')
 
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.betas(mask)  # get betas with or without masked probes
+    betas = samples.get_betas(mask=mask)  # get betas with or without masked probes
 
     # keep only samples that are both in sample sheet and betas columns
     filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
@@ -361,14 +361,17 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     plt.show()
 
 
-def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: None | str=None) -> None:
+def betas_dendrogram(samples: Samples, title: None | str = None, mask: bool = True, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
-    :param betas: dataframe as output from sample[s].get_betas() - rows are probes and columns sample-s
-    :type betas: pandas.DataFrame
+    :param samples: samples to plot
+    :type samples: Samples
 
     :param title: custom title for the plot. Default: None
     :type title: str | None
+
+    :param mask: True removes masked probes from betas, False keeps them. Default: True
+    :type mask: bool
 
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
@@ -376,8 +379,9 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: N
     :return: None"""
 
     plt.figure(figsize=(15, 10))
+    betas = samples.get_betas(drop_na=True, mask=mask)
 
-    linkage_matrix = linkage(betas.dropna().T.values, optimal_ordering=True, method='complete')
+    linkage_matrix = linkage(betas.T.values, optimal_ordering=True, method='complete')
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
 
     # todo : different handling for > 10 samples ? that's the behaviour in ChAMP:
@@ -402,29 +406,34 @@ def betas_dendrogram(betas: pd.DataFrame, title: None | str = None, save_path: N
 ########################################################################################################################
 
 
-def get_nb_probes_per_chr_and_type(sample: Samples) -> (pd.DataFrame, pd.DataFrame):
+def get_nb_probes_per_chr_and_type(samples: Samples) -> (pd.DataFrame, pd.DataFrame):
     """Count the number of probes covered by the sample-s per chromosome and design type
 
-    :param sample: Samples to analyze
-    :type sample: Samples
+    :param samples: Samples to analyze
+    :type samples: Samples
 
     :return: None"""
 
     chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
     type_df = pd.DataFrame(columns=['not masked', 'masked'])
-    manifest = sample.annotation.probe_infos.copy()
+    manifest = samples.annotation.probe_infos.copy()
     manifest['chromosome'] = merge_alt_chromosomes(manifest['chromosome'])
 
-    for name, masked in [('not masked', True), ('masked', False)]:
-        probes = set()
-        for current_sample in sample.samples.values():
-            probes.update(current_sample.get_signal_df(masked).reset_index().probe_id)
+    # for name, masked in [('not masked', True), ('masked', False)]:
+    masked_probes = set()
+    for current_sample in samples.sample_names:
+        mask = samples.masks.get_mask(sample_name=current_sample)
+        masked_probes.update(mask[mask].index.get_level_values('probe_id'))
+
+    unmasked_probes = samples.get_signal_df(False).index.get_level_values('probe_id').difference(masked_probes)
+
+    for name, probes in [('not masked', unmasked_probes), ('masked', masked_probes)]:
         chrm_and_type = manifest.loc[manifest.probe_id.isin(probes), ['probe_id', 'chromosome', 'type']].drop_duplicates()
         chromosome_df[name] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
         type_df[name] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
 
-    chromosome_df['masked'] = chromosome_df['masked'] - chromosome_df['not masked']
-    type_df['masked'] = type_df['masked'] - type_df['not masked']
+    # chromosome_df['masked'] = chromosome_df['masked'] - chromosome_df['not masked']
+    # type_df['masked'] = type_df['masked'] - type_df['not masked']
 
     # get the chromosomes numbers to order data frame correctly
     chromosome_df['chr_id'] = get_chromosome_number(chromosome_df.index.tolist())
@@ -471,22 +480,22 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
 ########################################################################################################################
 
 
-def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 100, keep_na=False, save_path: None | str=None) -> None:
+def plot_dmp_heatmap(dmp: pd.DataFrame, samples: Samples, nb_probes: int = 100, drop_na=True, save_path: None | str=None) -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
     :param dmp:  p-values and statistics for each probe, as returned by get_dmp()
     :type dmp: pandas.DataFrame
 
-    :param betas: beta values as output from sample[s].get_betas() rows are probes and columns sample-s
-    :type betas: pandas.DataFrame
+    :param samples: samples to use for plotting
+    :type samples: Samples
 
     :param nb_probes: number of probes to plot. Default: 100
     :type nb_probes: int
 
-    :param keep_na: set to False to drop probes with any NA beta values. Note that if set to True, the rendered plot
-        won't show the hierarchical clusters. Default: False
-    :type keep_na: bool
+    :param drop_na: set to True to drop probes with any NA beta values. Note that if set to False, the rendered plot
+        won't show the hierarchical clusters. Default: True
+    :type drop_na: bool
 
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
@@ -497,13 +506,14 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, betas: pd.DataFrame, nb_probes: int = 10
         return
 
     # sort betas per p-value
+    betas = samples.get_betas(drop_na=drop_na)
     sorted_probes = dmp.sort_values('p_value').index
     sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes]
 
-    if keep_na:
-        plot = sns.heatmap(sorted_betas[:nb_probes].sort_values(betas.columns[0]), xticklabels=True)
-    else:
+    if drop_na:
         plot = sns.clustermap(sorted_betas.dropna()[:nb_probes], xticklabels=True)
+    else:
+        plot = sns.heatmap(sorted_betas[:nb_probes].sort_values(betas.columns[0]), xticklabels=True)
 
     if save_path is not None:
         plot.get_figure().savefig(os.path.expanduser(save_path))

@@ -12,7 +12,7 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
-from pylluminator.utils import get_column_as_flat_array
+from pylluminator.utils import get_column_as_flat_array, set_channel_index_as
 from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
@@ -403,6 +403,7 @@ class Samples:
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
         self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
         self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
+        self._signal_df = self._signal_df.sort_index(axis=1)
 
         # if we don't want to keep idata, make sure we free the memory
         if not keep_idat:
@@ -578,34 +579,6 @@ class Samples:
     # Channel functions
     ####################################################################################################################
 
-    def set_channel_index_as(self, column: str, drop=True) -> None:
-        """Use an existing column specified by argument `column` as the new channel index. To keep the column, set
-        `drop` to False
-
-        :param column: name of the column to use as the new channel index
-        :type column: str
-        :param drop: if set to False, keep the column used for the new index. Default: True
-
-        :return: None"""
-
-        if column not in self._signal_df.columns:
-            LOGGER.error(f'column {column} not found in df ({self._signal_df.columns})')
-            return
-
-        # save index levels order to keep the same index structure
-        lvl_order = self._signal_df.index.names
-
-        if 'channel' in self._signal_df.columns and column != 'channel':
-            LOGGER.warning('dropping existing column `channel`')
-            self._signal_df.drop(column=['channel'], inplace=True)
-
-        if drop:
-            self._signal_df.rename(columns={column: 'channel'}, inplace=True)
-        else:
-            self._signal_df['channel'] = self._signal_df[column]  # copy values in a new column
-
-        self._signal_df = self._signal_df.droplevel('channel').set_index('channel', append=True).reorder_levels(
-            lvl_order)
 
     def infer_type1_channel(self, sample_name: str | None = None, switch_failed=False, mask_failed=False, summary_only=False) -> pd.DataFrame:
         """For Infinium type I probes, infer the channel from the signal values, setting it to the channel with the max
@@ -626,7 +599,7 @@ class Samples:
         :rtype: pandas.DataFrame"""
 
         # reset betas as we are modifying the signal dataframe
-        self._betas_df = None
+        self.reset_betas()
         sample_names = [sample_name] if isinstance(sample_name, str) else self.sample_names
 
         # subset to use
@@ -655,10 +628,18 @@ class Samples:
         if not summary_only:
             # propagate the inferred channel to the signal dataframe
             self._signal_df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
-            # make the inferred channel the new channel index
-            self.set_channel_index_as('inferred_channel', drop=True)
 
-        return type1_df.groupby(['inferred_channel', 'channel']).count().max(axis=1)
+            # propagate the inferred channel to the masks indexes
+            for mask in self.masks.masks.values():
+                mask_df = pd.concat([mask.series, self._signal_df['inferred_channel']], axis=1)
+                mask_df = set_channel_index_as(mask_df, 'inferred_channel', drop=True)
+                mask.series = mask_df.iloc[:, 0]
+
+            self._signal_df = set_channel_index_as(self._signal_df, 'inferred_channel', drop=True)  # make the inferred channel the new channel index
+            self._signal_df = self._signal_df.sort_index(axis=1)
+
+
+        return type1_df.groupby(['inferred_channel', 'channel'], observed=False).count().max(axis=1)
 
     ####################################################################################################################
     # Preprocessing functions
@@ -743,6 +724,8 @@ class Samples:
             beta_serie = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
             self._signal_df.loc[:, (sample_name, 'beta', '')] = beta_serie
 
+        self._signal_df = self._signal_df.sort_index(axis=1)  # sort columns after adding beta values
+
     def reset_betas(self) -> None:
         """Remove beta columns from signal df
 
@@ -752,7 +735,7 @@ class Samples:
     def has_betas(self) -> bool:
         return 'beta' in self._signal_df.columns.get_level_values('signal_channel')
 
-    def get_betas(self, sample_name: str | None = None, drop_na: bool = False) -> pd.DataFrame:
+    def get_betas(self, sample_name: str | None = None, drop_na: bool = False, mask: bool = False) -> pd.DataFrame:
         """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
 
         :param sample_name: the name of the sample to get beta values for. If None, return beta values for all samples.
@@ -764,7 +747,7 @@ class Samples:
         if not self.has_betas():
             self.calculate_betas()
 
-        betas = self._signal_df.xs('beta', level='signal_channel', axis=1).droplevel('methylation_state', axis=1)
+        betas = self.get_signal_df(mask).xs('beta', level='signal_channel', axis=1).droplevel('methylation_state', axis=1)
 
         if sample_name is not None:
             betas = betas[sample_name]
@@ -777,6 +760,9 @@ class Samples:
     def dye_bias_correction(self, sample_name: str | None = None, mask: bool = True, reference: dict | None = None) -> None:
         """Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If
         the reference level is not given, it is set to the mean intensity of all the in-band signals.
+
+        :param sample_name: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
+        :type sample_name: str | None
 
         :param mask: set to False if you don't want any mask to be applied. Default: True
         :type mask: bool
@@ -809,6 +795,9 @@ class Samples:
         This function compares the Type-I Red probes and Type-I Grn probes and generates and mapping to correct signal
         of the two channels to the middle.
 
+        :param sample_name: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
+        :type sample_name: str | None
+
         :param mask: if True include masked probes in Infinium-I probes. No big difference is noted in practice. More
             probes are generally better. Default: True
         :type mask: bool
@@ -818,7 +807,7 @@ class Samples:
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
         sample_names = [sample_name] if isinstance(sample_name, str) else self.sample_names
 
-        total_intensity_type1 = self.get_total_ib_intensity(mask=False).loc['I']
+        total_intensity_type1 = self.get_total_ib_intensity(mask=False).loc['I'].sort_index()
 
         # check that there is not too much distortion between the two channels
         for sample_name in sample_names:
@@ -878,6 +867,9 @@ class Samples:
 
         Background was modelled in a normal distribution and true signal in an exponential distribution. The Norm-Exp
         deconvolution is parameterized using Out-Of-Band (oob) probes. Multi-mapping probes are excluded.
+
+        :param sample_name: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
+        :type sample_name: str | None
 
         :param mask: True removes masked probes, False keeps them. Default: True
         :type mask: bool
@@ -970,6 +962,9 @@ class Samples:
         Adds two columns in the signal dataframe, 'p_value' and 'poobah_mask'. Add probes that are (strictly) above the
         defined threshold to the mask.
 
+        :param sample_name: the name of the sample to use for the pOOBAH calculation. If None, use all samples.
+        :type sample_name: str | None
+
         :param mask: True removes masked probes from background, False keeps them. Default: True
         :type mask: bool
 
@@ -998,10 +993,7 @@ class Samples:
         # reset mask
         self.masks = initial_masks
 
-        if isinstance(sample_name, str):
-            sample_names = [sample_name]
-        else:
-            sample_names = self.sample_names
+        sample_names = [sample_name] if isinstance(sample_name, str) else self.sample_names
 
         for sample_name in sample_names:
             bg_green = get_column_as_flat_array(background_df[sample_name], 'G', remove_na=True)
@@ -1021,6 +1013,7 @@ class Samples:
             # set new columns with pOOBAH values
             p_value = np.min([pval_green, pval_red], axis=0)
             self._signal_df[(sample_name, 'p_value', '')] = p_value
+            self._signal_df = self._signal_df.sort_index(axis=1)  # sort the columns after adding a new one
 
             # add a mask for the sample, depending on the threshold
             poobah_mask = Mask(f'poobah_{threshold}', sample_name, p_value > threshold)

@@ -162,7 +162,7 @@ def type1_color_channels_stats(samples: Samples, sample_name : str) -> None:
 
     print_header(f'{sample_name} Type I color channel', False)
 
-    summary_inferred_channels = samples.infer_type1_channel(sample_name=sample_name, summary_only=True)[sample_name]
+    summary_inferred_channels = samples.infer_type1_channel(sample_name=sample_name, summary_only=True)
     print_value('Green to Green : ', summary_inferred_channels['G']['G'])
     print_value('Green to Red : ', summary_inferred_channels['G']['R'])
     print_value('Red to Red : ', summary_inferred_channels['R']['R'])

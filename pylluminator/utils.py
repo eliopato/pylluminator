@@ -440,3 +440,36 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
                 os.remove(target_filepath)  # remove archive
 
     return 1
+
+
+def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFrame:
+    """Use an existing column specified by argument `column` as the new channel index. To keep the column, set
+    `drop` to False
+
+    :param df: input dataframe
+    :type df: pandas.DataFrame
+
+    :param column: name of the column to use as the new channel index
+    :type column: str
+    :param drop: if set to False, keep the column used for the new index. Default: True
+
+    :return: the updated dataframe
+    :rtype: pandas.DataFrame"""
+
+    if column not in df.columns:
+        LOGGER.error(f'column {column} not found in df ({df.columns})')
+        return df
+
+    # save index levels order to keep the same index structure
+    lvl_order = df.index.names
+
+    if 'channel' in df.columns and column != 'channel':
+        LOGGER.warning('dropping existing column `channel`')
+        df = df.drop(columns=['channel'])
+
+    if drop:
+        df.rename(columns={column: 'channel'}, inplace=True)
+    else:
+        df['channel'] = df[column]  # copy values in a new column
+
+    return df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order).sort_index()

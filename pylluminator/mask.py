@@ -1,4 +1,5 @@
 import pandas as pd
+
 from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
@@ -80,7 +81,6 @@ class MaskCollection:
         else:
             self.masks.pop((mask_name, sample_name), None)  # remove a specific mask
 
-    # define a copy method
     def copy(self):
         new_mask_collection = MaskCollection()
         for mask in self.masks.values():
@@ -96,3 +96,12 @@ class MaskCollection:
 
     def __repr__(self):
         return self.__str__()
+
+    def __getitem__(self, item: int | str) -> Mask | None:
+        if isinstance(item, str):
+            return self.get_mask(mask_name=item)
+
+        if isinstance(item, int) and item < len(self.masks):
+            return list(self.masks.values())[item]
+
+        return None
