@@ -301,9 +301,9 @@ class Samples:
         return self.sample_names
 
     def __repr__(self):
-        description = f'Samples object with {self.nb_samples} samples\n'
+        description = f'Samples object with {self.nb_samples} samples ({self.sample_names}\n'
         description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
-        description += self._signal_df.__repr__()
+        # description += self._signal_df.__repr__()
 
         return description
 
@@ -701,7 +701,7 @@ class Samples:
             type2 = self.type2(mask)[sample_name].sum(axis=1, min_count=1)
             series.append(pd.concat([ib_red, ib_green, type2]))
 
-        df = pd.concat(series, axis=1)
+        df = pd.concat(series, axis=1).sort_index()
         df.columns = sample_names
         return df
 

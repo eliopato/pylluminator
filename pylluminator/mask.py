@@ -31,10 +31,10 @@ class MaskCollection:
             raise ValueError("mask must be an instance of Mask.")
 
         if (mask.mask_name, mask.sample_name) in self.masks:
-            LOGGER.warning(f"{mask} already exists, overriding it.")
+            LOGGER.info(f"{mask} already exists, overriding it.")
 
         if mask.series is None:
-            LOGGER.warning(f"{mask} has no masked probes.")
+            LOGGER.info(f"{mask} has no masked probes.")
             return None
 
         self.masks[(mask.mask_name, mask.sample_name)] = mask
