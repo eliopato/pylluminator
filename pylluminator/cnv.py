@@ -47,6 +47,7 @@ def copy_number_variation(samples: Samples, sample_name: str, normalization_samp
     for norm_sample_name in normalization_samples_names:
         if norm_sample_name not in available_samples:
             LOGGER.error(f'Normalization sample {norm_sample_name} not found in the Samples object')
+    normalization_samples_names = [n for n in normalization_samples_names if n in available_samples]
 
     # get normalization samples
     if normalization_samples_names is None or len(normalization_samples_names) == 0:
@@ -54,8 +55,8 @@ def copy_number_variation(samples: Samples, sample_name: str, normalization_samp
         normal_samples = get_normalization_samples(samples.annotation)
 
         if normal_samples is None:
-            LOGGER.error('Please provide samples to use as normalization')
-            return None
+            print('Please provide samples to use as normalization')
+            # return None
 
         norm_intensities = normal_samples.get_total_ib_intensity()
 

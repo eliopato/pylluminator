@@ -98,8 +98,14 @@ class Samples:
         """
         # idx = pd.IndexSlice
         type_ii_df = self.get_signal_df(mask).xs('II', level='type', drop_level=False)  # get only type II probes
+        # type_ii_df = type_ii_df.loc[:, ((type_ii_df.columns.get_level_values('signal_channel') == 'R')
+        #                                 & (type_ii_df.columns.get_level_values('methylation_state') == 'U'))
+        #                                | ((type_ii_df.columns.get_level_values('signal_channel') == 'G')
+        #                                   & (type_ii_df.columns.get_level_values('methylation_state') == 'M'))]
+        type_ii_df = type_ii_df.loc[:, type_ii_df.columns.get_level_values('signal_channel').isin(['R', 'G'])]
         # return type_ii_df.loc[[idx[:, 'R', 'U'], idx[:, 'G', 'M']]]  # select non-NAN columns
-        return type_ii_df.dropna(axis=1, how='all')
+        # return type_ii_df.dropna(axis=1, how='all')
+        return type_ii_df
 
     def oob(self, mask: bool=True) -> pd.DataFrame | None:
         """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `mask` is True
@@ -424,12 +430,13 @@ class Samples:
         :rtype: pandas.DataFrame
         """
         sigdf = self._signal_df.copy()
+        sample_names = self.sample_names
 
         if mask:
             # set probes to NA for all samples with the common mask
             common_mask = self.masks.get_mask()
             if common_mask is not None:
-                sigdf.loc[common_mask] = None
+                sigdf.loc[common_mask, sample_names] = None
 
             # then mask probes per sample if needed
             for sample_name in self.sample_names:
@@ -665,13 +672,17 @@ class Samples:
 
         mean_intensity = dict()
         for sample_name in sample_names:
-            mean_intensity[sample_name] = sig_df[sample_name].mean(axis=None)
+            mean_intensity[sample_name] = sig_df[sample_name].mean(axis=None, skipna=True) #  masked rows stay NaN
 
         return mean_intensity
 
     def get_total_ib_intensity(self, sample_name: str | None = None, mask: bool = True) -> pd.DataFrame:
         """Computes the total intensity of all the in-band measurements. This includes all Type-I in-band measurements
         and all Type-II probe measurements. Both methylated and unmethylated alleles are considered.
+
+        :param sample_name: the name of the sample to get total in-band intensity values for. If None, return total
+            in-band intensity values for every sample.
+        :type sample_name: str | None
 
         :param mask: set to False if you don't want any mask to be applied. Default: True
         :type mask: bool
@@ -683,10 +694,11 @@ class Samples:
 
         series = []
 
+        # sum the intensities for each probe (rows), but keep the columns separated by sample. Masked rows stay NaN
         for sample_name in sample_names:
-            ib_red = self.ib_red(mask)[sample_name].sum(axis=1)
-            ib_green = self.ib_green(mask)[sample_name].sum(axis=1)
-            type2 = self.type2(mask)[sample_name].sum(axis=1)
+            ib_red = self.ib_red(mask)[sample_name].sum(axis=1, min_count=1)
+            ib_green = self.ib_green(mask)[sample_name].sum(axis=1, min_count=1)
+            type2 = self.type2(mask)[sample_name].sum(axis=1, min_count=1)
             series.append(pd.concat([ib_red, ib_green, type2]))
 
         df = pd.concat(series, axis=1)
