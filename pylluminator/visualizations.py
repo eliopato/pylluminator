@@ -506,7 +506,7 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, samples: Samples, nb_probes: int = 100, 
         return
 
     # sort betas per p-value
-    betas = samples.get_betas(drop_na=drop_na)
+    betas = samples.get_betas()
     sorted_probes = dmp.sort_values('p_value').index
     sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes]
 
@@ -851,10 +851,11 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
     is_gene_in_interval &= (probe_info_df.start >= gene_transcript_start) & (probe_info_df.start <= gene_transcript_end)
     is_gene_in_interval &= (probe_info_df.end >= gene_transcript_start) & (probe_info_df.end <= gene_transcript_end)
     gene_probes = probe_info_df[is_gene_in_interval][['probe_id', 'start', 'end']].drop_duplicates().set_index('probe_id')
-    gene_betas = samples.betas(mask).reset_index('probe_id').reset_index(drop=True).set_index('probe_id')
+    gene_betas = samples.get_betas(mask=mask)
+    gene_betas = set_level_as_index(gene_betas, 'probe_id', drop_others=True)
     betas_location = gene_betas.join(gene_probes, how='inner').sort_values('start')
 
-    print(chromosome, gene_transcript_start, gene_transcript_end)
+    print(f'chromosome {chromosome}, pos {gene_transcript_start} - {gene_transcript_end}')
 
     ################## PLOT LINKS BETWEEN TRANSCRIPTS AND BETAS
 
