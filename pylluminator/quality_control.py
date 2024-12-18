@@ -57,6 +57,8 @@ def detection_stats(samples: Samples, sample_name: str, mask=False) -> None:
 
     :param samples: Samples object containing the sample to check
     :type samples: Samples
+    :param sample_name: name of the sample to print the stats of
+    :type sample_name: str
     :param mask: True removes masked probes, False keeps them. Default False
     :type mask: bool
 
@@ -134,8 +136,10 @@ def intensity_stats(samples: Samples, sample_name: str, mask=False) -> None:
 def nb_probes_stats(samples: Samples, sample_name: str, mask=False) -> None:
     """Print probe counts per Infinium type and Probe type
 
-    :param sample: sample to print the stats of
-    :type sample: Sample
+    :param samples: samples to print the stats of
+    :type samples: Samples
+    :param sample_name: name of the sample to print the stats of
+    :type sample_name: str
     :param mask: True removes masked probes, False keeps them. Default False
     :type mask: bool
 
@@ -175,8 +179,10 @@ def type1_color_channels_stats(samples: Samples, sample_name : str) -> None:
 def dye_bias_stats(samples: Samples, sample_name: str, mask=False) -> None:
     """Print dye bias stats for Infinium type I probes
 
-    :param sample: sample to print the stats of
-    :type sample: Sample
+    :param samples: samples to print the stats of
+    :type samples: Samples
+    :param sample_name: name of the sample to print the stats of
+    :type sample_name: str
     :param mask: True removes masked probes, False keeps them. Default False
     :type mask: bool
 
@@ -206,6 +212,8 @@ def betas_stats(samples: Samples, sample_name: str, mask=False) -> None:
 
     :param samples: samples to print the stats of
     :type samples: Samples
+    :param sample_name: name of the sample to print the stats of
+    :type sample_name: str
     :param mask: True removes masked probes, False keeps them.  Default False
     :type mask: bool
 
