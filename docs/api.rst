@@ -9,9 +9,9 @@ API
     pylluminator.annotations
     pylluminator.cnv
     pylluminator.dm
+    pylluminator.mask
     pylluminator.quality_control
     pylluminator.read_idat
-    pylluminator.sample
     pylluminator.sample_sheet
     pylluminator.samples
     pylluminator.stats

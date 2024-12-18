@@ -22,6 +22,19 @@ LOGGER = get_logger()
 
 class Samples:
     """
+     Samples objects hold sample methylation signal in a dataframe, as well as annotation information, sample sheet data
+      and probes masks.
+
+    :ivar annotation: probes metadata. Default: None.
+    :vartype annotation: Annotations | None
+    :ivar sample_sheet: samples information given by the csv sample sheet. Default: None
+    :vartype sample_sheet: pandas.DataFrame | None
+    :ivar min_beads: minimum number of beads required for a probe to be considered. Default: None
+    :vartype min_beads: int | None
+    :ivar idata: dictionary of dataframes containing the raw signal values for each sample and channel. Default: {}
+    :vartype idata: dict[str, dict[Channel, pandas.DataFrame]]
+    :ivar masks: collection of probes masks. Default: MaskCollection()
+    :vartype masks: MaskCollection
     """
 
     def __init__(self, sample_sheet_df: pd.DataFrame | None = None):

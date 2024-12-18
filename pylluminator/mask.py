@@ -1,3 +1,4 @@
+"""Classes that handles probes masks"""
 import pandas as pd
 
 from pylluminator.utils import get_logger
@@ -5,7 +6,25 @@ from pylluminator.utils import get_logger
 LOGGER = get_logger()
 
 class Mask:
+    """
+    A mask is a set of probes that are masked for a specific sample or for all samples.
+
+    :var mask_name: the name of the mask
+    :vartype mask_name: str
+    :var sample_name: the name of the sample the mask is applied to
+    :vartype sample_name: str
+    :var series: a pandas Series of booleans, where True indicates that the probe is masked
+    :vartype series: pd.Series
+    """
     def __init__(self, mask_name: str, sample_name: str | None, series: pd.Series):
+        """Create a new Mask object.
+        
+        :param mask_name: the name of the mask
+        :type mask_name: str
+        :param sample_name: the name of the sample the mask is applied to. Default: None
+        :type sample_name: str | None
+        :param series: a pandas Series of booleans, where True indicates that the probe is masked
+        :type series: pd.Series"""
         self.mask_name = mask_name
         self.sample_name = sample_name
         self.series = series
@@ -19,14 +38,23 @@ class Mask:
 
     # define a copy method
     def copy(self):
+        """Creates a copy of the Mask object."""
         return Mask(self.mask_name, self.sample_name, self.series.copy())
 
 class MaskCollection:
+    """A collection of masks, each mask is a set of probes that are masked for a specific sample or for all samples.
+
+    :var masks: a dictionary of masks, where the key is a tuple (mask_name, sample_name) and the value is a Mask object
+    :vartype masks: dict
+    """
     def __init__(self):
         self.masks = {}
 
     def add_mask(self, mask: Mask) -> None:
-        """Add a new mask to the collection."""
+        """Add a new mask to the collection.
+
+        :param mask: the mask to add
+        :type mask: Mask"""
         if not isinstance(mask, Mask):
             raise ValueError("mask must be an instance of Mask.")
 
@@ -39,8 +67,13 @@ class MaskCollection:
 
         self.masks[(mask.mask_name, mask.sample_name)] = mask
 
-    def get_mask(self, mask_name=None, sample_name: str| None=None) -> pd.Series | None:
-        """Retrieve a mask by name and scope."""
+    def get_mask(self, mask_name: str | None =None, sample_name: str| None=None) -> pd.Series | None:
+        """Retrieve a mask by name and scope.
+
+        :param mask_name: the name of the mask. Default: None
+        :type mask_name: str | None
+        :param sample_name: the name of the sample the mask is applied to. Default: None
+        :type sample_name: str | None"""
         # to get a specific sample mask, retrieve the common mask and apply the sample mask on top of it
         if sample_name is None:
             mask_series = None
@@ -57,8 +90,13 @@ class MaskCollection:
 
         return mask_series
 
-    def number_probes_masked(self, mask_name=None, sample_name: str| None=None) -> int:
+    def number_probes_masked(self, mask_name: str | None =None, sample_name: str| None=None) -> int:
         """Return the number or masked probes for a specific sample or for all samples if no sample name is provided.
+
+        :param mask_name: the name of the mask. Default: None
+        :type mask_name: str | None
+        :param sample_name: the name of the sample the mask is applied to. Default: None
+        :type sample_name: str | None
 
         :return: number of masked probes
         :rtype: int"""
@@ -68,9 +106,15 @@ class MaskCollection:
         """Reset all masks."""
         self.masks = {}
 
-    def remove_masks(self, mask_name=None, sample_name: str| None=None) -> None:
+    def remove_masks(self, mask_name : str | None=None, sample_name: str| None=None) -> None:
         """Reset the mask for a specific sample or for all samples if no sample name is provided.
 
+        :param mask_name: the name of the mask. Default: None
+        :type mask_name: str | None
+        :param sample_name: the name of the sample the mask is applied to. Default: None
+        :type sample_name: str | None
+
+        :return: None
         """
         if sample_name is None and mask_name is None:
             self.reset_masks()
@@ -82,6 +126,7 @@ class MaskCollection:
             self.masks.pop((mask_name, sample_name), None)  # remove a specific mask
 
     def copy(self):
+        """Creates a copy of the MaskCollection object."""
         new_mask_collection = MaskCollection()
         for mask in self.masks.values():
             new_mask_collection.add_mask(mask.copy())
