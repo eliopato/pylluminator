@@ -56,6 +56,8 @@ def get_dmp(samples: Samples, formula: str, drop_na=False) -> pd.DataFrame | Non
         - https://www.statsmodels.org/devel/gettingstarted.html
         - https://patsy.readthedocs.io/en/latest/overview.html
 
+    :param samples: samples to use
+    :type samples: Samples
     :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
     :type formula: str
     :param drop_na: drop probes that have NA values. Default: False
@@ -111,8 +113,8 @@ def get_dmp(samples: Samples, formula: str, drop_na=False) -> pd.DataFrame | Non
 def get_dmr(samples: Samples, dmp: pd.DataFrame, dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
     """Find Differentially Methylated Regions (DMR) based on euclidian distance between beta values
 
-    :param betas: beta values of all the samples to use to find DMRs, as returned by Samples.get_betas()
-    :type betas: pandas.DataFrame
+    :param samples: samples to use
+    :type samples: Samples
     :param dmp: p-values and statistics for each probe, as returned by get_dmp()
     :type dmp: pandas.DataFrame
     :param dist_cutoff: cutoff used to find change points between DMRs, used on euclidian distance between beta values.

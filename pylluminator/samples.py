@@ -669,6 +669,9 @@ class Samples:
         """Computes the mean intensity of all the in-band measurements. This includes all Type-I in-band measurements
         and all Type-II probe measurements. Both methylated and unmethylated alleles are considered.
 
+        :param sample_name: the name of the sample to get mean in-band intensity values for. If None, return mean
+            in-band intensity values for every sample.
+        :type sample_name: str | None
         :param mask: set to False if you don't want any mask to be applied. Default: True
         :type mask: bool
 
@@ -765,6 +768,10 @@ class Samples:
 
         :param sample_name: the name of the sample to get beta values for. If None, return beta values for all samples.
         :type sample_name: str | None
+        :param drop_na: if set to True, drop rows with NA values. Default: False
+        :type drop_na: bool
+        :param mask: set to False if you don't want any mask to be applied. Default: False
+        :type mask: bool
 
         :return: beta values
         :rtype: pandas.DataFrame"""
@@ -962,6 +969,8 @@ class Samples:
 
         This function is meant to be used after noob.
 
+        :param  sample_name: the name of the sample to scrub background for. If None, scrub background for all samples.
+        :type sample_name: str | None
         :param mask: True removes masked probes, False keeps them. Default: True
         :type mask: bool
 

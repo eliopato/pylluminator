@@ -72,9 +72,9 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_colum
 
 def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict):
     """Define the line style to use for each sample, depending on the column used to categorized them.
+
     :param sheet: sample sheet data frame
     :type sheet: pandas.DataFrame
-
     :param column: name of the column of the sample sheet to use. If None, the function will return empty objects.
     :type column: str | None
 
@@ -252,7 +252,7 @@ def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=1
 
     plt.show()
 
-
+# todo
 def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None, save_path: None | str=None) -> None:
     """Plot beta values split by Infinium design type (I and II)
 
@@ -580,7 +580,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     data_to_plot['merged_chr'] = merge_alt_chromosomes(data_to_plot[chromosome_col])
 
     # convert the chromosome column to int values
-    if data_to_plot.dtypes[chromosome_col] != int:
+    if data_to_plot.dtypes[chromosome_col] is not int:
         data_to_plot['chr_id'] = get_chromosome_number(data_to_plot['merged_chr'], True)
         data_to_plot = data_to_plot.astype({'chr_id': 'int'})
     else:
