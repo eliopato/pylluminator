@@ -11,7 +11,7 @@ import os
 from pylluminator.utils import get_resource_folder, get_logger, convert_to_path, download_from_link
 
 LOGGER = get_logger()
-ILLUMINA_DATA_LINK = 'https://github.com/eliopato/pylluminator-data/raw/main/'
+PYLLUMINA_DATA_LINK = 'https://github.com/eliopato/pylluminator-data/raw/main/'
 
 
 def get_or_download_annotation_data(annotation_name: str, data_type:str,  output_folder: str | MultiplexedPath | os.PathLike, dl_link: str) -> pd.DataFrame | None:
@@ -160,7 +160,7 @@ class GenomeInfo:
             return
 
         folder_genome = get_resource_folder(f'genome_info.{name}.{genome_version}')
-        dl_link = f'{ILLUMINA_DATA_LINK}/genome_info/{genome_version}/'
+        dl_link = f'{PYLLUMINA_DATA_LINK}/genome_info/{genome_version}/'
 
         # read all the csv files
         for info in ['gap_info', 'seq_length', 'chromosome_regions', 'transcripts_exons', 'transcripts_list']:
@@ -237,7 +237,7 @@ class Annotations:
         # load probe_info and genomic_ranges files
 
         data_folder = get_resource_folder(f'annotations.{self.name}.{self.genome_version}.{self.array_type}')
-        dl_link = f'{ILLUMINA_DATA_LINK}/annotations/{self.genome_version}/{self.array_type}/'
+        dl_link = f'{PYLLUMINA_DATA_LINK}/annotations/{self.genome_version}/{self.array_type}/'
 
         df = get_or_download_annotation_data(name, 'probe_infos', data_folder, dl_link)
 

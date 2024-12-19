@@ -382,7 +382,7 @@ def download_from_geo(gsm_ids_to_download: str | list[str], target_directory: st
             download_from_link(dl_link, target_directory, f'{gsm_id}.tar', decompress=True)
 
 
-def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str,
+def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str | None = None,
                        decompress=False, delete_archive=False) -> int:
     """Download a file and save it to the target.
 
@@ -408,21 +408,23 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
     :rtype: int"""
 
     output_folder = convert_to_path(output_folder)
-    target_filepath = output_folder.joinpath(filename)
+    if filename is not None:
+        target_filepath = output_folder.joinpath(filename)
+    else:
+        target_filepath = output_folder.joinpath(dl_link.split('/')[-1])
 
-    if target_filepath.exists():
-        return 1
+    if not target_filepath.exists():
 
-    LOGGER.debug(f'file {filename} not found in {output_folder}, trying to download it from {dl_link}')
+        LOGGER.debug(f'file {filename} not found in {output_folder}, trying to download it from {dl_link}')
 
-    os.makedirs(output_folder, exist_ok=True)  # create destination directory
+        os.makedirs(output_folder, exist_ok=True)  # create destination directory
 
-    try:
-        urllib.request.urlretrieve(dl_link, target_filepath)
-        LOGGER.info(f'{filename} download successful')
-    except:
-        LOGGER.info(f'download of {filename} from {dl_link} failed, try downloading it manually and save it in {output_folder}')
-        return -1
+        try:
+            urllib.request.urlretrieve(dl_link, target_filepath)
+            LOGGER.info(f'{filename} download successful')
+        except:
+            LOGGER.info(f'download of {filename} from {dl_link} failed, try downloading it manually and save it in {output_folder}')
+            return -1
 
     if decompress:
         if filename.endswith('.zip'):

@@ -12,7 +12,7 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
-from pylluminator.utils import get_column_as_flat_array, set_channel_index_as
+from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix
 from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
@@ -117,8 +117,8 @@ class Samples:
         #                                   & (type_ii_df.columns.get_level_values('methylation_state') == 'M'))]
         type_ii_df = type_ii_df.loc[:, type_ii_df.columns.get_level_values('signal_channel').isin(['R', 'G'])]
         # return type_ii_df.loc[[idx[:, 'R', 'U'], idx[:, 'G', 'M']]]  # select non-NAN columns
-        # return type_ii_df.dropna(axis=1, how='all')
-        return type_ii_df
+        return type_ii_df.dropna(axis=1, how='all')
+        # return type_ii_df
 
     def oob(self, mask: bool=True) -> pd.DataFrame | None:
         """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `mask` is True
@@ -320,6 +320,19 @@ class Samples:
 
         return description
 
+    def copy(self):
+        """Create a copy of the Samples object
+
+        :return: a copy of the object
+        :rtype: Samples"""
+        new_samples = Samples(self.sample_sheet)
+        new_samples.annotation = self.annotation
+        new_samples.min_beads = self.min_beads
+        new_samples.idata = self.idata.copy()
+        new_samples.masks = self.masks.copy()
+        new_samples._signal_df = self._signal_df.copy()
+        return new_samples
+
     def save(self, filepath: str) -> None:
         """Save the current Samples object to `filepath`, as a pickle file
 
@@ -338,6 +351,10 @@ class Samples:
 
         :return: the loaded object"""
         return load_object(filepath, Samples)
+
+    ####################################################################################################################
+    # Data loading
+    ####################################################################################################################
 
     def merge_annotation_info(self, annotation: Annotations, keep_idat=False, min_beads=1) -> None:
         """Merge manifest dataframe with probe signal values read from idat files to build the signal dataframe, adding
@@ -1178,90 +1195,87 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     LOGGER.info('reading sample files done\n')
     return samples
 
+def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations) -> Samples:
+    """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
+
+    :param datadir:  directory where sesame files are, or path to a .csv file
+    :type datadir: str | os.PathLike | MultiplexedPath
+
+    :param annotation: Annotations object with genome version and array type corresponding to the data stored
+    :type annotation: Annotations
+
+    :return: a Samples object
+    :rtype: Samples"""
+    LOGGER.info('>> start reading sesame files')
+
+    # fin all .csv files in the subtree depending on datadir type
+    if '.csv' in str(convert_to_path(datadir)):
+        file_list = [datadir]
+    else:
+        file_list = get_files_matching(datadir, '*.csv*')
+
+    samples = Samples()
+    samples.annotation = annotation
+    sample_names = [f.stem.split('.csv')[0] for f in file_list]
+    samples.sample_sheet = pd.DataFrame({'sample_id': sample_names, 'sample_name': sample_names})
+    dfs = []
+
+    # load all samples
+    for csv_file in file_list:
+
+        name = Path(csv_file).stem
+
+        # read input file
+        sig_df = pd.read_csv(csv_file, low_memory=False)
+        sig_df = sig_df.rename(columns={'col': 'channel', 'Probe_ID': 'probe_id'})
+
+        # prepare manifest for merge
+        manifest = annotation.probe_infos.loc[:, ['probe_id', 'type', 'probe_type', 'channel', 'mask_info']]
+        # remove probe suffix from manifest as they are not in SigDF files
+        manifest['probe_id_to_join'] = manifest.probe_id.apply(remove_probe_suffix)
+        manifest = manifest.set_index('probe_id_to_join')
+        sig_df = sig_df.set_index('probe_id').drop(columns='channel', errors='ignore')
+
+        # merge manifest and mask
+        sample_df = sig_df.join(manifest, how='inner').set_index('probe_id')
+
+        # move Green type II probes values to MG column
+        sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']
+        sample_df.loc[sample_df.type == 'II', 'UG'] = np.nan
+
+        # set signal channel for type II probes
+        sample_df.loc[(sample_df.type == 'II') & (sample_df.MG.isna()), 'channel'] = 'R'
+        sample_df.loc[(sample_df.type == 'II') & (sample_df.UR.isna()), 'channel'] = 'G'
+
+        # make multi-index for rows and columns
+        sample_df = sample_df.reset_index().set_index(['type', 'channel', 'probe_type', 'probe_id'])
+        sample_df = sample_df.loc[:, ['UR', 'MR', 'MG', 'UG', 'mask', 'mask_info']]  # order columns
+        sample_df.columns = pd.MultiIndex.from_tuples([('R', 'U'), ('R', 'M'), ('G', 'M'), ('G', 'U'), ('mask', ''), ('mask_info', '')])
+
+        # set mask as specified in the input file, then drop the mask column
+        samples.masks.add_mask(Mask('sesame', name, sample_df['mask']))
+        sample_df = sample_df.sort_index(axis=1).drop(columns='mask')
+        dfs.append(sample_df)
+
+    samples._signal_df = pd.concat(dfs, axis=1, keys=sample_names)
+
+    LOGGER.info('done reading sesame files\n')
+    return samples
+
+
+# def from_sesame(filepath: str | os.PathLike, annotation: Annotations, name: str | None = None):
+#     """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object.
 #
-#     @staticmethod
-#     def from_sesame(filepath: str | os.PathLike, annotation: Annotations, name: str | None = None):
-#         """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object.
+#      :param filepath: file containing the sigdf to read
+#      :type filepath: str | os.PathLike
 #
-#          :param filepath: file containing the sigdf to read
-#          :type filepath: str | os.PathLike
-#
-#         :param annotation: annotation data corresponding to the sample
-#         :type annotation: Annotations
-#
-#         :param name: sample name
-#         :type name: str
-#
-#         :return: None"""
-#         filepath = os.path.expanduser(filepath)
-#
-#         LOGGER.debug(f'read {filepath}')
-#
-#         if name is None:
-#             name = Path(filepath).stem
-#
-#         sample = Sample(name)
-#         sample.annotation = annotation
-#
-#         # read input file
-#         sig_df = pd.read_csv(filepath, low_memory=False)
-#         sig_df = sig_df.rename(columns={'col': 'channel', 'Probe_ID': 'probe_id'})
-#
-#         # prepare manifest for merge
-#         manifest = annotation.probe_infos.loc[:, ['probe_id', 'type', 'probe_type', 'channel']]
-#         manifest = manifest.rename(columns={'channel': 'manifest_channel'})
-#         # remove probe suffix from manifest as they are not in SigDF files
-#         manifest['probe_id_to_join'] = manifest.probe_id.apply(remove_probe_suffix)
-#         manifest = manifest.set_index('probe_id_to_join')
-#         sig_df = sig_df.set_index('probe_id')
-#
-#         # merge manifest and mask
-#         sample_df = sig_df.join(manifest, how='inner').set_index('probe_id')
-#
-#         # move Green type II probes values to MG column
-#         sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']
-#         sample_df.loc[sample_df.type == 'II', 'UG'] = np.nan
-#
-#         # set signal channel for type II probes
-#         sample_df.loc[(sample_df.type == 'II') & (sample_df.MG.isna()), 'channel'] = 'R'
-#         sample_df.loc[(sample_df.type == 'II') & (sample_df.UR.isna()), 'channel'] = 'G'
-#
-#         # make multi-index for rows and columns
-#         sample_df = sample_df.reset_index().set_index(['type', 'channel', 'probe_type', 'probe_id'])
-#         sample_df = sample_df.loc[:, ['UR', 'MR', 'MG', 'UG', 'mask', 'manifest_channel', 'mask_info']]  # order columns
-#         sample_df.columns = pd.MultiIndex.from_tuples([('R', 'U'), ('R', 'M'), ('G', 'M'), ('G', 'U'),
-#                                                        ('mask', ''), ('manifest_channel', ''), ('mask_info', '')])
-#
-#         # set mask as specified in the input file, then drop the mask column
-#         sample.mask_indexes(sample_df[sample_df['mask']].index)
-#         sample.signal_df = sample_df.drop(columns=('mask', ''))
-#
-#         return sample
-#
-#
-#
-# def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations) -> Samples:
-#     """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
-#
-#     :param datadir:  directory where sesame files are
-#     :type datadir: str | os.PathLike | MultiplexedPath
-#
-#     :param annotation: Annotations object with genome version and array type corresponding to the data stored
+#     :param annotation: annotation data corresponding to the sample
 #     :type annotation: Annotations
 #
-#     :return: a Samples object
-#     :rtype: Samples"""
-#     LOGGER.info('>> start reading sesame files')
-#     samples = Samples(None)
-#     samples.annotation = annotation
+#     :param name: sample name
+#     :type name: str
 #
-#     # fin all .csv files in the subtree depending on datadir type
-#     file_list = get_files_matching(datadir, '*.csv')
+#     :return: None"""
 #
-#     # load all samples
-#     for csv_file in file_list:
-#         sample = Sample.from_sesame(csv_file, annotation)
-#         samples.samples[sample.name] = sample
 #
-#     LOGGER.info('done reading sesame files\n')
-#     return samples
+#     return sample

@@ -65,6 +65,7 @@ def detection_stats(samples: Samples, sample_name: str, mask=False) -> None:
     :return: None"""
     print_header('Detection', mask)
     poobah_threshold = 0.05
+    samples = samples.copy()  # we don't want changes (mask) from poobah to change the samples object
 
     samples.poobah(sample_name, mask, True, threshold=poobah_threshold)
     # p_values_df = samples.get_signal_df(mask).xs('p_value', level='signal_channel', axis=1)
@@ -114,11 +115,11 @@ def intensity_stats(samples: Samples, sample_name: str, mask=False) -> None:
 
     print_value('Mean in-band signal intensity', samples.get_mean_ib_intensity(sample_name, mask)[sample_name])
     print_value('Mean in-band signal intensity (M+U)', samples.get_total_ib_intensity(sample_name, mask).mean()[sample_name])
-    print_value('Mean in-band type II signal intensity ', samples.type2(mask).mean(axis=None, skipna=True))
-    print_value('Mean in-band type I Red signal intensity ', samples.ib_red(mask).mean(axis=None, skipna=True))
-    print_value('Mean in-band type I Green signal intensity ', samples.ib_green(mask).mean(axis=None, skipna=True))
-    print_value('Mean out-of-band type I Red signal intensity ', samples.oob_green(mask).mean(axis=None, skipna=True))
-    print_value('Mean out-of-band type I Green signal intensity ', samples.oob_red(mask).mean(axis=None, skipna=True))
+    print_value('Mean in-band type II signal intensity ', samples.type2(mask)[sample_name].mean(axis=None, skipna=True))
+    print_value('Mean in-band type I Red signal intensity ', samples.ib_red(mask)[sample_name].mean(axis=None, skipna=True))
+    print_value('Mean in-band type I Green signal intensity ', samples.ib_green(mask)[sample_name].mean(axis=None, skipna=True))
+    print_value('Mean out-of-band type I Red signal intensity ', samples.oob_red(mask)[sample_name].mean(axis=None, skipna=True))
+    print_value('Mean out-of-band type I Green signal intensity ', samples.oob_green(mask)[sample_name].mean(axis=None, skipna=True))
 
     type_i_m_na = pd.isna(samples.meth(mask).loc['I', sample_name]).values.sum()
     type_ii_m_na = pd.isna(samples.meth(mask).loc['II', sample_name]['G']).values.sum()
@@ -220,6 +221,7 @@ def betas_stats(samples: Samples, sample_name: str, mask=False) -> None:
     :return: None"""
 
     print_header('Betas', mask)
+    samples = samples.copy()   # we don't want changes from processing to change the samples object
 
     samples.dye_bias_correction_nl(sample_name, mask)
     samples.noob_background_correction(sample_name, mask)

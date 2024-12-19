@@ -10,9 +10,9 @@ import numpy as np
 import linear_segment
 from sklearn.linear_model import LinearRegression
 
-from pylluminator.samples import Samples, read_samples
-from pylluminator.annotations import ArrayType, Annotations
-from pylluminator.utils import get_resource_folder, get_files_matching, download_from_geo
+from pylluminator.samples import Samples, read_samples, from_sesame
+from pylluminator.annotations import ArrayType, Annotations, get_or_download_annotation_data, PYLLUMINA_DATA_LINK
+from pylluminator.utils import get_resource_folder, get_files_matching, download_from_geo, download_from_link
 from pylluminator.utils import set_logger, get_logger, get_logger_level
 
 LOGGER = get_logger()
@@ -153,40 +153,27 @@ def get_normalization_samples(annotation: Annotations) -> Samples | None:
     :rtype: Samples | None"""
     LOGGER.info('Getting normalization samples')
 
-    log_level = get_logger_level()
-    set_logger('WARNING')  # set log level to Debug to hide loading log messages
-
     if annotation.array_type == ArrayType.HUMAN_EPIC_V2:
 
         idat_dir = get_resource_folder('arrays.epic_v2_normalization_data')
         gsm_ids = ['GSM7139626', 'GSM7139627']
         download_from_geo(gsm_ids, idat_dir)
-        set_logger(log_level)
         return read_samples(idat_dir, annotation=annotation)
 
     if annotation.array_type == ArrayType.HUMAN_EPIC:
 
         datadir = get_resource_folder('arrays.epic_normalization_data')
-
-        datafiles_csv = get_files_matching(datadir, '*.csv')
-        datafiles_zip = get_files_matching(datadir, '*.zip')
-
-        # if there are less .csv files than .zip files, unzip them
-        if len(datafiles_csv) < len(datafiles_zip):
-            datadir_str = datadir.joinpath('*').parent
-            for zip_file in datafiles_zip:
-                with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-                    zip_ref.extractall(datadir_str)
-        set_logger(log_level)
-        return Samples.from_sesame(datadir, annotation)
-
-    set_logger(log_level)
+        files = ['NAF.A.csv.gz', 'NAF.B.csv.gz', 'NAF.C.csv.gz', 'PrEC.Rep1.csv.gz', 'PrEC.Rep2.csv.gz']
+        missing_files = [f for f in files if not datadir.joinpath(f).exists()]
+        for missing_file in missing_files:
+            download_from_link(f'{PYLLUMINA_DATA_LINK}/arrays/epic_normalization_data/{missing_file}', datadir)
+        return from_sesame(datadir, annotation)
 
     LOGGER.error(f'No predefined normalization data for array {annotation.array_type}')
     return None
 
 
-def merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: pr.PyRanges, minimum_overlap: int =20,
+def merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: pr.PyRanges, minimum_overlap: int = 20,
                                   precision:float = 1) -> pr.PyRanges:
     """Merge adjacent intervals from `pr_to_merge` until they have a minimum probes overlap such as defined in parameter
     `minimum_overlap`.
