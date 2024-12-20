@@ -1,5 +1,4 @@
 """Class that holds a collection of Sample objects and defines methods for batch processing."""
-
 import os
 import re
 import gc
@@ -704,7 +703,7 @@ class Samples:
 
         mean_intensity = dict()
         for sample_name in sample_names:
-            mean_intensity[sample_name] = sig_df[sample_name].mean(axis=None, skipna=True) #  masked rows stay NaN
+            mean_intensity[sample_name] = sig_df[sample_name][['R', 'G']].mean(axis=None, skipna=True) #  masked rows stay NaN
 
         return mean_intensity
 
@@ -854,29 +853,30 @@ class Samples:
         """
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
         sample_names = [sample_name] if isinstance(sample_name, str) else self.sample_names
-
-        total_intensity_type1 = self.get_total_ib_intensity(mask=False).loc['I'].sort_index()
+        type_1_green = self.type1_green(mask)
+        type_1_red = self.type1_red(mask)
 
         # check that there is not too much distortion between the two channels
         for sample_name in sample_names:
+            total_intensity_type1 = self.get_total_ib_intensity(sample_name = sample_name, mask=False).loc['I', sample_name].sort_index()  # 0.5 sec
 
-            median_red = np.median(total_intensity_type1.loc['R', sample_name])
-            median_green = np.median(total_intensity_type1.loc['G', sample_name])
+            median_red = np.median(total_intensity_type1.loc['R'])
+            median_green = np.median(total_intensity_type1.loc['G'])
 
-            top_20_median_red = np.median(total_intensity_type1.loc['R', sample_name].nlargest(20))
-            top_20_median_green = np.median(total_intensity_type1.loc['G', sample_name].nlargest(20))
+            top_20_median_red = np.median(total_intensity_type1.loc['R'].nlargest(20))  # 0.25 sec
+            top_20_median_green = np.median(total_intensity_type1.loc['G'].nlargest(20))  # 0.25 sec
 
             red_green_distortion = (top_20_median_red / top_20_median_green) / (median_red / median_green)
 
             if red_green_distortion is None or red_green_distortion > 10:
                 LOGGER.debug(f'Red-Green distortion is too high ({red_green_distortion}. Masking green probes')
-                type1_mask = pd.Series(self._signal_df.index.get_level_values('type') == 'I', self._signal_df.index)
+                type1_mask = pd.Series(self._signal_df.index.get_level_values('channel') == 'G', self._signal_df.index)
                 self.masks.add_mask(Mask('dye bias nl', sample_name, type1_mask))
                 return
 
             # all good, we can apply dye bias correction...
-            sorted_intensities = {'G': np.sort(get_column_as_flat_array(self.type1_green(mask)[sample_name], 'G')),
-                                  'R': np.sort(get_column_as_flat_array(self.type1_red(mask)[sample_name], 'R'))}
+            sorted_intensities = {'G': np.sort(get_column_as_flat_array(type_1_green[sample_name], 'G', remove_na=True)),
+                                  'R': np.sort(get_column_as_flat_array(type_1_red[sample_name], 'R', remove_na=True))}
 
             # ... if red or green channel intensities are not all 0
             if np.max(sorted_intensities['G']) <= 0 or np.max(sorted_intensities['R']) <= 0:
@@ -894,6 +894,11 @@ class Samples:
                 midpoint_intensities = (channel_intensities + normalized_intensities) / 2
                 max_midpoint_intensity = np.max(midpoint_intensities)
                 min_midpoint_intensity = np.min(midpoint_intensities)
+
+                # check that none of max or min intensities are none
+                if None in [max_intensity, min_intensity, max_midpoint_intensity, min_midpoint_intensity]:
+                    LOGGER.warning(f'Max or min intensities are None. Aborting dye bias correction for sample {sample_name}.')
+                    continue
 
                 def fit_function(data: np.array) -> np.array:
                     within_range = (data <= max_intensity) & (data >= min_intensity) & (~np.isnan(data))
