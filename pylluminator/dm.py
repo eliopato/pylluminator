@@ -18,7 +18,7 @@ from pylluminator.samples import Samples
 LOGGER = get_logger()
 
 
-def combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
+def _combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
     """shortcut to scipy's function, using Stouffer method to combine p-values. Only return the combined p-value
 
     :param p_values: p-values to combine
@@ -29,7 +29,7 @@ def combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
     return combine_pvalues(p_values, method='stouffer')[1]
 
 
-def get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str]) -> list[float]:
+def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str]) -> list[float]:
     """Create an Ordinary Least Square model for the beta values, using the design matrix provided, fit it and
     extract the required results for DMP detection (p-value, t-value, estimate, standard error)
 
@@ -98,11 +98,11 @@ def get_dmp(samples: Samples, formula: str, drop_na=False) -> pd.DataFrame | Non
 
     # if it's a small dataset, don't parallelize
     if len(betas) <= 10000:
-        result_array = [get_model_parameters(row[1:], design_matrix, factor_names) for row in betas.itertuples()]
+        result_array = [_get_model_parameters(row[1:], design_matrix, factor_names) for row in betas.itertuples()]
     # otherwise parallelize
     else:
         def wrapper_get_model_parameters(row):
-            return get_model_parameters(row, design_matrix, factor_names)
+            return _get_model_parameters(row, design_matrix, factor_names)
         result_array = Parallel(n_jobs=-1)(delayed(wrapper_get_model_parameters)(row[1:]) for row in betas.itertuples())
 
     LOGGER.info('get DMP done')
@@ -209,7 +209,7 @@ def get_dmr(samples: Samples, dmp: pd.DataFrame, dist_cutoff: float | None = Non
 
     # calculate each segment's p-values
     LOGGER.info('combining p-values, it might take a few minutes...')
-    dmr['segment_p_value'] = segments_grouped['p_value'].transform(combine_p_values_stouffer)
+    dmr['segment_p_value'] = segments_grouped['p_value'].transform(_combine_p_values_stouffer)
     nb_significant = len(dmr.loc[dmr.segment_p_value < 0.05, 'segment_id'].drop_duplicates())
     LOGGER.info(f' - {nb_significant} significant segments (p-value < 0.05)')
 

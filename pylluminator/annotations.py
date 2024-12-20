@@ -308,8 +308,8 @@ class Annotations:
 
     def __str__(self):
         if self.name == 'default':
-            return f'{self.array_type} - {self.genome_version} '
-        return f'{self.name} annotation - {self.array_type} - {self.genome_version} '
+            return f'{self.array_type} array - genome version {self.genome_version}\n'
+        return f'{self.name} annotation - {self.array_type} array - genome version {self.genome_version}\n'
 
     def __repr__(self):
         return self.__str__()
@@ -346,6 +346,6 @@ def detect_array(probe_count: int) -> ArrayType:
     if 315000 <= probe_count <= 362000:
         return ArrayType.MOUSE_MM285
 
-    LOGGER.warning(f'Could not detect array type from probe count ({probe_count:.}). It could be due to having samples '
+    LOGGER.warning(f'Could not detect array type from probe count ({probe_count:,}). It could be due to having samples '
                     'of mixed array types. Setting it to the most recent human type, EPIC v2')
     return ArrayType.HUMAN_EPIC_V2

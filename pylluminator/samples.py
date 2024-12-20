@@ -314,10 +314,9 @@ class Samples:
         return self.sample_names
 
     def __repr__(self):
-        description = f'Samples object with {self.nb_samples} samples ({self.sample_names}\n'
+        description = f'Samples object with {self.nb_samples} samples: {", ".join(self.sample_names)}\n'
         description += 'No annotation\n' if self.annotation is None else self.annotation.__repr__()
-        # description += self._signal_df.__repr__()
-
+        description += f'{len(self._signal_df):,} probes'
         return description
 
     def copy(self):

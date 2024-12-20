@@ -7,7 +7,7 @@ import pandas as pd
 from pylluminator.samples import Samples as Samples
 
 
-def print_header(title: str, mask=False) -> None:
+def _print_header(title: str, mask=False) -> None:
     """Format and print a QC section header
 
     :param title: title of the section header
@@ -26,7 +26,7 @@ def print_header(title: str, mask=False) -> None:
     print('===================================================================\n')
 
 
-def print_value(name: str, value) -> None:
+def _print_value(name: str, value) -> None:
     """Format and print a QC value
 
     :param name: name (description) of the value to display
@@ -41,7 +41,7 @@ def print_value(name: str, value) -> None:
     else:
         print(f'{name:<55} {value}')
 
-def print_pct(name: str, value) -> None:
+def _print_pct(name: str, value) -> None:
     """Format and print a QC percentage (x100 will be applied to the input value)
 
     :param name: name (description) of the value to display
@@ -63,7 +63,7 @@ def detection_stats(samples: Samples, sample_name: str, mask=False) -> None:
     :type mask: bool
 
     :return: None"""
-    print_header('Detection', mask)
+    _print_header('Detection', mask)
     poobah_threshold = 0.05
     samples = samples.copy()  # we don't want changes (mask) from poobah to change the samples object
 
@@ -78,25 +78,25 @@ def detection_stats(samples: Samples, sample_name: str, mask=False) -> None:
     missing_p_values = p_values_df.isna().sum()
 
     value_missing = missing_p_values + missing_from_manifest
-    print_value('N. Probes w/ Missing Raw Intensity', value_missing)
-    print_pct('% Probes w/ Missing Raw Intensity', value_missing / (len(p_values_df) + missing_from_manifest))
+    _print_value('N. Probes w/ Missing Raw Intensity', value_missing)
+    _print_pct('% Probes w/ Missing Raw Intensity', value_missing / (len(p_values_df) + missing_from_manifest))
 
     p_values_df = p_values_df.dropna()
 
     value_detection = sum(p_values_df < poobah_threshold)
-    print_value('N. Probes w/ Detection Success', value_detection)
-    print_pct('% Detection Success', value_detection / len(p_values_df))
+    _print_value('N. Probes w/ Detection Success', value_detection)
+    _print_pct('% Detection Success', value_detection / len(p_values_df))
 
     for probe_type in ['cg', 'ch', 'snp']:
         if probe_type not in p_values_df.index.get_level_values('probe_type'):
-            print_value(f'\nN. {probe_type} probes', 0)
+            _print_value(f'\nN. {probe_type} probes', 0)
             continue
         probes = p_values_df.xs(probe_type, level='probe_type')
         probes_value = sum(probes < poobah_threshold)
         print()
-        print_value(f'N. {probe_type} probes', len(probes))
-        print_value(f'N. Probes w/ Detection Success {probe_type}', probes_value)
-        print_pct(f'% Detection Success {probe_type}', probes_value / len(probes))
+        _print_value(f'N. {probe_type} probes', len(probes))
+        _print_value(f'N. Probes w/ Detection Success {probe_type}', probes_value)
+        _print_pct(f'% Detection Success {probe_type}', probes_value / len(probes))
 
 
 def intensity_stats(samples: Samples, sample_name: str, mask=False) -> None:
@@ -111,25 +111,25 @@ def intensity_stats(samples: Samples, sample_name: str, mask=False) -> None:
     :type mask: bool
 
     :return: None"""
-    print_header('Signal intensity', mask)
+    _print_header('Signal intensity', mask)
 
-    print_value('Mean in-band signal intensity', samples.get_mean_ib_intensity(sample_name, mask)[sample_name])
-    print_value('Mean in-band signal intensity (M+U)', samples.get_total_ib_intensity(sample_name, mask).mean()[sample_name])
-    print_value('Mean in-band type II signal intensity ', samples.type2(mask)[sample_name].mean(axis=None, skipna=True))
-    print_value('Mean in-band type I Red signal intensity ', samples.ib_red(mask)[sample_name].mean(axis=None, skipna=True))
-    print_value('Mean in-band type I Green signal intensity ', samples.ib_green(mask)[sample_name].mean(axis=None, skipna=True))
-    print_value('Mean out-of-band type I Red signal intensity ', samples.oob_red(mask)[sample_name].mean(axis=None, skipna=True))
-    print_value('Mean out-of-band type I Green signal intensity ', samples.oob_green(mask)[sample_name].mean(axis=None, skipna=True))
+    _print_value('Mean in-band signal intensity', samples.get_mean_ib_intensity(sample_name, mask)[sample_name])
+    _print_value('Mean in-band signal intensity (M+U)', samples.get_total_ib_intensity(sample_name, mask).mean()[sample_name])
+    _print_value('Mean in-band type II signal intensity ', samples.type2(mask)[sample_name].mean(axis=None, skipna=True))
+    _print_value('Mean in-band type I Red signal intensity ', samples.ib_red(mask)[sample_name].mean(axis=None, skipna=True))
+    _print_value('Mean in-band type I Green signal intensity ', samples.ib_green(mask)[sample_name].mean(axis=None, skipna=True))
+    _print_value('Mean out-of-band type I Red signal intensity ', samples.oob_red(mask)[sample_name].mean(axis=None, skipna=True))
+    _print_value('Mean out-of-band type I Green signal intensity ', samples.oob_green(mask)[sample_name].mean(axis=None, skipna=True))
 
     type_i_m_na = pd.isna(samples.meth(mask).loc['I', sample_name]).values.sum()
     type_ii_m_na = pd.isna(samples.meth(mask).loc['II', sample_name]['G']).values.sum()
-    print_value('Number of NAs in Methylated signal', type_i_m_na + type_ii_m_na)
+    _print_value('Number of NAs in Methylated signal', type_i_m_na + type_ii_m_na)
     type_i_u_na = pd.isna(samples.unmeth(mask).loc['I', sample_name]).values.sum()
     type_ii_u_na = pd.isna(samples.unmeth(mask).loc['II', sample_name]['R']).values.sum()
-    print_value('Number of NAs in Unmethylated signal', type_ii_u_na + type_i_u_na)
-    print_value('Number of NAs in Type 1 Red signal', samples.type1_red(mask)[sample_name].isna().values.sum())
-    print_value('Number of NAs in Type 1 Green signal', samples.type1_green(mask)[sample_name].isna().values.sum())
-    print_value('Number of NAs in Type 2 signal', samples.type2(mask)[sample_name].isna().values.sum())
+    _print_value('Number of NAs in Unmethylated signal', type_ii_u_na + type_i_u_na)
+    _print_value('Number of NAs in Type 1 Red signal', samples.type1_red(mask)[sample_name].isna().values.sum())
+    _print_value('Number of NAs in Type 1 Green signal', samples.type1_green(mask)[sample_name].isna().values.sum())
+    _print_value('Number of NAs in Type 2 signal', samples.type2(mask)[sample_name].isna().values.sum())
     print('-- note : these NA values don\'t count probes that don\'t appear in .idat files; these are only counted in '
           'the `Detection - missing raw intensity` QC line')
 
@@ -146,15 +146,15 @@ def nb_probes_stats(samples: Samples, sample_name: str, mask=False) -> None:
 
     :return: None"""
 
-    print_header('Number of probes', mask)
+    _print_header('Number of probes', mask)
 
-    print_value('Total : ', len(samples.get_signal_df(mask)[sample_name]))
-    print_value('Type II : ', len(samples.type2(mask)[sample_name]))
-    print_value('Type I Green : ', len(samples.type1_green(mask)[sample_name]))
-    print_value('Type I Red : ', len(samples.type1_red(mask)[sample_name]))
-    print_value('CG : ', len(samples.cg_probes(mask)[sample_name]))
-    print_value('CH : ', len(samples.ch_probes(mask)[sample_name]))
-    print_value('SNP : ', len(samples.snp_probes(mask)[sample_name]))
+    _print_value('Total : ', len(samples.get_signal_df(mask)[sample_name]))
+    _print_value('Type II : ', len(samples.type2(mask)[sample_name]))
+    _print_value('Type I Green : ', len(samples.type1_green(mask)[sample_name]))
+    _print_value('Type I Red : ', len(samples.type1_red(mask)[sample_name]))
+    _print_value('CG : ', len(samples.cg_probes(mask)[sample_name]))
+    _print_value('CH : ', len(samples.ch_probes(mask)[sample_name]))
+    _print_value('SNP : ', len(samples.snp_probes(mask)[sample_name]))
 
 
 def type1_color_channels_stats(samples: Samples, sample_name : str) -> None:
@@ -168,13 +168,13 @@ def type1_color_channels_stats(samples: Samples, sample_name : str) -> None:
 
     :return: None"""
 
-    print_header(f'{sample_name} Type I color channel', False)
+    _print_header(f'{sample_name} Type I color channel', False)
 
     summary_inferred_channels = samples.infer_type1_channel(sample_name=sample_name, summary_only=True)
-    print_value('Green to Green : ', summary_inferred_channels['G']['G'])
-    print_value('Green to Red : ', summary_inferred_channels['G']['R'])
-    print_value('Red to Red : ', summary_inferred_channels['R']['R'])
-    print_value('Red to Green : ', summary_inferred_channels['R']['G'])
+    _print_value('Green to Green : ', summary_inferred_channels['G']['G'])
+    _print_value('Green to Red : ', summary_inferred_channels['G']['R'])
+    _print_value('Red to Red : ', summary_inferred_channels['R']['R'])
+    _print_value('Red to Green : ', summary_inferred_channels['R']['G'])
 
 
 def dye_bias_stats(samples: Samples, sample_name: str, mask=False) -> None:
@@ -189,23 +189,23 @@ def dye_bias_stats(samples: Samples, sample_name: str, mask=False) -> None:
 
     :return: None"""
 
-    print_header('Dye bias', mask)
+    _print_header('Dye bias', mask)
 
     total_intensity_type1 = samples.get_total_ib_intensity(sample_name, mask).loc['I']
 
     median_red = total_intensity_type1.loc['R'].median(skipna=True)[sample_name]
     median_green = total_intensity_type1.loc['G'].median(skipna=True)[sample_name]
-    print_value('Median Inf type I red channel intensity', median_red)
-    print_value('Median Inf type I green channel intensity', median_green)
+    _print_value('Median Inf type I red channel intensity', median_red)
+    _print_value('Median Inf type I green channel intensity', median_green)
 
     top_20_median_red = total_intensity_type1.loc['R', sample_name].nlargest(20).median(skipna=True)
     top_20_median_green = total_intensity_type1.loc['G', sample_name].nlargest(20).median(skipna=True)
-    print_value('Median of top 20 Inf type I red channel intensity', top_20_median_red)
-    print_value('Median of top 20 Inf type I green channel intensity', top_20_median_green)
+    _print_value('Median of top 20 Inf type I red channel intensity', top_20_median_red)
+    _print_value('Median of top 20 Inf type I green channel intensity', top_20_median_green)
 
-    print_value('Ratio of Red-to-green median intensities', median_red / median_green)
+    _print_value('Ratio of Red-to-green median intensities', median_red / median_green)
     red_green_distortion = (top_20_median_red/top_20_median_green) / (median_red / median_green)
-    print_value('Ratio of top vs global Red-to-green median intensities', red_green_distortion)
+    _print_value('Ratio of top vs global Red-to-green median intensities', red_green_distortion)
 
 
 def betas_stats(samples: Samples, sample_name: str, mask=False) -> None:
@@ -220,7 +220,7 @@ def betas_stats(samples: Samples, sample_name: str, mask=False) -> None:
 
     :return: None"""
 
-    print_header('Betas', mask)
+    _print_header('Betas', mask)
     samples = samples.copy()   # we don't want changes from processing to change the samples object
 
     samples.dye_bias_correction_nl(sample_name, mask)
@@ -229,24 +229,24 @@ def betas_stats(samples: Samples, sample_name: str, mask=False) -> None:
     samples.calculate_betas()
     betas = samples.get_betas(sample_name, mask) # get betas as a pd.Series
 
-    print_value('Mean', betas.mean(skipna=True))
-    print_value('Median', betas.median(skipna=True))
+    _print_value('Mean', betas.mean(skipna=True))
+    _print_value('Median', betas.median(skipna=True))
     nb_non_na = len(betas.dropna())
-    print_pct('Unmethylated fraction (beta values < 0.3)', len(betas[betas < 0.3])/nb_non_na)
-    print_pct('Methylated fraction (beta values > 0.7)', len(betas[betas > 0.7])/nb_non_na)
+    _print_pct('Unmethylated fraction (beta values < 0.3)', len(betas[betas < 0.3]) / nb_non_na)
+    _print_pct('Methylated fraction (beta values > 0.7)', len(betas[betas > 0.7]) / nb_non_na)
     nb_na = len(betas) - nb_non_na
-    print_value('Number of NAs', nb_na)
-    print_pct('Fraction of NAs', nb_na / len(betas))
+    _print_value('Number of NAs', nb_na)
+    _print_pct('Fraction of NAs', nb_na / len(betas))
 
     for probe_type in 'cg', 'ch', 'snp':
         print(f'------ {probe_type} probes ------')
         subset_df = betas.xs(probe_type, level='probe_type')
-        print_value('Mean', subset_df.mean(skipna=True))
-        print_value('Median', subset_df.median(skipna=True))
+        _print_value('Mean', subset_df.mean(skipna=True))
+        _print_value('Median', subset_df.median(skipna=True))
         nb_non_na = len(subset_df.dropna())
-        print_pct('Unmethylated fraction (beta values < 0.3)', len(subset_df[subset_df < 0.3])/nb_non_na)
-        print_pct('Methylated fraction (beta values > 0.7)', len(subset_df[subset_df > 0.7])/nb_non_na)
+        _print_pct('Unmethylated fraction (beta values < 0.3)', len(subset_df[subset_df < 0.3]) / nb_non_na)
+        _print_pct('Methylated fraction (beta values > 0.7)', len(subset_df[subset_df > 0.7]) / nb_non_na)
         nb_na = len(subset_df) - nb_non_na
-        print_value('Number of NAs', nb_na)
-        print_pct('Fraction of NAs', nb_na / len(subset_df))
+        _print_value('Number of NAs', nb_na)
+        _print_pct('Fraction of NAs', nb_na / len(subset_df))
 

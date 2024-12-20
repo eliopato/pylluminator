@@ -423,7 +423,8 @@ def get_nb_probes_per_chr_and_type(samples: Samples) -> (pd.DataFrame, pd.DataFr
     masked_probes = set()
     for current_sample in samples.sample_names:
         mask = samples.masks.get_mask(sample_name=current_sample)
-        masked_probes.update(mask[mask].index.get_level_values('probe_id'))
+        if mask is not None:
+            masked_probes.update(mask[mask].index.get_level_values('probe_id'))
 
     unmasked_probes = samples.get_signal_df(False).index.get_level_values('probe_id').difference(masked_probes)
 

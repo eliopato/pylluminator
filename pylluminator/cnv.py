@@ -104,7 +104,7 @@ def copy_number_variation(samples: Samples, sample_name: str, normalization_samp
         return None, None, None
 
     # merge small bins together, until they reach a minimum of 20 overlapping probes #todo optimize (10sec)
-    bins = merge_bins_to_minimum_overlap(diff_tiles, probe_coords, 20, 1)
+    bins = _merge_bins_to_minimum_overlap(diff_tiles, probe_coords, 20, 1)
 
     # segment the signal
     if len(bins) == 0:
@@ -173,7 +173,7 @@ def get_normalization_samples(annotation: Annotations) -> Samples | None:
     return None
 
 
-def merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: pr.PyRanges, minimum_overlap: int = 20,
+def _merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with: pr.PyRanges, minimum_overlap: int = 20,
                                   precision:float = 1) -> pr.PyRanges:
     """Merge adjacent intervals from `pr_to_merge` until they have a minimum probes overlap such as defined in parameter
     `minimum_overlap`.
