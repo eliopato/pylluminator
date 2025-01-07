@@ -778,11 +778,14 @@ class Samples:
     def has_betas(self) -> bool:
         return 'beta' in self._signal_df.columns.get_level_values('signal_channel')
 
-    def get_betas(self, sample_name: str | None = None, drop_na: bool = False, mask: bool = False) -> pd.DataFrame:
+    def get_betas(self, sample_name: str | None = None, include_out_of_band = None, drop_na: bool = False, mask: bool = False) -> pd.DataFrame:
         """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
 
         :param sample_name: the name of the sample to get beta values for. If None, return beta values for all samples.
         :type sample_name: str | None
+        :param include_out_of_band: if set to True, calculate beta values on in-band AND out-of-band signal values. If
+            set to False, calculate beta values on in-band values only. If not set, get the latest calculated betas if
+            they already exist. Default: None
         :param drop_na: if set to True, drop rows with NA values. Default: False
         :type drop_na: bool
         :param mask: set to False if you don't want any mask to be applied. Default: False
@@ -791,7 +794,9 @@ class Samples:
         :return: beta values
         :rtype: pandas.DataFrame"""
 
-        if not self.has_betas():
+        if include_out_of_band is not None:
+            self.calculate_betas(include_out_of_band=include_out_of_band)
+        elif not self.has_betas():
             self.calculate_betas()
 
         betas = self.get_signal_df(mask).xs('beta', level='signal_channel', axis=1).droplevel('methylation_state', axis=1)

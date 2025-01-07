@@ -20,8 +20,7 @@ from pylluminator.utils import get_chromosome_number, set_level_as_index, get_lo
 
 LOGGER = get_logger()
 
-def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_column: str | None,
-                cmap_name: str = 'Spectral') -> (list, dict):
+def _get_colors(sheet: pd.DataFrame, color_column: str | None, group_column: str | list[str] | None = None, cmap_name: str = 'Spectral') -> (list, dict | None):
     """Define the colors to use for each sample, depending on the columns used to categorized them.
 
     :param sheet: sample sheet data frame
@@ -30,47 +29,42 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, color_group_colum
     :param color_column: name of the column of the sample sheet to use for color. If None, the function will return empty objects.
     :type color_column: str | None
 
-    :param color_group_column: name of the column of the sample sheet to use to group colors together
-    :type color_group_column: str | None
-
     :param cmap_name: name of the matplotlib color map to use. Default: spectral
     :type cmap_name: str
 
     :return: the list of legend handles and a dict of color categories, with keys being the values of color_column
-    :rtype: tuple[list,dict]"""
+    :rtype: tuple[list,dict | None]"""
+    if color_column is None and group_column is None:
+        return [], None
+
     legend_handles = []
     color_categories = dict()
     cmap = colormaps[cmap_name]
 
-    # determine the line color
-    if color_column is not None:
-        categories = sorted(set(sheet[color_column]))
-        nb_colors = len(sheet[color_column])
-        if color_group_column is None:
-            for i, category in enumerate(categories):
-                color_categories[category] = cmap(i / max(1, nb_colors - 1))
-        else:
-            grouped_sheet = sheet.groupby(color_group_column)
-            nb_categories = len(grouped_sheet)
-            # gap between colors of two different group
-            cmap_group_interval_size = min(0.2, 1 / (nb_categories * 2 - 1))
-            # gap between two colors of the same group
-            cmap_color_interval_size = (1 - (nb_categories - 1) * cmap_group_interval_size) / nb_colors
-            idx_color = 0
-            for _, sub_sheet in grouped_sheet:
-                categories = sorted(set(sub_sheet[color_column]))
-                for i, category in enumerate(categories):
-                    color_categories[category] = cmap(idx_color)
-                    idx_color += cmap_color_interval_size
-                idx_color += cmap_group_interval_size
+    if group_column is not None:
+        grouped_sheet = sheet.groupby(group_column)
+        nb_colors = len(grouped_sheet)
+        for i, (group_name, group) in enumerate(grouped_sheet):
+            color_categories[str(group_name).replace("'", "")] = cmap(i / max(1, nb_colors - 1))
+    elif color_column == 'sample_name':
+        color_categories = {name: cmap(i / len(sheet)) for i, name in enumerate(sheet.sample_name)}
+        legend_handles += [Line2D([0], [0], color=color, label=label) for label, color in color_categories.items()]
+    else:
+        grouped_sheet = sheet.groupby(color_column)
+        nb_colors = len(grouped_sheet)
 
-        # make the legend (title + colors)
-        legend_handles += [Line2D([0], [0], color='black', linestyle='', label=f'{color_column} :')]
-        legend_handles += [mpatches.Patch(color=color, label=label) for label, color in color_categories.items()]
+        for i, (group_name, group) in enumerate(grouped_sheet):
+            color = cmap(i / max(1, nb_colors - 1))
+            for name in group.sample_name:
+                color_categories[name] = color
+            group_name = str(group_name).replace("'", "").replace('(','').replace(')','')
+            legend_handles += [Line2D([0], [0], color='black', linestyle='', label=f'{group_name} :')]
+            legend_handles += [Line2D([0], [0], color=color, label=label) for label in group.sample_name]
 
     return legend_handles, color_categories
 
-def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict):
+
+def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict | None):
     """Define the line style to use for each sample, depending on the column used to categorized them.
 
     :param sheet: sample sheet data frame
@@ -79,34 +73,36 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict):
     :type column: str | None
 
     :return: the list of legend handles and a dict of line styles, with keys being the values of column
-    :rtype: tuple[list,dict]"""
+    :rtype: tuple[list,dict | None]"""
+
+    if column is None:
+        return [], None
 
     linestyle_categories = dict()
     legend_handles = []
     line_styles = ['-', ':', '--', '-.']
 
     # determine the line style
-    if column is not None:
-        categories = sorted(set(sheet[column]))
-        for i, category in enumerate(categories):
-            linestyle_categories[category] = line_styles[i % len(line_styles)]
-        legend_handles += [Line2D([0], [0], color='black', linestyle='', label=f'{column} :')]
-        legend_handles += [Line2D([0], [0], color='black', linestyle=ls, label=label) for label, ls in
-                           linestyle_categories.items()]
+    categories = sorted(set(sheet[column]))
+    for i, category in enumerate(categories):
+        linestyle_categories[category] = line_styles[i % len(line_styles)]
+    legend_handles += [Line2D([0], [0], color='black', linestyle='', label=f'{column} :')]
+    legend_handles += [Line2D([0], [0], color='black', linestyle=ls, label=label) for label, ls in
+                       linestyle_categories.items()]
 
     return legend_handles, linestyle_categories
 
 
-def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
-               color_column='sample_name', color_group_column: None | str = None, linestyle_column=None,
+def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, group_column: None | str | list[str] = None,
+               color_column='sample_name',  linestyle_column=None,
                custom_sheet: None | pd.DataFrame = None, mask=True, save_path: None | str=None) -> None:
     """Plot beta values density for each sample
 
     :param samples: with beta values already calculated
     :type samples: Samples
 
-    :param n_bins: number of bins to generate the histogram. Default: 100
-    :type n_bins: int
+    :param n_ind: number of evaluation points for the estimated PDF. Default: 100
+    :type n_ind: int
 
     :param title: custom title for the plot to override generated title. Default: None
     :type title: str | None
@@ -114,9 +110,8 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     :param color_column: name of a Sample Sheet column to define which samples get the same color. Default: sample_name
     :type color_column: str
 
-    :param color_group_column:  name of a Sample Sheet column to categorize samples and give samples from the same
-        category a similar color shade.. Default: None
-    :type color_group_column: str | None
+    :param group_column: compute the average beta values per group of samples. Default: None
+    :type group_column: str | list[str] | None
 
     :param linestyle_column: name of a Sample Sheet column to define which samples get the same line style. Default: None
     :type linestyle_column: str | None
@@ -124,7 +119,7 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
     :type custom_sheet: pandas.DataFrame
 
-    :param mask: rue removes masked probes from betas, False keeps them. Default: True
+    :param mask: true removes masked probes from betas, False keeps them. Default: True
     :type mask: bool
 
     :param save_path: if set, save the graph to save_path. Default: None
@@ -137,30 +132,35 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
     betas = samples.get_betas(mask = mask)  # get betas with or without masked probes
 
-    # keep only samples that are both in sample sheet and betas columns
+    # keep only samples that are both in sample sheet and beta columns
     filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
     betas = betas[filtered_samples]
     sheet = sheet[sheet.sample_name.isin(filtered_samples)]
 
+    if group_column is not None:
+
+        grouped_sheet = sheet.groupby(group_column)
+        avg_betas_list = []
+        group_names = []
+        for name, line in grouped_sheet.sample_name.apply(list).items():
+            avg_betas_list.append(betas[line].mean(axis=1))
+            group_names.append(name)
+
+        betas = pd.concat(avg_betas_list, axis=1)
+        betas.columns = group_names
+
     # define the color and line style of each sample
-    c_legend_handles, colors = _get_colors(sheet, color_column, color_group_column)
+    c_legend_handles, colors = _get_colors(sheet, color_column, group_column)
     ls_legend_handles, linestyles = _get_linestyles(sheet, linestyle_column)
     legend_handles = c_legend_handles + ls_legend_handles
 
-    # plot the data
-    plt.figure(figsize=(15, 10))
+    if n_ind < 10:
+        LOGGER.warning('n_ind is too low, setting it to 10')
+        n_ind = 10
 
-    color = None
-    linestyle = None
-    for label, row in betas.transpose().iterrows():
-        histogram_y, histogram_x = np.histogram(row.dropna().values, bins=n_bins, density=True)
-        sample_sheet_row = sheet[sheet.sample_name == label]
-        if color_column is not None:
-            label = sample_sheet_row[color_column].iloc[0]
-            color = colors[label]
-        if linestyle_column is not None:
-            linestyle = linestyles[sample_sheet_row[linestyle_column].iloc[0]]
-        plt.plot(histogram_x[:-1], histogram_y, label=label, linewidth=1, color=color, linestyle=linestyle)
+    inds = [(n-2)*(1/n_ind) for n in range(1, n_ind+4)]
+    betas.plot.density(ind=inds, figsize=(15, 10), color=colors, linestyle=linestyles)
+
 
     title = title if title is not None else f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes'
     plt.title(title)
@@ -175,118 +175,41 @@ def plot_betas(samples: Samples, n_bins: int = 100, title: None | str = None,
 
     plt.show()
 
-
-def plot_betas_grouped(samples: Samples, group_columns: list[str], n_bins: int=100, title: str | None=None, mask=True,
-                       custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
-    """Plot beta values grouped by one or several sample sheet columns. Display the average beta values per group with a plain
-    line, and individual beta values distribution as transparent lines.
-
-    :param samples: with beta values already calculated
-    :type samples: Samples
-
-    :param group_columns: name of one or several Sample Sheet column to categorize samples and give samples from the
-        same category a similar color shade.
-    :type group_columns: list[str]
-
-    :param n_bins: number of bins to generate the histogram. Default: 100
-    :type n_bins: int
-
-    :param title: custom title for the plot. Default: None
-    :type title: str | None
-
-    :param mask: True removes masked probes from betas, False keeps them. Default: True
-    :type mask: bool
-
-    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
-        samples to display. Default: None
-    :type custom_sheet: pandas.DataFrame | None
-
-    :param save_path: if set, save the graph to save_path. Default: None.
-    :type save_path: str | None
-
-    :return: None"""
-
-    cmap = colormaps['Spectral']
-    plt.style.use('ggplot')
-    bins = [n*1/n_bins for n in range(0, n_bins+1)]
-
-    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.get_betas(mask = mask)  # get betas with or without masked probes
-
-    # keep only samples that are both in sample sheet and betas columns
-    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
-    betas = betas[filtered_samples]
-    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
-
-    grouped_sheet = sheet.groupby(group_columns)
-    nb_groups = len(grouped_sheet)
-
-    plt.figure(figsize=(15, 10))
-
-    for i_group, (group_name, sub_sheet) in enumerate(grouped_sheet):
-        color = cmap(i_group / (nb_groups - 1))
-
-        histos = np.zeros((len(sub_sheet), n_bins))
-
-        # draw each sample's beta distribution with a very transparent line, and save values to calculate the average
-        for i, sample in enumerate(sub_sheet.sample_name):
-            hist_y, _ = np.histogram(betas[sample].dropna().values, bins=bins, density=True)
-            plt.plot(bins[:-1], hist_y, linewidth=1, alpha=0.1, color=color)
-            histos[i] = hist_y
-
-        # get average histogram for the group
-        mean_histo =  histos.mean(axis=0)
-
-        plt.plot(bins[:-1], mean_histo, label=group_name, linewidth=1, color=color)
-
-        # plt.plot(bins[:-1], mean_histo, label=group_name, linewidth=min(10, len(sub_sheet)/2),
-        #          alpha=min(1, 0.5+1/len(sub_sheet)), color=color, zorder=len(grouped_sheet) - i_group) #, alpha=0.5) #, linestyle=':')
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1), title=group_columns)
-
-    if title is None:
-        title = f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes, grouped by {group_columns}'
-    plt.title(title)
-
-    if save_path is not None:
-        plt.savefig(os.path.expanduser(save_path))
-
-    plt.show()
-
-# todo
-def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None, save_path: None | str=None) -> None:
-    """Plot beta values split by Infinium design type (I and II)
-
-    :param betas: dataframe as output from sample[s].get_betas() - rows are probes and columns sample-s
-    :type betas: pandas.DataFrame
-
-    :param n_bins: number of bins to generate the histogram. Default: 100
-    :type n_bins: int
-
-    :param title: custom title for the plot. Default: None
-    :type title: str
-
-    :param save_path: if set, save the graph to save_path. Default: None
-    :type save_path: str | None
-
-    :return: None
-    """
-    for design_type in ['I', 'II']:
-        betas_to_plot = betas.loc[design_type].transpose()
-        for index, row in betas_to_plot.iterrows():
-            histogram_values = np.histogram(row.dropna().values, bins=n_bins, density=False)
-            plt.plot(histogram_values[1][:-1], histogram_values[0], label=index, linewidth=1)
-
-    title = title if title is not None else f'Beta values per design type on {len(betas):,} probes'
-    plt.title(title)
-    plt.legend()
-
-    if save_path is not None:
-        plt.savefig(os.path.expanduser(save_path))
-
-    plt.show()
+# # todo
+# def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None, save_path: None | str=None) -> None:
+#     """Plot beta values split by Infinium design type (I and II)
+#
+#     :param betas: dataframe as output from sample[s].get_betas() - rows are probes and columns sample-s
+#     :type betas: pandas.DataFrame
+#
+#     :param n_bins: number of bins to generate the histogram. Default: 100
+#     :type n_bins: int
+#
+#     :param title: custom title for the plot. Default: None
+#     :type title: str
+#
+#     :param save_path: if set, save the graph to save_path. Default: None
+#     :type save_path: str | None
+#
+#     :return: None
+#     """
+#     for design_type in ['I', 'II']:
+#         betas_to_plot = betas.loc[design_type].transpose()
+#         for index, row in betas_to_plot.iterrows():
+#             histogram_values = np.histogram(row.dropna().values, bins=n_bins, density=False)
+#             plt.plot(histogram_values[1][:-1], histogram_values[0], label=index, linewidth=1)
+#
+#     title = title if title is not None else f'Beta values per design type on {len(betas):,} probes'
+#     plt.title(title)
+#     plt.legend()
+#
+#     if save_path is not None:
+#         plt.savefig(os.path.expanduser(save_path))
+#
+#     plt.show()
 
 
-def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column: str | None = None,
+def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str = 'sample_name',
               nb_probes: int=1000, random_state: int = 42, title: None | str = None, mask=True,
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
     """Plot samples in 2D space according to their beta distances.
@@ -297,9 +220,8 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     :param label_column: name of the column containing the labels
     :type label_column: str | None
 
-    :param color_group_column: name of a Sample Sheet column to categorize samples and give samples from the same
-        category a similar color shade. Default: None
-    :type color_group_column: str | None
+    :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: sample_name
+    :type color_column: str
 
     :param nb_probes: number of probes to use for the model. Default: 1000
     :type nb_probes: int
@@ -341,7 +263,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     mds = MDS(n_components=2, random_state=random_state)
     fit = mds.fit_transform(betas_most_variance.T)
 
-    legend_handles, colors_dict = _get_colors(sheet, label_column, color_group_column)
+    legend_handles, colors_dict = _get_colors(sheet, color_column)
 
     plt.figure(figsize=(15, 10))
     labels = [sheet.loc[sheet.sample_name == name, label_column].values[0] for name in betas.columns]
@@ -353,7 +275,10 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_group_column
     title = title if title is not None else f'MDS of the {nb_probes} most variable probes'
     plt.title(title)
 
-    plt.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1, 1))
+    if len(legend_handles) > 0:
+        plt.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(1, 1))
+    else:
+        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
