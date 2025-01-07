@@ -531,7 +531,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     v_max = np.max(data_to_plot[y_col])
     v_min = np.min(data_to_plot[y_col])
     if v_min < 0:
-        cmap = colormaps.get_cmap('gist_rainbow')
+        cmap = colormaps.get_cmap('jet')
     else:
         cmap = colormaps.get_cmap('viridis').reversed()
         v_min = 0
@@ -556,7 +556,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         chrom_end = max(group[x_col]) + margin
 
         # build the chromosomes scatter plot
-        ax.scatter(group[x_col], group[y_col], c=group[y_col], vmin=v_min, vmax=v_max, cmap=cmap, alpha=0.9)
+        ax.scatter(group[x_col], group[y_col], c=group[y_col], vmin=v_min, vmax=v_max, cmap=cmap, alpha=1)
         # save chromosome's name and limits for x-axis
         x_labels.append(' '.join(set(group['merged_chr'])).replace('chr', ''))
         x_minor_ticks.append(chrom_end)  # chromosome limits
@@ -569,8 +569,9 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                 for segment in chrom_segments.itertuples(index=False):
                     plt.plot([chrom_start + segment.start, chrom_start + segment.end],
                              [segment.mean_cnv, segment.mean_cnv],
-                             c=cmap(-segment.mean_cnv),
-                             linewidth=2)
+                             c='black',
+                             linewidth=2,
+                             alpha=1)
 
         # draw annotations for probes that are over the threshold, if annotation_col is set
         if annotation is not None:
@@ -608,13 +609,18 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     ax.tick_params(axis='x', length=0)  # hide ticks for chromosomes labels
     ax.set_xlabel('chromosome')
 
+    # center vertically on 0 for graphs that include negative values
+    if v_min < 0:
+        y_lim_inf, y_lim_sup = ax.get_ylim()
+        y_lim = max(abs(y_lim_inf), abs(y_lim_sup))
+        ax.set_ylim(-y_lim, y_lim)
+
     # define y label and graph title
     ax.set_ylabel(f'log10({y_col})' if log10 else y_col)
+
     if title is None:
-        if 'probe_id' in data_to_plot.columns:
-            title = f'Manhattan plot of {len(data_to_plot):,} probes'
-        else:
-            title = f'Manhattan plot of {len(data_to_plot)} bins'
+        what = 'probes' if 'probe_id' in data_to_plot.columns else 'bins'
+        title = f'Manhattan plot of {len(data_to_plot):,} {what}'
     plt.title(title)
 
     if save_path is not None:
