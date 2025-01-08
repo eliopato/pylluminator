@@ -52,15 +52,13 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, group_column: str
     else:
         grouped_sheet = sheet.groupby(color_column)
         nb_colors = len(grouped_sheet)
-
+        legend_handles += [Line2D([0], [0], color='black', linestyle='', label=color_column)]
         for i, (group_name, group) in enumerate(grouped_sheet):
             color = cmap(i / max(1, nb_colors - 1))
             for name in group.sample_name:
                 color_categories[name] = color
             group_name = str(group_name).replace("'", "").replace('(','').replace(')','')
-            legend_handles += [Line2D([0], [0], color='black', linestyle='', label=f'{group_name} :')]
-            legend_handles += [Line2D([0], [0], color=color, label=label) for label in group.sample_name]
-
+            legend_handles += [mpatches.Patch(color=color, label=group_name)]
     return legend_handles, color_categories
 
 
@@ -438,11 +436,12 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, samples: Samples, nb_probes: int = 100, 
 
     if drop_na:
         plot = sns.clustermap(sorted_betas.dropna()[:nb_probes], xticklabels=True)
+        if save_path is not None:
+            plot.savefig(os.path.expanduser(save_path))
     else:
         plot = sns.heatmap(sorted_betas[:nb_probes].sort_values(betas.columns[0]), xticklabels=True)
-
-    if save_path is not None:
-        plot.get_figure().savefig(os.path.expanduser(save_path))
+        if save_path is not None:
+            plot.get_figure().savefig(os.path.expanduser(save_path))
 
 
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
