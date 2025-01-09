@@ -404,12 +404,12 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
 ########################################################################################################################
 
 
-def plot_dmp_heatmap(dmp: pd.DataFrame, samples: Samples, nb_probes: int = 100, drop_na=True, save_path: None | str=None) -> None:
+def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=None, nb_probes: int = 100, drop_na=True, save_path: None | str=None) -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
-    :param dmp:  p-values and statistics for each probe, as returned by get_dmp()
-    :type dmp: pandas.DataFrame
+    :param dmps:  p-values and statistics for each probe, as returned by get_dmp()
+    :type dmps: pandas.DataFrame
 
     :param samples: samples to use for plotting
     :type samples: Samples
@@ -426,12 +426,19 @@ def plot_dmp_heatmap(dmp: pd.DataFrame, samples: Samples, nb_probes: int = 100, 
 
     :return: None"""
 
-    if dmp is None or len(dmp) == 0:
+    if dmps is None or len(dmps) == 0:
+        return
+
+    if isinstance(contrast, list):
+        LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
 
     # sort betas per p-value
     betas = samples.get_betas()
-    sorted_probes = dmp.sort_values('p_value').index
+    if contrast is None:
+        sorted_probes = dmps.sort_values('f_pvalue').index
+    else:
+        sorted_probes = dmps.sort_values(f'{contrast}_p_value').index
     sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes]
 
     if drop_na:
@@ -628,7 +635,8 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     plt.show()
 
 
-def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='chromosome', x_col='start', y_col='p_value',
+def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
+                       chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation: Annotations | None = None, annotation_col='genes', log10=True,
                        draw_significance=True,
                        medium_threshold=1e-05, high_threshold=5e-08,
@@ -677,7 +685,7 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, chromosome_col='chromosome', 
 
     :return: nothing"""
 
-    _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=y_col, x_col=x_col,
+    _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}', x_col=x_col,
                     draw_significance=draw_significance, annotation=annotation, annotation_col=annotation_col,
                     medium_threshold=medium_threshold, high_threshold=high_threshold,
                     log10=log10, title=title, save_path=save_path)
@@ -761,6 +769,10 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
     gene_data = transcript_data[transcript_data.gene_name == gene_name]
     if protein_coding_only:
         gene_data = gene_data[gene_data.transcript_type == 'protein_coding']
+
+    if len(gene_data) == 0:
+        LOGGER.error(f'Gene {gene_name} not found in the annotation data.')
+        return
 
     chromosome = str(gene_data.iloc[0].chromosome)
     chr_df = genome_info.chromosome_regions.loc[chromosome]

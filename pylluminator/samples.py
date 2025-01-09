@@ -21,8 +21,7 @@ LOGGER = get_logger()
 
 class Samples:
     """
-     Samples objects hold sample methylation signal in a dataframe, as well as annotation information, sample sheet data
-      and probes masks.
+     Samples objects hold sample methylation signal in a dataframe, as well as annotation information, sample sheet data and probes masks.
 
     :ivar annotation: probes metadata. Default: None.
     :vartype annotation: Annotations | None
