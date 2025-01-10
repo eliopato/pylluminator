@@ -53,7 +53,7 @@ def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_name
     return results
 
 
-def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, drop_na=False, mask=True) -> (pd.DataFrame | None, list[str]):
+def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, custom_sheet: None | pd.DataFrame=None, drop_na=False, mask=True) -> (pd.DataFrame | None, list[str]):
     """Find Differentially Methylated Probes (DMP)
 
     More info on  design matrices and formulas:
@@ -66,6 +66,8 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, dr
     :type formula: str
     :param reference_value: reference value for each factor. Default: None
     :type reference_value: dict | None
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
+    :type custom_sheet: pandas.DataFrame
     :param drop_na: drop probes that have NA values. Default: False
     :type drop_na: bool
 
@@ -82,12 +84,19 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, dr
 
     betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, mask=mask)
 
-    # data init.
+    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
+    # keep only samples that are both in sample sheet and beta columns
+    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
+    if len(filtered_samples) == 0:
+        LOGGER.error('No samples found')
+        return None
+
+    betas = betas[filtered_samples]
+    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
-
+    
     # make the design matrix
-    sample_info = samples.sample_sheet.set_index('sample_name')
-
+    sample_info = sheet.set_index('sample_name')
     # order betas and sample_info the same way
     sample_names_order = [c for c in betas.columns if c in sample_info.index]
     sample_info = sample_info.loc[sample_names_order]
