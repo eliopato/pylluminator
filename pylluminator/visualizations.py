@@ -284,7 +284,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str 
     plt.show()
 
 
-def betas_dendrogram(samples: Samples, title: None | str = None, custom_sheet: pd.DataFrame | None = None, mask: bool = True, save_path: None | str=None) -> None:
+def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None, custom_sheet: pd.DataFrame | None = None, mask: bool = True, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
     :param samples: samples to plot
@@ -304,6 +304,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, custom_sheet: p
     :type save_path: str | None
 
     :return: None"""
+    plt.style.use('ggplot')
     plt.figure(figsize=(15, 10))
 
     sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
@@ -315,6 +316,15 @@ def betas_dendrogram(samples: Samples, title: None | str = None, custom_sheet: p
 
     linkage_matrix = linkage(betas.T.values, optimal_ordering=True, method='complete')
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
+
+    if color_column is not None:
+        legend_handles, label_colors = _get_colors(sheet, color_column=color_column)
+
+        for lbl in plt.gca().get_ymajorticklabels():
+            lbl.set_color(label_colors[lbl.get_text()])
+
+        if len(legend_handles) > 0:
+            plt.legend(handles=legend_handles)
 
     # todo : different handling for > 10 samples ? that's the behaviour in ChAMP:
     # SVD < - svd(beta)
