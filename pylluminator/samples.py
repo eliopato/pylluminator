@@ -325,9 +325,9 @@ class Samples:
         new_samples = Samples(self.sample_sheet)
         new_samples.annotation = self.annotation
         new_samples.min_beads = self.min_beads
-        new_samples.idata = self.idata.copy()
-        new_samples.masks = self.masks.copy()
-        new_samples._signal_df = self._signal_df.copy()
+        new_samples.idata = None if self.idata is None else self.idata.copy()
+        new_samples.masks =  None if self.masks is None else self.masks.copy()
+        new_samples._signal_df = None if self._signal_df is None else self._signal_df.copy()
         return new_samples
 
     def save(self, filepath: str) -> None:

@@ -284,7 +284,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str 
     plt.show()
 
 
-def betas_dendrogram(samples: Samples, title: None | str = None, mask: bool = True, save_path: None | str=None) -> None:
+def betas_dendrogram(samples: Samples, title: None | str = None, custom_sheet: pd.DataFrame | None = None, mask: bool = True, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
     :param samples: samples to plot
@@ -296,13 +296,22 @@ def betas_dendrogram(samples: Samples, title: None | str = None, mask: bool = Tr
     :param mask: True removes masked probes from betas, False keeps them. Default: True
     :type mask: bool
 
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display. Default: None
+    :type custom_sheet: pandas.DataFrame | None
+
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
     :return: None"""
-
     plt.figure(figsize=(15, 10))
+
+    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
     betas = samples.get_betas(drop_na=True, mask=mask)
+
+    # keep only samples that are both in sample sheet and betas columns
+    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
+    betas = betas[filtered_samples]
 
     linkage_matrix = linkage(betas.T.values, optimal_ordering=True, method='complete')
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')

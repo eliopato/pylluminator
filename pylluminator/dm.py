@@ -53,7 +53,7 @@ def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_name
     return results
 
 
-def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, drop_na=False) -> (pd.DataFrame | None, list[str]):
+def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, drop_na=False, mask=True) -> (pd.DataFrame | None, list[str]):
     """Find Differentially Methylated Probes (DMP)
 
     More info on  design matrices and formulas:
@@ -80,7 +80,7 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, dr
         LOGGER.error('get_dmp() :  dataframe sample_sheet must have a sample_name column')
         return None
 
-    betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na)
+    betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, mask=mask)
 
     # data init.
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
