@@ -127,13 +127,9 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 
     # initialize values
     plt.style.use('ggplot')
-    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.get_betas(mask = mask)  # get betas with or without masked probes
-
-    # keep only samples that are both in sample sheet and beta columns
-    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
-    betas = betas[filtered_samples]
-    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
+    # get betas with or without masked probes and samples
+    betas = samples.get_betas(mask = mask, custom_sheet=custom_sheet)
+    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
 
     if group_column is not None:
 
@@ -244,13 +240,11 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str 
 
     plt.style.use('ggplot')
 
-    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.get_betas(mask=mask)  # get betas with or without masked probes
+    # get betas with or without masked probes and samples
+    betas = samples.get_betas(mask=mask, custom_sheet=custom_sheet)
 
     # keep only samples that are both in sample sheet and betas columns
-    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
-    betas = betas[filtered_samples]
-    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
+    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
 
     # get betas with the most variance across samples
     betas_variance = np.var(betas, axis=1)
@@ -307,12 +301,8 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     plt.style.use('ggplot')
     plt.figure(figsize=(15, 10))
 
-    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    betas = samples.get_betas(drop_na=True, mask=mask)
-
-    # keep only samples that are both in sample sheet and betas columns
-    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
-    betas = betas[filtered_samples]
+    betas = samples.get_betas(drop_na=True, mask=mask, custom_sheet=custom_sheet)
+    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
 
     linkage_matrix = linkage(betas.T.values, optimal_ordering=True, method='complete')
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
@@ -423,7 +413,10 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
 ########################################################################################################################
 
 
-def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=None, nb_probes: int = 100, drop_na=True, save_path: None | str=None) -> None:
+def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=None,
+                     nb_probes: int = 100, figsize=(10,15),
+                     var: str | None | list[str] =None, custom_sheet: pd.DataFrame | None=None,
+                     drop_na=True, save_path: None | str=None) -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
@@ -453,25 +446,32 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
         return
 
     # sort betas per p-value
-    betas = samples.get_betas()
+    betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
+    if var is not None:
+        if isinstance(var, str):
+            var = [var]
+        sheet = samples.sample_sheet
+        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet.sample_name == c, v].iloc[0]) for v in var]) + ')' for c in betas.columns]
+        betas.columns = colnames
+
     if contrast is None:
         sorted_probes = dmps.sort_values('f_pvalue').index
     else:
         sorted_probes = dmps.sort_values(f'{contrast}_p_value').index
-    sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes]
+    sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes][:nb_probes].T
 
     if drop_na:
-        plot = sns.clustermap(sorted_betas.dropna()[:nb_probes], xticklabels=True)
+        plot = sns.clustermap(sorted_betas, yticklabels=True, figsize=figsize)
         if save_path is not None:
             plot.savefig(os.path.expanduser(save_path))
     else:
-        plot = sns.heatmap(sorted_betas[:nb_probes].sort_values(betas.columns[0]), xticklabels=True)
+        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), yticklabels=True, figsize=figsize)
         if save_path is not None:
             plot.get_figure().savefig(os.path.expanduser(save_path))
 
 
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
-                    x_col='start', y_col='p_value', log10=False,
+                    x_col='start', y_col='p_value', log10=False, figsize=(20,14),
                     annotation: Annotations | None = None, annotation_col: str = 'genes',
                     medium_threshold=1e-05, high_threshold=5e-08,
                     title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
@@ -541,7 +541,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     data_to_plot = data_to_plot.sort_values(['chr_id', x_col]).astype({'chr_id': 'category'})
 
     # figure initialization
-    fig, ax = plt.subplots(figsize=(20, 14))
+    fig, ax = plt.subplots(figsize=figsize)
     margin = int(max(data_to_plot[x_col]) / 10)
     chrom_start, chrom_end = 0, 0
     x_labels, x_major_ticks, x_minor_ticks = [], [], [0]
@@ -657,7 +657,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
                        chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation: Annotations | None = None, annotation_col='genes', log10=True,
-                       draw_significance=True,
+                       draw_significance=True, figsize=(20, 14),
                        medium_threshold=1e-05, high_threshold=5e-08,
                        title: None | str = None, save_path: None | str=None):
     """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
@@ -701,17 +701,17 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
 
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
-
     :return: nothing"""
 
     _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}', x_col=x_col,
                     draw_significance=draw_significance, annotation=annotation, annotation_col=annotation_col,
-                    medium_threshold=medium_threshold, high_threshold=high_threshold,
+                    medium_threshold=medium_threshold, high_threshold=high_threshold, figsize=figsize,
                     log10=log10, title=title, save_path=save_path)
 
 
 def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
                        x_col='start_bin', chromosome_col='chromosome', y_col='cnv',
+                       figsize=(20, 14),
                        title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
@@ -741,13 +741,14 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
     :return: None"""
 
     _manhattan_plot(data_to_plot=data_to_plot, segments_to_plot=segments_to_plot, x_col=x_col,
-                    chromosome_col=chromosome_col, y_col=y_col, title=title,
+                    chromosome_col=chromosome_col, y_col=y_col, title=title, figsize=figsize,
                     log10=False, annotation=None, draw_significance=False, save_path=save_path)
 
 ########################################################################################################################
 
 def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=1500, keep_na: bool=False,
-                   protein_coding_only=True, figsize=(20, 20), save_path: None | str=None) -> None:
+                   protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
+                   figsize=(20, 20), save_path: None | str=None) -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
     :param samples : samples with beta values already calculated
@@ -813,7 +814,7 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
     is_gene_in_interval &= (probe_info_df.start >= gene_transcript_start) & (probe_info_df.start <= gene_transcript_end)
     is_gene_in_interval &= (probe_info_df.end >= gene_transcript_start) & (probe_info_df.end <= gene_transcript_end)
     gene_probes = probe_info_df[is_gene_in_interval][['probe_id', 'start', 'end']].drop_duplicates().set_index('probe_id')
-    gene_betas = samples.get_betas(mask=mask)
+    gene_betas = samples.get_betas(mask=mask, custom_sheet=custom_sheet)
     gene_betas = set_level_as_index(gene_betas, 'probe_id', drop_others=True)
     betas_location = gene_betas.join(gene_probes, how='inner').sort_values('start')
 
@@ -821,19 +822,33 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
 
     ################## PLOT LINKS BETWEEN TRANSCRIPTS AND BETAS
 
+    # chromosome, chr-transcript links, transcripts, transcript-betas lings, betas heatmap
     height_ratios = [0.05, 0.05, 0.45, 0.05, 0.4]
     nb_plots = len(height_ratios)
 
     betas_data = betas_location if keep_na else betas_location.dropna()
+
     heatmap_data = betas_data.drop(columns=['start', 'end']).T
+
+    if len(heatmap_data) == 0:
+        LOGGER.error('no beta data to plot')
+        return
+
+    # add variable values to the column names
+    if var is not None:
+        if isinstance(var, str):
+            var = [var]
+        sheet = samples.sample_sheet
+        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet.sample_name == c, v].iloc[0]) for v in var]) + ')' for c in heatmap_data.index]
+        heatmap_data.index = colnames
 
     if keep_na:
         fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
-        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, xticklabels=True)
+        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, xticklabels=True, yticklabels=True)
     else:
         dendrogram_ratio = 0.05
         g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False,
-                           dendrogram_ratio=dendrogram_ratio, xticklabels=True)
+                           dendrogram_ratio=dendrogram_ratio, xticklabels=True, yticklabels=True)
         shift_ratio = np.sum(height_ratios[:-1])
         g.gs.update(top=shift_ratio)  # shift the heatmap to the bottom of the figure
         gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio, height_ratios=height_ratios[:-1])

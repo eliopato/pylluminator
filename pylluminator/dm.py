@@ -82,19 +82,11 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
         LOGGER.error('get_dmp() :  dataframe sample_sheet must have a sample_name column')
         return None
 
-    betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, mask=mask)
-
-    sheet = samples.sample_sheet if custom_sheet is None else custom_sheet
-    # keep only samples that are both in sample sheet and beta columns
-    filtered_samples = [col for col in sheet.sample_name.values if col in betas.columns]
-    if len(filtered_samples) == 0:
-        LOGGER.error('No samples found')
-        return None
-
-    betas = betas[filtered_samples]
-    sheet = sheet[sheet.sample_name.isin(filtered_samples)]
+    betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, mask=mask, custom_sheet=custom_sheet)
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
-    
+
+    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
+
     # make the design matrix
     sample_info = sheet.set_index('sample_name')
     # order betas and sample_info the same way
@@ -137,7 +129,8 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     return pd.DataFrame(result_array, index=betas.index, columns=column_names, dtype='float64'), factor_names[1:]
 
 
-def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dist_cutoff: float | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
+def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dist_cutoff: float | None = None,
+            custom_sheet: pd.DataFrame | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
     """Find Differentially Methylated Regions (DMR) based on euclidian distance between beta values
 
     :param samples: samples to use
@@ -160,7 +153,7 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     LOGGER.info('>>> Start get DMR')
 
     # data initialization
-    betas = samples.get_betas(drop_na=False)
+    betas = samples.get_betas(drop_na=False, custom_sheet=custom_sheet)
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     # get genomic range information (for chromosome id and probe position)

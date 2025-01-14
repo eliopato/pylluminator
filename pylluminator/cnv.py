@@ -11,9 +11,9 @@ import linear_segment
 from sklearn.linear_model import LinearRegression
 
 from pylluminator.samples import Samples, read_samples, from_sesame
-from pylluminator.annotations import ArrayType, Annotations, get_or_download_annotation_data, PYLLUMINA_DATA_LINK
-from pylluminator.utils import get_resource_folder, get_files_matching, download_from_geo, download_from_link
-from pylluminator.utils import set_logger, get_logger, get_logger_level
+from pylluminator.annotations import ArrayType, Annotations, PYLLUMINA_DATA_LINK
+from pylluminator.utils import get_resource_folder, download_from_geo, download_from_link
+from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
 

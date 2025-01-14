@@ -777,7 +777,8 @@ class Samples:
     def has_betas(self) -> bool:
         return 'beta' in self._signal_df.columns.get_level_values('signal_channel')
 
-    def get_betas(self, sample_name: str | None = None, include_out_of_band = None, drop_na: bool = False, mask: bool = False) -> pd.DataFrame:
+    def get_betas(self, sample_name: str | None = None, include_out_of_band = None, drop_na: bool = False,
+                  custom_sheet: pd.DataFrame | None = None, mask: bool = False) -> pd.DataFrame:
         """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
 
         :param sample_name: the name of the sample to get beta values for. If None, return beta values for all samples.
@@ -799,6 +800,14 @@ class Samples:
             self.calculate_betas()
 
         betas = self.get_signal_df(mask).xs('beta', level='signal_channel', axis=1).droplevel('methylation_state', axis=1)
+
+        if custom_sheet is not None:
+            # keep only samples that are both in sample sheet and beta columns
+            filtered_samples = [col for col in custom_sheet.sample_name.values if col in betas.columns]
+            if len(filtered_samples) == 0:
+                LOGGER.error('No samples found')
+                return pd.DataFrame()
+            betas = betas[filtered_samples]
 
         if sample_name is not None:
             betas = betas[sample_name]
