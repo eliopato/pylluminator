@@ -127,7 +127,7 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame | None
         """
-        return pd.concat([self.oob_green(mask), self.oob_red(mask)])
+        return pd.concat([self.oob_green(mask), self.oob_red(mask)]).sort_index(axis=1)
 
     def oob_red(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of out-of-band red probes (for type I probes only), and apply the mask if `mask` is True
@@ -186,7 +186,7 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return pd.concat([self.ib_red(mask), self.ib_green(mask)])
+        return pd.concat([self.ib_red(mask), self.ib_green(mask)]).sort_index(axis=1)
 
     def type1_green(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of type I green probes, and apply the mask if `mask` is True
@@ -285,7 +285,7 @@ class Samples:
 
         return self.get_signal_df(mask).xs(probe_type, level='probe_type', drop_level=False)#[['R', 'G']]
 
-    def get_probes_with_probe_ids(self, probe_ids: list[str], mask: bool = True) -> pd.DataFrame | None:
+    def get_probes(self, probe_ids: list[str] | str, mask: bool = True) -> pd.DataFrame | None:
         """Returns the probes dataframe filtered on a list of probe IDs
 
         :param probe_ids: the IDs of the probes to select
@@ -299,6 +299,9 @@ class Samples:
         """
         if probe_ids is None or len(probe_ids) == 0:
             return None
+
+        if isinstance(probe_ids, str):
+            probe_ids = [probe_ids]
 
         probes_mask = self.get_signal_df(mask).index.get_level_values('probe_id').isin(probe_ids)
         return self.get_signal_df(mask)[probes_mask]
@@ -427,16 +430,21 @@ class Samples:
         sample_df = sample_df.drop(columns=['address_a', 'address_b', 'illumina_id'])
 
         # reshape dataframe to have something resembling sesame data structure - one row per probe
-        self._signal_df = sample_df.pivot(index=indexes, columns=['signal_channel', 'methylation_state'])
+        sample_df = sample_df.pivot(index=indexes, columns=['signal_channel', 'methylation_state'])
 
         # index column 'channel' corresponds by default to the manifest channel. But it could change by calling
         # 'infer_type_i_channel()' e.g., so we need to keep track of the manifest_channel in another column
         # self._signal_df['manifest_channel'] = self._signal_df.index.get_level_values('channel').values
 
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
-        self._signal_df['mask_info'] = self._signal_df.index.get_level_values('mask_info').fillna('').values
-        self._signal_df = self._signal_df.reset_index(level='mask_info', drop=True)
-        self._signal_df = self._signal_df.sort_index(axis=1)
+        sample_df['mask_info'] = sample_df.index.get_level_values('mask_info').fillna('').values
+        sample_df = sample_df.reset_index(level='mask_info', drop=True)
+        sample_df = sample_df.sort_index(axis=1)
+        self._signal_df = sample_df
+
+        for sample_name in self.sample_names:
+            subset = sample_df[[(sample_name, 'G', 'M'), (sample_name, 'R', 'U')]]
+            self.masks.add_mask(Mask(f'min_beads_{min_beads}', sample_name, subset.isna().any(axis=1)))
 
         # if we don't want to keep idata, make sure we free the memory
         if not keep_idat:
@@ -459,16 +467,20 @@ class Samples:
         sigdf = self._signal_df.copy()
         sample_names = self.sample_names
 
+        if not isinstance(mask, bool):
+            LOGGER.warning('Mask should be a boolean, setting it to True')
+            mask = True
+
         if mask:
             # set probes to NA for all samples with the common mask
             common_mask = self.masks.get_mask()
-            if common_mask is not None:
+            if common_mask is not None and len(common_mask) > 0:
                 sigdf.loc[common_mask, sample_names] = None
 
             # then mask probes per sample if needed
             for sample_name in self.sample_names:
                 sample_mask = self.masks.get_mask(sample_name=sample_name)
-                if sample_mask is not None:
+                if sample_mask is not None and len(sample_mask) > 0:
                     sigdf.loc[sample_mask, sample_name] = None
 
         return sigdf
@@ -647,7 +659,8 @@ class Samples:
             # calculate background for type I probes
             bg_signal_values = np.concatenate([type1_df.loc[type1_df.inferred_channel == 'R', (slice(None), 'G')],
                                                type1_df.loc[type1_df.inferred_channel == 'G', (slice(None), 'R')]])
-            bg_max = np.percentile(bg_signal_values, 95)
+
+            bg_max = np.nanpercentile(bg_signal_values, 95)
             failed_idxs = (type1_df.max(axis=1, numeric_only=True) < bg_max) | (type1_df.isna().any(axis=1))
 
             # reset color channel to the value of 'manifest_channel' for failed indexes of type I probes
@@ -672,8 +685,8 @@ class Samples:
             self._signal_df = set_channel_index_as(self._signal_df, 'inferred_channel', drop=True)  # make the inferred channel the new channel index
             self._signal_df = self._signal_df.sort_index(axis=1)
 
-
-        return type1_df.groupby(['inferred_channel', 'channel'], observed=False).count().max(axis=1)
+        cols = ['inferred_channel', 'channel']
+        return type1_df.reset_index().set_index(cols).groupby(cols).count()['probe_id']
 
     ####################################################################################################################
     # Preprocessing functions
@@ -778,7 +791,7 @@ class Samples:
         return 'beta' in self._signal_df.columns.get_level_values('signal_channel')
 
     def get_betas(self, sample_name: str | None = None, include_out_of_band = None, drop_na: bool = False,
-                  custom_sheet: pd.DataFrame | None = None, mask: bool = False) -> pd.DataFrame:
+                  custom_sheet: pd.DataFrame | None = None, mask: bool = False) -> pd.DataFrame | pd.Series | None:
         """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
 
         :param sample_name: the name of the sample to get beta values for. If None, return beta values for all samples.
@@ -788,11 +801,13 @@ class Samples:
             they already exist. Default: None
         :param drop_na: if set to True, drop rows with NA values. Default: False
         :type drop_na: bool
+        :param custom_sheet: a custom sample sheet to filter samples. Ignored if sample_name is provided. Default: None
+        :type custom_sheet: pandas.DataFrame | None
         :param mask: set to False if you don't want any mask to be applied. Default: False
         :type mask: bool
 
-        :return: beta values
-        :rtype: pandas.DataFrame"""
+        :return: beta values as a DataFrame, or Series if sample_name is provided. If no beta values are found, return None
+        :rtype: pandas.DataFrame | pandas.Series | None"""
 
         if include_out_of_band is not None:
             self.calculate_betas(include_out_of_band=include_out_of_band)
@@ -800,6 +815,10 @@ class Samples:
             self.calculate_betas()
 
         betas = self.get_signal_df(mask).xs('beta', level='signal_channel', axis=1).droplevel('methylation_state', axis=1)
+
+        if custom_sheet is not None and sample_name is not None:
+            LOGGER.warning('Both sample_name and custom_sheet are provided. Ignoring custom_sheet')
+            custom_sheet = None
 
         if custom_sheet is not None:
             # keep only samples that are both in sample sheet and beta columns
@@ -810,6 +829,9 @@ class Samples:
             betas = betas[filtered_samples]
 
         if sample_name is not None:
+            if sample_name not in betas.columns:
+                LOGGER.error(f'Sample {sample_name} not found')
+                return None
             betas = betas[sample_name]
 
         if drop_na:
@@ -1084,7 +1106,8 @@ class Samples:
             self._signal_df = self._signal_df.sort_index(axis=1)  # sort the columns after adding a new one
 
             # add a mask for the sample, depending on the threshold
-            poobah_mask = Mask(f'poobah_{threshold}', sample_name, p_value > threshold)
+            mask = self._signal_df[(sample_name, 'p_value', '')] >= threshold
+            poobah_mask = Mask(f'poobah_{threshold}', sample_name, mask)
             self.masks.add_mask(poobah_mask)
 
 
@@ -1190,6 +1213,10 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
         sample_sheet_df, _ = sample_sheet.create_from_idats(datadir)
     elif sample_sheet_name is not None:
         sample_sheet_df = sample_sheet.read_from_file(f'{datadir}/{sample_sheet_name}')
+
+    if min_beads < 1:
+        LOGGER.warning('min_beads must be >= 1. Setting it to 1.')
+        min_beads = 1
 
     # check that the sample sheet was correctly created / read. If not, abort mission.
     if sample_sheet_df is None:

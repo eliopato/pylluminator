@@ -27,6 +27,8 @@ class Mask:
         :type series: pd.Series"""
         self.mask_name = mask_name
         self.sample_name = sample_name
+        if not isinstance(series, pd.Series):
+            raise ValueError("series must be a pandas Series.")
         self.series = series
 
     def __str__(self):
@@ -73,7 +75,11 @@ class MaskCollection:
         :param mask_name: the name of the mask. Default: None
         :type mask_name: str | None
         :param sample_name: the name of the sample the mask is applied to. Default: None
-        :type sample_name: str | None"""
+        :type sample_name: str | None
+
+        :return: a pandas Series of booleans, where True indicates that the probe is masked
+        :rtype: pd.Series | None"""
+
         # to get a specific sample mask, retrieve the common mask and apply the sample mask on top of it
         if sample_name is None:
             mask_series = None
@@ -82,7 +88,7 @@ class MaskCollection:
 
         for mask in self.masks.values():
             if mask_name is None or mask.mask_name == mask_name:
-                if sample_name is None or mask.sample_name == sample_name:
+                if mask.sample_name == sample_name:
                     if mask_series is None:
                         mask_series = mask.series
                     else:
@@ -100,7 +106,11 @@ class MaskCollection:
 
         :return: number of masked probes
         :rtype: int"""
-        return sum(self.get_mask(mask_name, sample_name))
+
+        mask = self.get_mask(mask_name, sample_name)
+        if mask is None:
+            return 0
+        return sum(mask)
 
     def reset_masks(self):
         """Reset all masks."""

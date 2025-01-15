@@ -1,0 +1,39 @@
+import pytest
+import os
+import pandas as pd
+import numpy as np
+
+from pylluminator.samples import read_samples
+
+@pytest.fixture
+def test_samples():
+    min_beads = 0
+    max_samples = 2
+    data_path = os.path.expanduser('~/data/pylluminator-utest')
+    return read_samples(data_path, annotation=None, min_beads=min_beads, max_samples=max_samples, keep_idat=True)
+
+def test_poobah(test_samples):
+
+    test_samples.poobah('PREC_500_3')
+    test_df = test_samples.get_signal_df()
+    assert isinstance(test_df[('PREC_500_3', 'p_value')], pd.Series)
+    poobah = test_df[('PREC_500_3', 'p_value')]
+    assert sum(np.isnan(poobah)) == 46259
+    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 46259
+    assert test_samples.masks.number_probes_masked('poobah_0.05') == 0
+    assert test_samples.masks.number_probes_masked('poobah_0.05', 'PREC_500_3') == 46212
+
+def test_quality_mask(test_samples):
+    test_samples.apply_quality_mask()
+    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 32948
+
+def test_infer_infinium_I_channel(test_samples):
+    summary = test_samples.infer_type1_channel('PREC_500_3')
+    assert (summary == [44984, 52, 701, 82558]).all()
+    # comparison with R - one probe is different (cg09773691_BC11) because it has < 0 beads in a channel and is set to NA
+    # in pylluminator, while in R the other channel values are kept
+    # df_r = pd.read_csv('~/diff_r.csv', index_col='Probe_ID')
+    # test_samples.infer_type1_channel('PREC_500_3')
+    # df_py = test_samples['PREC_500_3'].reset_index().set_index('probe_id')
+    # dfs_after = df_r.join(df_py.droplevel('methylation_state', axis=1))
+    # dfs_after[dfs_after.col != dfs_after.channel]

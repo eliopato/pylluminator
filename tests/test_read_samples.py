@@ -6,10 +6,6 @@ from pylluminator.annotations import ArrayType
 from pylluminator.samples import read_samples
 from pylluminator.utils import download_from_geo
 
-import pandas as pd
-pd.options.display.max_columns = 40
-pd.options.display.width = 1000
-
 @pytest.fixture
 def data_path():
     return os.path.expanduser('~/data/pylluminator-utest')
@@ -44,10 +40,11 @@ def test_read_samples(data_path):
 
     assert my_samples.sample_sheet is not None
     assert my_samples.idata is not None
-    assert my_samples.min_beads == min_beads
+    assert my_samples.min_beads == 1
     assert len(my_samples.idata ) == max_samples
     assert my_samples.nb_samples == max_samples
     assert my_samples.annotation.array_type == ArrayType.HUMAN_EPIC_V2
+    assert my_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 52
 
     # Check that the samples are correctly loaded
     sample = my_samples['PREC_500_3']
