@@ -840,7 +840,7 @@ class Samples:
         return betas
 
     def dye_bias_correction(self, sample_name: str | None = None, mask: bool = True, reference: dict | None = None) -> None:
-        """Correct dye bias in by linear scaling. Scale both the green and red signal to a reference (ref) level. If
+        """Correct dye bias by linear scaling. Scale both the green and red signal to a reference level. If
         the reference level is not given, it is set to the mean intensity of all the in-band signals.
 
         :param sample_name: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
@@ -856,7 +856,18 @@ class Samples:
         """
 
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
-        sample_names = [sample_name] if isinstance(sample_name, str) else self.sample_names
+        if sample_name is None:
+            for sample_name in self.sample_names:
+                self.dye_bias_correction(sample_name, mask, reference)
+            return
+
+        if not isinstance(sample_name, str):
+            LOGGER.error('sample_name should be a string')
+            return
+
+        if sample_name not in self.sample_names:
+            LOGGER.error(f'Sample {sample_name} not found')
+            return
 
         if reference is None:
             reference = self.get_mean_ib_intensity(sample_name, mask)
@@ -867,9 +878,8 @@ class Samples:
             return None
 
         for channel in ['R', 'G']:
-            for sample_name in sample_names:
-                factor = reference[sample_name] / norm_values_dict[channel][sample_name]
-                self._signal_df[(sample_name, channel)] *= factor
+            factor = reference[sample_name] / norm_values_dict[channel][sample_name]
+            self._signal_df[(sample_name, channel)] *= factor
 
     def dye_bias_correction_nl(self, sample_name: str | None = None, mask: bool = True) -> None:
         """Dye bias correction by matching green and red to mid-point.
