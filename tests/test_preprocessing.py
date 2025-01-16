@@ -10,7 +10,7 @@ def test_samples():
     min_beads = 0
     max_samples = 2
     data_path = os.path.expanduser('~/data/pylluminator-utest')
-    return read_samples(data_path, annotation=None, min_beads=min_beads, max_samples=max_samples, keep_idat=True)
+    return read_samples(data_path, annotation=None, min_beads=min_beads, max_samples=max_samples)
 
 def test_poobah(test_samples):
     test_samples.poobah('PREC_500_3')

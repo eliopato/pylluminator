@@ -53,7 +53,8 @@ def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_name
     return results
 
 
-def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, custom_sheet: None | pd.DataFrame=None, drop_na=False, mask=True) -> (pd.DataFrame | None, list[str]):
+def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, custom_sheet: None | pd.DataFrame=None,
+            drop_na=False, mask=True, probe_ids:None|list[str]=None) -> (pd.DataFrame | None, list[str]):
     """Find Differentially Methylated Probes (DMP)
 
     More info on  design matrices and formulas:
@@ -70,7 +71,10 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     :type custom_sheet: pandas.DataFrame
     :param drop_na: drop probes that have NA values. Default: False
     :type drop_na: bool
-
+    :param mask: set to True to apply mask. Default: True
+    :type mask: bool
+    :param probe_ids: list of probe IDs to use. Useful to work on a subset for testing purposes. Default: None
+    :type probe_ids: list[str] | None
     :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
     :rtype: pandas.DataFrame, list[str]
     """
@@ -84,6 +88,9 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
 
     betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, mask=mask, custom_sheet=custom_sheet)
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
+
+    if probe_ids is not None:
+        betas = betas.loc[probe_ids]
 
     sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
 
