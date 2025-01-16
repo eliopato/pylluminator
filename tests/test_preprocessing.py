@@ -92,3 +92,21 @@ def test_dye_bias_nonlinear_all(test_samples):
     assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
     expected_values = [3371.5, 3246.0] # values 1 and 2 are NA
     assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
+
+def test_noob(test_samples):
+    test_samples.noob_background_correction('PREC_500_3')
+    expected_values = [98.03031921386719, 4391.55712890625, 160.515625, 327.8741455078125]
+    assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
+    expected_values = [75.70853424072266, 73.65463256835938, 1540.5257568359375, 1460.5260009765625]
+    assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
+    expected_values = [2273.55712890625, 3623.52587890625] # values 1 and 2 are NA
+    assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
+
+def test_noob_all(test_samples):
+    test_samples.noob_background_correction()
+    expected_values = [98.03031921386719, 4391.55712890625, 160.515625, 327.8741455078125]
+    assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
+    expected_values = [75.70853424072266, 73.65463256835938, 1540.5257568359375, 1460.5260009765625]
+    assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
+    expected_values = [2273.55712890625, 3623.52587890625] # values 1 and 2 are NA
+    assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
