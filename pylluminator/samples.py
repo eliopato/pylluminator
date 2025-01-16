@@ -974,7 +974,6 @@ class Samples:
 
                 max_intensity = np.max(channel_intensities)
                 min_intensity = np.min(channel_intensities)
-
                 normalized_intensities = np.sort(quantile_normalization_using_target(channel_intensities, ref_intensities))
                 midpoint_intensities = (channel_intensities + normalized_intensities) / 2
                 max_midpoint_intensity = np.max(midpoint_intensities)

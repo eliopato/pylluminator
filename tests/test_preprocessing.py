@@ -72,3 +72,23 @@ def test_dye_bias_linear_all(test_samples):
     assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
     expected_values = [4298.62646484375, 3897.869140625] # values 1 and 2 are NA
     assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
+
+def test_dye_bias_nonlinear(test_samples):
+    # small differences with R as the probes with no signal (0) are not masked properly in Sesame
+    test_samples.dye_bias_correction_nl('PREC_500_3')
+    expected_values = [462.5, 6534.5, 166.0, 475.0]
+    assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
+    expected_values = [307.0, 288.0, 1518.5, 1449.0]
+    assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
+    expected_values = [3371.5, 3246.0] # values 1 and 2 are NA
+    assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
+
+def test_dye_bias_nonlinear_all(test_samples):
+    # small differences with R as the probes with no signal (0) are not masked properly in Sesame
+    test_samples.dye_bias_correction_nl()
+    expected_values = [462.5, 6534.5, 166.0, 475.0]
+    assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
+    expected_values = [307.0, 288.0, 1518.5, 1449.0]
+    assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
+    expected_values = [3371.5, 3246.0] # values 1 and 2 are NA
+    assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
