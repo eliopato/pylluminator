@@ -881,6 +881,46 @@ class Samples:
             factor = reference[sample_name] / norm_values_dict[channel][sample_name]
             self._signal_df[(sample_name, channel)] *= factor
 
+    def dye_bias_correction_l(self, sample_name: str | None = None, mask: bool = True, reference: dict | None = None) -> None:
+        """Correct dye bias by linear scaling. Scale both the green and red signal to a reference level. If
+        the reference level is not given, it is set to the mean intensity of all the in-band signals.
+
+        :param sample_name: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
+        :type sample_name: str | None
+
+        :param mask: set to False if you don't want any mask to be applied. Default: True
+        :type mask: bool
+
+        :param reference: values to use as reference to scale red and green signal for each sample (=dict keys). Default: None
+        :type: dict | None
+
+        :return: None
+        """
+
+        self.reset_betas()  # reset betas as we are modifying the signal dataframe
+        if sample_name is None:
+            for sample_name in self.sample_names:
+                self.dye_bias_correction_l(sample_name, mask, reference)
+            return
+
+        if not isinstance(sample_name, str):
+            LOGGER.error('sample_name should be a string')
+            return
+
+        if sample_name not in self.sample_names:
+            LOGGER.error(f'Sample {sample_name} not found')
+            return
+
+        if reference is None:
+            reference = self.get_mean_ib_intensity(sample_name, mask)
+
+        norm_values_dict = {'R': self.type1_red(mask)[(sample_name, 'R')].median(axis=None),
+                            'G': self.type1_green(mask)[(sample_name, 'G')].median(axis=None)}
+
+        for channel in ['R', 'G']:
+            factor = reference[sample_name] / norm_values_dict[channel]
+            self._signal_df[(sample_name, channel)] *= factor
+
     def dye_bias_correction_nl(self, sample_name: str | None = None, mask: bool = True) -> None:
         """Dye bias correction by matching green and red to mid-point.
 

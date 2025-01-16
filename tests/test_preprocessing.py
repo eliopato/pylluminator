@@ -37,12 +37,38 @@ def test_infer_infinium_I_channel(test_samples):
     # dfs_after = df_r.join(df_py.droplevel('methylation_state', axis=1))
     # dfs_after[dfs_after.col != dfs_after.channel]
 
-def test_dye_bias_linear(test_samples):
+def test_dye_bias_corr(test_samples):
     test_samples.dye_bias_correction('PREC_500_3')
-    # should be 3424,625, 67547,79, 898.522, 2944.005
     expected_values = [288.32562255859375, 5686.97412109375, 154.75692749023438, 507.06072998046875]
     assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
     expected_values = [213.75865173339844, 205.05917358398438, 1456.2840576171875, 1399.2308349609375]
     assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
     expected_values = [3054.76025390625, 2941.80810546875]  # values 1 and 2 are NA
+    assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
+
+def test_dye_bias_corr_all(test_samples):
+    test_samples.dye_bias_correction()
+    expected_values = [288.32562255859375, 5686.97412109375, 154.75692749023438, 507.06072998046875]
+    assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
+    expected_values = [213.75865173339844, 205.05917358398438, 1456.2840576171875, 1399.2308349609375]
+    assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
+    expected_values = [3054.76025390625, 2941.80810546875]  # values 1 and 2 are NA
+    assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
+
+def test_dye_bias_linear(test_samples):
+    test_samples.dye_bias_correction_l('PREC_500_3')
+    expected_values = [405.728759765625, 8002.650390625, 205.05152893066406, 671.8508911132812]
+    assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
+    expected_values = [300.7989196777344, 288.5570983886719, 1929.563232421875, 1853.96826171875]
+    assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
+    expected_values = [4298.62646484375, 3897.869140625] # values 1 and 2 are NA
+    assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
+
+def test_dye_bias_linear_all(test_samples):
+    test_samples.dye_bias_correction_l()
+    expected_values = [405.728759765625, 8002.650390625, 205.05152893066406, 671.8508911132812]
+    assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
+    expected_values = [300.7989196777344, 288.5570983886719, 1929.563232421875, 1853.96826171875]
+    assert (test_samples.get_probes('rs6991394_BC11')['PREC_500_3'].values == expected_values).all() # Type I red
+    expected_values = [4298.62646484375, 3897.869140625] # values 1 and 2 are NA
     assert (test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == expected_values).all() # Type II
