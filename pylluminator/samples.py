@@ -1086,8 +1086,8 @@ class Samples:
 
         for sample_name in sample_names:
 
-            median_bg = {'G': np.median(self.oob_green(mask)[sample_name]),
-                         'R': np.median(self.oob_red(mask)[sample_name])}
+            median_bg = {'G': self.oob_green(mask)[sample_name].median(axis=None),
+                         'R': self.oob_red(mask)[sample_name].median(axis=None)}
 
             for channel in ['G', 'R']:
                 for methylation_state in ['U', 'M']:
