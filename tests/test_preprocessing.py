@@ -1,16 +1,6 @@
-import pytest
-import os
 import pandas as pd
 import numpy as np
 
-from pylluminator.samples import read_samples
-
-@pytest.fixture
-def test_samples():
-    min_beads = 0
-    max_samples = 2
-    data_path = os.path.expanduser('~/data/pylluminator-utest')
-    return read_samples(data_path, annotation=None, min_beads=min_beads, max_samples=max_samples)
 
 def test_poobah(test_samples):
     test_samples.poobah('PREC_500_3')
@@ -113,7 +103,6 @@ def test_noob_all(test_samples):
 
 def test_scrub(test_samples):
     test_samples.scrub_background_correction('PREC_500_3')
-
     expected_values = [58.0, 4402.0, 1.0, 308.0]
     assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
     expected_values = [1.0, 1.0, 1639.0, 1559.0]
@@ -123,7 +112,6 @@ def test_scrub(test_samples):
 
 def test_scrub_all(test_samples):
     test_samples.scrub_background_correction()
-
     expected_values = [58.0, 4402.0, 1.0, 308.0]
     assert (test_samples.get_probes('cg00002033_TC12')['PREC_500_3'].values == expected_values).all() # Type I green
     expected_values = [1.0, 1.0, 1639.0, 1559.0]

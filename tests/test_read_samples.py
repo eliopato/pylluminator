@@ -1,14 +1,9 @@
-import pytest
 import os
 import numpy as np
 
 from pylluminator.annotations import ArrayType
 from pylluminator.samples import read_samples
 from pylluminator.utils import download_from_geo
-
-@pytest.fixture
-def data_path():
-    return os.path.expanduser('~/data/pylluminator-utest')
 
 def test_download_from_geo(data_path):
     geo_ids = ['GSM7698438', 'GSM7698446', 'GSM7698462', 'GSM7698435', 'GSM7698443', 'GSM7698459']

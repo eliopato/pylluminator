@@ -1,20 +1,7 @@
 import pandas as pd
-import pytest
-import os
 import numpy as np
 from pylluminator.dm import get_dmp, get_dmr, _get_model_parameters
 
-from pylluminator.samples import read_samples
-from pylluminator.visualizations import plot_dmp_heatmap
-
-@pytest.fixture
-def test_samples():
-    min_beads = 1
-    data_path = os.path.expanduser('~/data/pylluminator-utest')
-    samples = read_samples(data_path, annotation=None, min_beads=min_beads)
-    samples.sample_sheet['sample_type'] = [n.split('_')[0] for n in samples.sample_sheet.sample_name]
-    samples.sample_sheet['sample_number'] = [int(n[-1]) for n in samples.sample_sheet.sample_name]
-    return samples
 
 def test_dmp(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
@@ -44,14 +31,13 @@ def test_ols_na():
 
 def test_dmr(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
-    # dmps, contrasts = get_dmp(test_samples, '~ sample_type', probe_ids=probe_ids)
     dmps, contrasts = get_dmp(test_samples, '~ sample_type', probe_ids=probe_ids)
     dmrs = get_dmr(test_samples, dmps, contrasts, probe_ids=probe_ids)
     assert max(dmrs.segment_id) == 516
     assert len(dmrs[dmrs.segment_id == 515]) == 3
 
-    expected_values =['X',  515, 0.06386775794434923, 0.04350292682647744, 2.22147739294547e-07, 72.06726215266518,
-                      0.8722137212753298, 0.012102773093109292, 0.06386775794434768, -2.5416666348952917,
-                       -0.04350292682647744, 0.01711590585059933, 151960303, 153792416, 0.04285787432064722,
-                      0.055877280730961175, 0.7505345278316077, 0.055821167098150985]
+    expected_values =['X', 152871744, 152871746, 515, 0.06386775794434923, 0.04350292682647744, 2.22147739294547e-07,
+                      72.06726215266518, 0.8722137212753298, 0.012102773093109292, 0.06386775794434768,
+                      -2.5416666348952917, -0.04350292682647744, 0.01711590585059933, 151960303, 153792416,
+                      0.04285787432064722, 0.055877280730961175, 0.7505345278316077, 0.055821167098150985]
     assert dmrs.loc['cg00017004_BC21', ].values.tolist() == expected_values

@@ -1,15 +1,5 @@
-import pytest
-import os
 import pandas as pd
 
-from pylluminator.samples import read_samples
-
-@pytest.fixture
-def test_samples():
-    min_beads = 0
-    max_samples = 2
-    data_path = os.path.expanduser('~/data/pylluminator-utest')
-    return read_samples(data_path, annotation=None, min_beads=min_beads, max_samples=max_samples)
 
 # test beta values on object my_samples
 def test_calculate_betas(test_samples):
@@ -32,13 +22,13 @@ def test_betas_options(test_samples):
     test_df = test_samples.get_betas(sample_name="PREC_500_3")
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.Series)
-    assert test_df[0] == test_samples.get_betas()['PREC_500_3'][0]
+    assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0][0]
 
-    # test sample_name and custom_sheet options
+    # test sample_name and custom_sheet options (a warning should be triggered for using both sample_name and custom_sheet)
     test_df = test_samples.get_betas(sample_name="PREC_500_3", custom_sheet=pd.DataFrame())
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.Series)
-    assert test_df[0] == test_samples.get_betas()['PREC_500_3'][0]
+    assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0][0]
 
     # test custom_sheet option
     custom_sheet = test_samples.sample_sheet[test_samples.sample_sheet.sample_name == 'LNCAP_500_3']
@@ -46,7 +36,7 @@ def test_betas_options(test_samples):
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.DataFrame)
     assert len(test_df.columns) == 1
-    assert test_df['LNCAP_500_3'][0] == test_samples.get_betas()['LNCAP_500_3'][0]
+    assert test_df['LNCAP_500_3'].iloc[0] == test_samples.get_betas()['LNCAP_500_3'].iloc[0]
 
 
 
