@@ -422,17 +422,23 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
 
     :param dmps:  p-values and statistics for each probe, as returned by get_dmp()
     :type dmps: pandas.DataFrame
-
     :param samples: samples to use for plotting
     :type samples: Samples
-
+    :param contrast: name of the contrast to use to sort beta values. Must be one of the output contrasts from get_dmp().
+        If None is given, will use the F-statistics p-value. Default: None
+    :type contrast: str | None
     :param nb_probes: number of probes to plot. Default: 100
     :type nb_probes: int
-
+    :param figsize: size of the plot. Default: (10, 15)
+    :type figsize: tuple
+    :param var: name of the variable to use for the columns of the heatmap. If None, will use the sample names. Default: None
+    :type var: str | list[str] | None
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display. Default: None
+    :type custom_sheet: pandas.DataFrame | None
     :param drop_na: set to True to drop probes with any NA beta values. Note that if set to False, the rendered plot
         won't show the hierarchical clusters. Default: True
     :type drop_na: bool
-
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
@@ -444,6 +450,10 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
     if isinstance(contrast, list):
         LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
+    if contrast is None:
+        sorted_probes = dmps.sort_values('f_pvalue').index
+    else:
+        sorted_probes = dmps.sort_values(f'{contrast}_p_value').index
 
     # sort betas per p-value
     betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
@@ -453,12 +463,10 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
         sheet = samples.sample_sheet
         colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet.sample_name == c, v].iloc[0]) for v in var]) + ')' for c in betas.columns]
         betas.columns = colnames
-
-    if contrast is None:
-        sorted_probes = dmps.sort_values('f_pvalue').index
-    else:
-        sorted_probes = dmps.sort_values(f'{contrast}_p_value').index
-    sorted_betas = set_level_as_index(betas, 'probe_id', drop_others=True).loc[sorted_probes][:nb_probes].T
+    betas = set_level_as_index(betas, 'probe_id', drop_others=True)
+    sorted_probes = sorted_probes[sorted_probes.isin(betas.index)]
+    nb_probes = min(nb_probes, len(sorted_probes))
+    sorted_betas = betas.loc[sorted_probes][:nb_probes].T
 
     if drop_na:
         plot = sns.clustermap(sorted_betas, yticklabels=True, figsize=figsize)

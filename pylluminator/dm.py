@@ -42,6 +42,9 @@ def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_name
 
     :return: f statistics p-value, effect size, and for each factor: p-value, t-value, estimate, standard error
     :rtype: list[float]"""
+    if np.isnan(betas_values).all():
+        return [np.nan] * (2 + 4 * len(factor_names))
+
     fitted_ols = OLS(betas_values, design_matrix, missing='drop').fit()  # drop NA values
     # fitted ols is a statsmodels.regression.linear_model.RegressionResultsWrapper object
     estimates = fitted_ols.params[1:].tolist()  + [0]# remove the intercept
@@ -137,7 +140,7 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
 
 
 def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dist_cutoff: float | None = None,
-            custom_sheet: pd.DataFrame | None = None, seg_per_locus: float = 0.5) -> pd.DataFrame:
+            custom_sheet: pd.DataFrame | None = None, seg_per_locus: float = 0.5, probe_ids:None|list[str]=None) -> pd.DataFrame:
     """Find Differentially Methylated Regions (DMR) based on euclidian distance between beta values
 
     :param samples: samples to use
@@ -149,9 +152,13 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     :param dist_cutoff: cutoff used to find change points between DMRs, used on euclidian distance between beta values.
         If set to None (default) will be calculated depending on `seg_per_locus` parameter value. Default: None
     :type dist_cutoff: float | None
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful to filter out samples. Default: None
+    :type custom_sheet: pandas.DataFrame | None
     :param seg_per_locus: used if dist_cutoff is not set : defines what quartile should be used as a distance cut-off.
         Higher values leads to more segments. Should be 0 < seg_per_locus < 1. Default: 0.5.
     :type seg_per_locus: float
+    :param probe_ids: list of probe IDs to use. Useful to work on a subset for testing purposes. Default: None
+    :type probe_ids: list[str] | None
 
     :return: dataframe with DMRs
     :rtype: pandas.DataFrame
@@ -162,6 +169,9 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     # data initialization
     betas = samples.get_betas(drop_na=False, custom_sheet=custom_sheet)
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
+
+    if probe_ids is not None:
+        betas = betas.loc[probe_ids]
 
     # get genomic range information (for chromosome id and probe position)
     probe_coords_df = samples.annotation.genomic_ranges.drop(columns='strand', errors='ignore')
@@ -192,16 +202,16 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     beta_euclidian_dist.iloc[-1] = None  # last probe shouldn't have a distance (default is 0 otherwise)
 
     # determine cut-off if not provided
-    if dist_cutoff is None:
+    if dist_cutoff is None or dist_cutoff <= 0:
         if not 0 < seg_per_locus < 1:
             LOGGER.warning(f'Invalid parameter `seg_per_locus` {seg_per_locus}, should be in ]0:1[. Setting it to 0.5')
             seg_per_locus = 0.5
-        # dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
-        dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
+        if dist_cutoff is not None and dist_cutoff <= 0:
+            LOGGER.warning('Wrong input : euclidian distance cutoff for DMP should be > 0. Recalculating it.')
+        dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
+        # dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
         LOGGER.debug(f'Segments per locus : {seg_per_locus}')
 
-    if dist_cutoff <= 0:
-        LOGGER.warning('Euclidian distance cutoff for DMP should be > 0')
     LOGGER.debug(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
 
     # find change points
@@ -215,13 +225,14 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     segments = probe_coords_df.loc[betas.index].join(segment_id).sort_values('segment_id')
 
     last_segment_id = segment_id.max()
-    LOGGER.info(f'Number of segments : {last_segment_id}')
+    LOGGER.info(f'Number of segments : {last_segment_id:,}')
 
     # assign new segments IDs to NA segments
+    # NA segments = betas with NA values or probes with 0-width ranges
     na_segments_indexes = segments.segment_id.isna()
     nb_na_segments = na_segments_indexes.sum()
     if nb_na_segments > 0:
-        LOGGER.info(f'Adding {nb_na_segments} NA segments')
+        LOGGER.info(f'Adding {nb_na_segments:,} NA segments')
         segments.loc[na_segments_indexes, 'segment_id'] = [n for n in range(nb_na_segments)] + last_segment_id + 1
         segments.segment_id = segments.segment_id.astype(int)
 
@@ -243,17 +254,18 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     for c in contrast:
         dmr[f'segment_{c}_p_value'] = segments_grouped[f'{c}_p_value'].transform(_combine_p_values_stouffer)
         nb_significant = len(dmr.loc[dmr[f'segment_{c}_p_value'] < 0.05, 'segment_id'].drop_duplicates())
-        LOGGER.info(f' - {nb_significant} significant segments for {c} (p-value < 0.05)')
+        LOGGER.info(f' - {nb_significant:,} significant segments for {c} (p-value < 0.05)')
 
         # use Benjamini/Hochberg's method to adjust p-values
         idxs = ~np.isnan(dmr[f'segment_{c}_p_value'])  # any NA in segment_p_value column causes BH method to crash
         dmr.loc[idxs, f'segment_{c}_p_value_adjusted'] = multipletests(dmr.loc[idxs, f'segment_{c}_p_value'], method='fdr_bh')[1]
         nb_significant = len(dmr.loc[dmr[f'segment_{c}_p_value_adjusted'] < 0.05, 'segment_id'].drop_duplicates())
-        LOGGER.info(f' - {nb_significant} significant segments after Benjamini/Hochberg\'s adjustment for {c} (p-value < 0.05)')
+        LOGGER.info(f' - {nb_significant:,} significant segments after Benjamini/Hochberg\'s adjustment for {c} (p-value < 0.05)')
 
     # calculate estimates' means for each factor
     for c in dmps.columns:
-        if c.startswith('estimate_'):
+        if c.endswith('estimate'):
             dmr[f'segment_{c}'] = segments_grouped[c].transform('mean')
 
+    # dmr = dmr.drop(columns = dmps.columns, errors='ignore')
     return dmr

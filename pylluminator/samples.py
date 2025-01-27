@@ -653,6 +653,7 @@ class Samples:
 
         # get the channel (provided by the index) where the signal is at its max for each probe
         type1_df['inferred_channel'] = type1_df.droplevel(0, axis=1).idxmax(axis=1, numeric_only=True).values
+        type1_df = type1_df.sort_index(axis=1)
 
         # handle failed probes
         if not switch_failed or mask_failed:
@@ -685,8 +686,8 @@ class Samples:
             self._signal_df = set_channel_index_as(self._signal_df, 'inferred_channel', drop=True)  # make the inferred channel the new channel index
             self._signal_df = self._signal_df.sort_index(axis=1)
 
-        cols = ['inferred_channel', 'channel']
-        return type1_df.reset_index().set_index(cols).groupby(cols).count()['probe_id']
+        cols = ['channel', 'inferred_channel']
+        return type1_df['inferred_channel'].reset_index().groupby(cols, observed=True).count()['probe_id']
 
     ####################################################################################################################
     # Preprocessing functions
