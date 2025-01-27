@@ -5,7 +5,7 @@ from pylluminator.utils import download_from_geo
 
 @pytest.fixture(scope='session')
 def data_path():
-    return os.path.expanduser('~/data/pylluminator-utestgi')
+    return os.path.expanduser('~/data/pylluminator-utest')
 
 @pytest.fixture(scope='session')
 def test_samples_ini(data_path):
@@ -18,6 +18,7 @@ def test_samples_ini(data_path):
     samples.sample_sheet['sample_number'] = [int(n[-1]) for n in samples.sample_sheet.sample_name]
     return samples
 
+# we load samples once but always work on a fresh copy, so that the order of the tests does not matter
 @pytest.fixture
 def test_samples(data_path, test_samples_ini):
     return test_samples_ini.copy()

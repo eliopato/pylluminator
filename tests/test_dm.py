@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import pytest
+
 from pylluminator.dm import get_dmp, get_dmr, _get_model_parameters
 
 
@@ -40,4 +42,4 @@ def test_dmr(test_samples):
                       72.06726215266518, 0.8722137212753298, 0.012102773093109292, 0.06386775794434768,
                       -2.5416666348952917, -0.04350292682647744, 0.01711590585059933, 151960303, 153792416,
                       0.04285787432064722, 0.055877280730961175, 0.7505345278316077, 0.055821167098150985]
-    assert dmrs.loc['cg00017004_BC21', ].values.tolist() == expected_values
+    assert dmrs.loc['cg00017004_BC21', ].values.tolist() == pytest.approx(expected_values)

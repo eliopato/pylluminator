@@ -22,13 +22,13 @@ def test_betas_options(test_samples):
     test_df = test_samples.get_betas(sample_name="PREC_500_3")
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.Series)
-    assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0][0]
+    assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0]
 
     # test sample_name and custom_sheet options (a warning should be triggered for using both sample_name and custom_sheet)
     test_df = test_samples.get_betas(sample_name="PREC_500_3", custom_sheet=pd.DataFrame())
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.Series)
-    assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0][0]
+    assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0]
 
     # test custom_sheet option
     custom_sheet = test_samples.sample_sheet[test_samples.sample_sheet.sample_name == 'LNCAP_500_3']
