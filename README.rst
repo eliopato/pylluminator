@@ -42,24 +42,23 @@ Visualization examples:
 
 .. list-table::
 
-    * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
-            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_19_0.png
+    * - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_1_-_Read_data_and_get_betas_16_0.png
+            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_1_-_Read_data_and_get_betas_16_0.png
 
             Fig 1. Beta values
 
-      - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
-            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_12_0.png
+      - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_13_0.png
+            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_13_0.png
 
             Fig 2. Differentially methylated regions (DMRs)
 
-    * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
-            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_14_1.png
+    * - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_15_1.png
+            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_15_1.png
 
             Fig 3. Gene visualization
 
-      - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
-            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
-
+      - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_%28CNV%29_9_0.png
+            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_%28CNV%29_9_0.png
             Fig 4. Copy number variations (CNVs)
 
 
