@@ -50,20 +50,20 @@ class Samples:
     def __getitem__(self, item: int | str | list[str]) -> pd.DataFrame | None:
         if self._signal_df is not None:
             columns = self._signal_df.columns
-            if isinstance(item, int) and item < len(columns):
-                return self._signal_df[columns[item]].copy()
+            if isinstance(item, int) and item < len(self.sample_names):
+                return self._signal_df[[self.sample_names[0]]].copy()
             elif isinstance(item, str) and item in self.sample_names:
-                return self._signal_df[item].copy()
+                return self._signal_df[[item]].copy()
             elif isinstance(item, list):
                 samples_names = []
                 for sample in item:
                     if sample not in self.sample_names:
-                        LOGGER.warning(f'Could not find sample {sample} in {self.sample_names}')
+                        LOGGER.warning(f'Could not find sample "{sample}" in {self.sample_names}')
                     else:
                         samples_names.append(sample)
                 if len(samples_names) > 0:
                     return self._signal_df[samples_names].copy()
-            LOGGER.error(f'Could not find item {item} in {columns}')
+            LOGGER.error(f'Could not find item {item} in {self.sample_names} of length {self.nb_samples}')
         else:
             LOGGER.error('No signal dataframe')
         return None
@@ -301,7 +301,7 @@ class Samples:
 
         return self.get_signal_df(mask).xs(probe_type, level='probe_type', drop_level=False)#[['R', 'G']]
 
-    def get_probes(self, probe_ids: list[str] | str, mask: bool = True) -> pd.DataFrame | None:
+    def get_probes(self, probe_ids: list[str] | str, mask: bool = True) -> pd.DataFrame:
         """Returns the probes dataframe filtered on a list of probe IDs
 
         :param probe_ids: the IDs of the probes to select
@@ -311,10 +311,10 @@ class Samples:
         :type mask: bool
 
         :return: methylation signal dataframe
-        :rtype: pandas.DataFrame | None
+        :rtype: pandas.DataFrame
         """
         if probe_ids is None or len(probe_ids) == 0:
-            return None
+            return pd.DataFrame()
 
         if isinstance(probe_ids, str):
             probe_ids = [probe_ids]
@@ -842,6 +842,14 @@ class Samples:
             custom_sheet = None
 
         if custom_sheet is not None:
+            if len(custom_sheet) == 0:
+                LOGGER.error('Empty custom_sheet')
+                return None
+
+            if 'sample_name' not in custom_sheet.columns:
+                LOGGER.error(f'No sample_name column found in custom_sheet ({custom_sheet.columns})')
+                return None
+
             # keep only samples that are both in sample sheet and beta columns
             filtered_samples = [col for col in custom_sheet.sample_name.values if col in betas.columns]
             if len(filtered_samples) == 0:
@@ -1309,30 +1317,51 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     LOGGER.info('reading sample files done\n')
     return samples
 
-def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations) -> Samples:
+def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations, no_suffix=False) -> Samples | None:
     """Reads all .csv files in the directory provided, supposing they are SigDF from SeSAMe saved as csv files.
 
     :param datadir:  directory where sesame files are, or path to a .csv file
     :type datadir: str | os.PathLike | MultiplexedPath
-
     :param annotation: Annotations object with genome version and array type corresponding to the data stored
     :type annotation: Annotations
+    :param no_suffix: set to True if the probe ids from sesame don't have a suffix (i.e. they look like 'cg00000155' and
+        not 'cg00000155_BC21'). Default: False
+    :type no_suffix: bool
 
     :return: a Samples object
-    :rtype: Samples"""
+    :rtype: Samples | None"""
+
     LOGGER.info('>> start reading sesame files')
 
-    # fin all .csv files in the subtree depending on datadir type
-    if '.csv' in str(convert_to_path(datadir)):
+    if isinstance(datadir, list):
+        LOGGER.error('You can only provide one datadir or filepath for sesame files')
+        return None
+
+    # find all .csv files in the subtree depending on datadir type
+    datadir = convert_to_path(datadir)
+    if '.csv' in str(datadir):
         file_list = [datadir]
     else:
         file_list = get_files_matching(datadir, '*.csv*')
+
+    if len(file_list) == 0:
+        LOGGER.error('no csv files found')
+        return None
 
     samples = Samples()
     samples.annotation = annotation
     sample_names = [f.stem.split('.csv')[0] for f in file_list]
     samples.sample_sheet = pd.DataFrame({'sample_id': sample_names, 'sample_name': sample_names})
     dfs = []
+
+    # prepare manifest for merge
+    manifest = annotation.probe_infos.loc[:, ['probe_id', 'type', 'probe_type', 'channel', 'mask_info']]
+    # remove probe suffix from manifest if specified
+    if no_suffix:
+        manifest['probe_id'] = manifest.probe_id.apply(remove_probe_suffix)
+    manifest = manifest.set_index('probe_id')
+
+    mandatory_columns = ['probe_id', 'MG', 'MR', 'UG', 'UR', 'mask']
 
     # load all samples
     for csv_file in file_list:
@@ -1341,17 +1370,22 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
 
         # read input file
         sig_df = pd.read_csv(csv_file, low_memory=False)
-        sig_df = sig_df.rename(columns={'col': 'channel', 'Probe_ID': 'probe_id'})
+        sig_df = sig_df.rename(columns={'Probe_ID': 'probe_id'})
 
-        # prepare manifest for merge
-        manifest = annotation.probe_infos.loc[:, ['probe_id', 'type', 'probe_type', 'channel', 'mask_info']]
-        # remove probe suffix from manifest as they are not in SigDF files
-        manifest['probe_id_to_join'] = manifest.probe_id.apply(remove_probe_suffix)
-        manifest = manifest.set_index('probe_id_to_join')
-        sig_df = sig_df.set_index('probe_id').drop(columns='channel', errors='ignore')
+        # check that the csv file has all the mandatory columns
+        missing_col = False
+        for col in mandatory_columns:
+            if col not in sig_df.columns:
+                LOGGER.error(f'no "{col}" column found in {csv_file}, skip the file')
+                missing_col = True
+        if missing_col:
+            continue
+
+        # only keep mandatory columns
+        sig_df = sig_df.loc[:, mandatory_columns].set_index('probe_id')
 
         # merge manifest and mask
-        sample_df = sig_df.join(manifest, how='inner').set_index('probe_id')
+        sample_df = sig_df.join(manifest, how='inner')
 
         # move Green type II probes values to MG column
         sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']
@@ -1371,25 +1405,10 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
         sample_df = sample_df.sort_index(axis=1).drop(columns='mask')
         dfs.append(sample_df)
 
+    if len(dfs) == 0:
+        return None
+
     samples._signal_df = pd.concat(dfs, axis=1, keys=sample_names)
 
     LOGGER.info('done reading sesame files\n')
     return samples
-
-
-# def from_sesame(filepath: str | os.PathLike, annotation: Annotations, name: str | None = None):
-#     """Read a SigDF object from SeSAMe, saved in a .csv file, and convert it into a Sample object.
-#
-#      :param filepath: file containing the sigdf to read
-#      :type filepath: str | os.PathLike
-#
-#     :param annotation: annotation data corresponding to the sample
-#     :type annotation: Annotations
-#
-#     :param name: sample name
-#     :type name: str
-#
-#     :return: None"""
-#
-#
-#     return sample

@@ -45,6 +45,14 @@ def test_dye_bias_corr(test_samples):
     expected_values = [3054.76025390625, 2941.80810546875]
     assert test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == pytest.approx(expected_values)
 
+def test_dye_bias_corr_non_existent(test_samples):
+    # no change should be done if a wrong sample is passed
+    test_samples2 = test_samples.copy()
+    test_samples2.dye_bias_correction('no sample')  # non existent sample
+    assert test_samples.get_signal_df().equals(test_samples2.get_signal_df())
+    test_samples2.dye_bias_correction(2587)  # wrong input type
+    assert test_samples.get_signal_df().equals(test_samples2.get_signal_df())
+
 def test_dye_bias_corr_all(test_samples):
     test_samples.dye_bias_correction()
     # Type I green
@@ -68,6 +76,14 @@ def test_dye_bias_linear(test_samples):
     # Type II - values 1 and 2 are NA
     expected_values = [4298.62646484375, 3897.869140625]
     assert test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == pytest.approx(expected_values)
+
+def test_dye_bias_linear_non_existent(test_samples):
+    # no change should be done if a wrong sample is passed
+    test_samples2 = test_samples.copy()
+    test_samples2.dye_bias_correction_l('no sample')  # non existent sample
+    assert test_samples.get_signal_df().equals(test_samples2.get_signal_df())
+    test_samples2.dye_bias_correction_l(2587)  # wrong input type
+    assert test_samples.get_signal_df().equals(test_samples2.get_signal_df())
 
 def test_dye_bias_linear_all(test_samples):
     test_samples.dye_bias_correction_l()
@@ -154,3 +170,27 @@ def test_scrub_all(test_samples):
     # Type II - values 1 and 2 are NA
     expected_values =[2284.0, 3722.0]
     assert test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == pytest.approx(expected_values)
+
+def test_apply_xy(test_samples):
+    test_samples.apply_xy_mask()
+    assert test_samples.masks.number_probes_masked() == 24953
+
+def test_apply_non_unique_mask(test_samples):
+    test_samples.apply_non_unique_mask()
+    assert test_samples.masks.number_probes_masked() == 23664
+    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 23716
+    assert test_samples.masks.number_probes_masked(mask_name='min_beads_1', sample_name='PREC_500_3') == 52
+
+def test_normalization_controls(test_samples):
+    norm_controls = test_samples.get_normalization_controls()
+    assert len(norm_controls.columns) == 25
+    assert len(norm_controls) == 170
+    assert len(norm_controls.xs('R', level='channel')) == 85
+
+def test_get_betas_empty_sheet(test_samples):
+    df = test_samples.get_betas(custom_sheet=pd.DataFrame())
+    assert df is None
+
+def test_get_betas_drop_na(test_samples):
+    df = test_samples.get_betas(drop_na=True)
+    assert len(df) == 937544

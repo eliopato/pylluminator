@@ -1,8 +1,9 @@
 import os
 import numpy as np
+import pandas as pd
 
 from pylluminator.annotations import ArrayType
-from pylluminator.samples import read_samples
+from pylluminator.samples import read_samples, from_sesame
 from pylluminator.utils import download_from_geo
 
 def test_download_from_geo(data_path):
@@ -145,3 +146,54 @@ def test_read_samples(data_path):
     assert probe_tII_g[('R', 'M')].values == 319.0
     assert probe_tII_g[('G', 'U')].values == 2827.0
     assert probe_tII_g[('G', 'M')].values == 1522.0
+
+def test_read_sample_wrong_input(data_path):
+    assert read_samples(data_path, sample_sheet_df=pd.DataFrame(), sample_sheet_name='sample.csv') is None
+    assert read_samples(data_path, sample_sheet_name='nonexistent.csv') is None
+
+def test_from_sesame(test_samples):
+    assert from_sesame('fakedir', test_samples.annotation) is None
+    assert from_sesame(['liste'], test_samples.annotation) is None  # input cant be a list
+
+    csv_content = ('"","Probe_ID","MG","MR","UG","UR","col","mask"\n'
+     '"1","cg00000029_TC21",NA,NA,169,3222,"2",FALSE\n'
+     '"2","cg00000109_TC21",NA,NA,1664,577,"2",FALSE\n'
+     '"3","cg00000155_BC21",NA,NA,1901,404,"2",FALSE\n'
+     '"4","cg00000158_BC21",NA,NA,2163,438,"2",FALSE\n'
+     '"5","cg00000165_TC21",NA,NA,215,2370,"2",TRUE\n'
+     '"6","cg00000221_BC21",NA,NA,1195,695,"2",FALSE\n'
+     '"7","cg00000236_TC21",NA,NA,1491,433,"2",FALSE\n'
+     '"8","cg00000289_TC21",NA,NA,406,289,"2",TRUE\n'
+     '"9","cg00000292_BC21",NA,NA,3596,3219,"2",FALSE\n')
+    file_path = 'sesame1.csv'
+    with open(file_path, 'w') as f:
+        f.write(csv_content)
+
+    csv_content = ''',Probe_ID,MG,MR,UG,UR,col,mask\n
+    1,cg00000029_TC21,NA,NA,187,4268,2,FALSE\n
+    2,cg00000109_TC21,NA,NA,1823,885,2,FALSE\n
+    3,cg00000155_BC21,NA,NA,2107,347,2,FALSE\n
+    4,cg00000158_BC21,NA,NA,2841,436,2,FALSE\n
+    5,cg00000165_TC21,NA,NA,197,2445,2,FALSE\n
+    6,cg00000221_BC21,NA,NA,1375,658,2,FALSE\n
+    7,cg00000236_TC21,NA,NA,1829,663,2,FALSE\n
+    8,cg00000289_TC21,NA,NA,599,166,2,FALSE\n
+    9,cg00000292_BC21,NA,NA,4161,3318,2,FALSE\n
+    '''
+    file_path = 'sesame2.csv'
+    with open(file_path, 'w') as f:
+        f.write(csv_content)
+
+    sample1 = from_sesame('sesame1.csv', test_samples.annotation)
+    assert sample1 is not None
+    assert sample1.sample_names == ['sesame1']
+    assert sample1.nb_probes == 9
+    assert sample1.masks.number_probes_masked(sample_name='sesame1') == 2
+
+    samples = from_sesame('.', test_samples.annotation)
+    assert samples is not None
+    assert 'sesame1' in samples.sample_names
+    assert 'sesame2' in samples.sample_names
+    assert samples.nb_probes == 9
+    assert samples.masks.number_probes_masked(sample_name='sesame1') == 2
+    assert samples.masks.number_probes_masked(sample_name='sesame2') == 0
