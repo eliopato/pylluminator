@@ -87,6 +87,22 @@ class Samples:
         :rtype: int"""
         return len(self.sample_names)
 
+    @property
+    def nb_probes(self) -> int:
+        """Count the number of probes in the signal dataframe
+
+        :return: number of probes
+        :rtype: int"""
+        return len(self._signal_df)
+
+    @property
+    def probe_ids(self) -> list[str]:
+        """Return the list of probe IDs contained in the signal dataframe
+
+        :return: list of probe IDs
+        :rtype: list[str]"""
+        return self._signal_df.index.get_level_values('probe_id').tolist()
+
     def type1(self, mask: bool = True) -> pd.DataFrame:
         """Get the subset of Infinium type I probes, and apply the mask if `mask` is True
 

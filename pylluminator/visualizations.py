@@ -469,11 +469,11 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
     sorted_betas = betas.loc[sorted_probes][:nb_probes].T
 
     if drop_na:
-        plot = sns.clustermap(sorted_betas, yticklabels=True, figsize=figsize)
+        plot = sns.clustermap(sorted_betas, yticklabels=True, xticklabels=True, figsize=figsize)
         if save_path is not None:
             plot.savefig(os.path.expanduser(save_path))
     else:
-        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), yticklabels=True, figsize=figsize)
+        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), yticklabels=True, xticklabels=True, figsize=figsize)
         if save_path is not None:
             plot.get_figure().savefig(os.path.expanduser(save_path))
 

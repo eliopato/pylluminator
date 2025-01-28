@@ -274,7 +274,7 @@ def merge_alt_chromosomes(chromosome_id: str | list[str] | pd.Series) -> list[st
     if first_str_part.isdigit() or first_str_part in ['x', 'y', 'm', '*']:
         return first_str_part
 
-    LOGGER.warning(f'Can`t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
+    LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
     return chromosome_id
 
 

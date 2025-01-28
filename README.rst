@@ -1,11 +1,21 @@
 |logo| Welcome to pylluminator
 ==============================
-.. _GitHub Actions: https://github.com/eliopato/pylluminator/actions
-
 
 .. image:: https://img.shields.io/github/actions/workflow/status/eliopato/pylluminator/run_test.yml?branch=main
-   :target: _GitHub Actions
+   :target: https://github.com/eliopato/pylluminator/actions
    :alt: Test Status
+
+.. image:: https://img.shields.io/codecov/c/github/eliopato/pylluminator
+   :target: https://codecov.io/gh/eliopato/pylluminator
+   :alt: Code coverage
+
+.. image:: https://readthedocs.com/projects/pylluminator/badge/?version=latest
+   :target: https://pylluminator.readthedocs.io/en/latest/
+   :alt: Documentation Status
+
+.. image:: https://img.shields.io/badge/License-MIT-blue.svg
+   :target: ./LICENSE
+   :alt: MIT License
 
 Illuminator is a Python package designed to provide an efficient workflow for processing and analyzing DNA
 methylation data, mirroring the functionalities of the popular R package `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_.
@@ -63,8 +73,9 @@ Visualization examples:
 
             Fig 3. Gene visualization
 
-      - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
-            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_(CNV)_9_0.png
+      - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_9_0.png
+            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_9_0.png
+
             Fig 4. Copy number variations (CNVs)
 
 

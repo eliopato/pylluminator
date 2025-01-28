@@ -28,12 +28,12 @@ extensions = [
 ]
 
 intersphinx_mapping = {
-    "rtd": ("https://docs.readthedocs.io/en/stable/", None),
+    "rtd": ("https://docs.readthedocs.com/platform/stable/", None),
     "python": ("https://docs.python.org/3/", None),
     "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
     "pandas": ("https://pandas.pydata.org/pandas-docs/stable", None),
     "pyranges": ("https://pyranges1.readthedocs.io/en/latest/", None),
-    "numpy": ("http://docs.scipy.org/doc/numpy/", None)
+    "numpy": ("https://numpy.org/doc/stable/", None)
 }
 intersphinx_disabled_domains = ["std"]
 
