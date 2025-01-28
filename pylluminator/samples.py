@@ -686,7 +686,11 @@ class Samples:
 
             # mask failed probes
             if mask_failed:
-                self.masks.add_mask(Mask('failed_probes_inferTypeI', None, failed_idxs))
+                # failed_ids misses the "type" index level, so we need to add it back - maybe there is a better way
+                probe_ids = self._signal_df.index.get_level_values('probe_id')
+                failed_probe_ids = failed_idxs[failed_idxs].index.get_level_values('probe_id')
+                mask_series = pd.Series(probe_ids.isin(failed_probe_ids), index=self._signal_df.index)
+                self.masks.add_mask(Mask('failed_probes_inferTypeI', None, mask_series))
 
         # set the inferred channel as the new 'channel' index
         if not summary_only:

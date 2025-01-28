@@ -21,6 +21,20 @@ def set_logger(level: str | int) -> None:
     :rtype level: str | int
 
     :return: None"""
+    error_msg = ('Unknown logging level, must be one of NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL or their int '
+                 'equivalent (0, 10, 20, 30, 40, 50)')
+
+    if isinstance(level, str):
+        if level not in ['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+            LOGGER.error(error_msg)
+            return
+    elif isinstance(level, int):
+        if level not in [0, 10, 20, 30, 40, 50]:
+            LOGGER.error(error_msg)
+            return
+    else:
+        LOGGER.error(error_msg)
+        return
     logging.getLogger().setLevel(level)
 
 
@@ -68,27 +82,26 @@ def column_names_to_snake_case(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def concatenate_non_na(row: pd.Series, col_names: list[str]) -> list:
-    """Function to concatenate values of N columns into a list, excluding NaN
-
-    :param row: the input row
-    :type row: pandas.Series
-
-    :param col_names: list of columns to concatenate
-    :type col_names: list[str]
-
-    :return: concatenated values
-    :rtype: list[Any]"""
-    values = []
-    for col_name in col_names:
-        if pd.notna(row[col_name]):
-            values.append(row[col_name])
-    return values
+# def concatenate_non_na(row: pd.Series, col_names: list[str]) -> list:
+#     """Function to concatenate values of N columns into a list, excluding NaN
+#
+#     :param row: the input row
+#     :type row: pandas.Series
+#
+#     :param col_names: list of columns to concatenate
+#     :type col_names: list[str]
+#
+#     :return: concatenated values
+#     :rtype: list[Any]"""
+#     values = []
+#     for col_name in col_names:
+#         if pd.notna(row[col_name]):
+#             values.append(row[col_name])
+#     return values
 
 
 def get_column_as_flat_array(df: pd.DataFrame, column: str | list, remove_na: bool = False):
     """Get values from one or several columns of a pandas dataframe, and return a flatten list of the values.
-     If `remove_na` is
 
      :param df: input dataframe
      :type df: pandas.DataFrame
@@ -261,6 +274,13 @@ def merge_alt_chromosomes(chromosome_id: str | list[str] | pd.Series) -> list[st
             return '*'
         return str(chromosome_id)
 
+    if chromosome_id is None:
+        return None
+
+    if not isinstance(chromosome_id, str):
+        LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
+        return None
+
     trimmed_str = str(chromosome_id).lower().replace('chr', '')
 
     # if the remaining string only contains digits, we're good !
@@ -299,6 +319,13 @@ def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_st
     # juste checking that it's not already an int to avoid a useless error...
     if isinstance(chromosome_id, int):
         return chromosome_id
+
+    if chromosome_id is None:
+        return None
+
+    if not isinstance(chromosome_id, str):
+        LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
+        return None
 
     # remove the 'chr' part of the string to keep only the number
     trimmed_str = chromosome_id.lower().replace('chr', '')

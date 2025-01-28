@@ -28,6 +28,11 @@ def test_infer_infinium_I_channel(test_samples):
     # dfs_after = df_r.join(df_py.droplevel('methylation_state', axis=1))
     # dfs_after[dfs_after.col != dfs_after.channel]
 
+
+def test_infer_infinium_I_channel_switch(test_samples):
+    summary = test_samples.infer_type1_channel('PREC_500_3', switch_failed=True, mask_failed=True)
+    assert summary.values.tolist() == [44803, 882, 67, 82543]
+
 def test_dye_bias_corr(test_samples):
     test_samples.dye_bias_correction('PREC_500_3')
     # Type I green

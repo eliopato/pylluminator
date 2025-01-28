@@ -9,7 +9,7 @@
    :target: https://codecov.io/gh/eliopato/pylluminator
    :alt: Code coverage
 
-.. image:: https://readthedocs.com/projects/pylluminator/badge/?version=latest
+.. image:: https://readthedocs.org/projects/pylluminator/badge/?version=latest
    :target: https://pylluminator.readthedocs.io/en/latest/
    :alt: Documentation Status
 
@@ -31,7 +31,7 @@ It supports the following Illumina's Infinium array versions :
 
 .. note::
 
-   **This project is under active development. It has been mostly tested on Human EPICv2 arrays.**
+   **This project is under active development.**
 
 
 Main functionalities
@@ -58,23 +58,23 @@ Visualization examples:
 
 .. list-table::
 
-    * - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_1_-_Read_data_and_get_betas_16_0.png
-            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_1_-_Read_data_and_get_betas_16_0.png
+    * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_16_0.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_16_0.png
 
             Fig 1. Beta values
 
-      - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_13_0.png
-            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_13_0.png
+      - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_15_0.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_15_0.png
 
             Fig 2. Differentially methylated regions (DMRs)
 
-    * - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_15_1.png
-            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_3_-_Calculate_DMP_and_DMR_15_1.png
+    * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_17_1.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_17_1.png
 
             Fig 3. Gene visualization
 
-      - .. figure:: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_9_0.png
-            :target: https://pylluminator.readthedocs.io/en/latest/_images/tutorials_4_-_Copy_Number_Variation_9_0.png
+      - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_9_0.png
+            :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_9_0.png
 
             Fig 4. Copy number variations (CNVs)
 
