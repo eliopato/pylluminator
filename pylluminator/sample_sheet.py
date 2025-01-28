@@ -60,6 +60,10 @@ def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
     df = df.rename(columns={'sentrixposition_a': 'sentrix_position',
                             'sentrixbarcode': 'sentrix_id', 'sentrixbarcode_a': 'sentrix_id'})
 
+    if len(df) == 0:
+        LOGGER.error(f'Empty sample sheet file {filepath}')
+        return None
+
     if 'sample_id' not in df.columns:
         LOGGER.error(f'Column sample_id not found in {df.columns}')
         return None
