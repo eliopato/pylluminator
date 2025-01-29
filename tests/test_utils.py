@@ -1,6 +1,6 @@
 import logging
-
 import numpy as np
+import os
 
 from pylluminator.utils import (set_logger, get_logger_level, get_logger, remove_probe_suffix, save_object, load_object,
                                 merge_alt_chromosomes, get_chromosome_number, set_level_as_index, download_from_link)

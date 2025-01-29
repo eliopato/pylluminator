@@ -49,7 +49,6 @@ class Samples:
 
     def __getitem__(self, item: int | str | list[str]) -> pd.DataFrame | None:
         if self._signal_df is not None:
-            columns = self._signal_df.columns
             if isinstance(item, int) and item < len(self.sample_names):
                 return self._signal_df[[self.sample_names[0]]].copy()
             elif isinstance(item, str) and item in self.sample_names:
@@ -1414,6 +1413,9 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
 
     if len(dfs) == 0:
         return None
+
+    if len(dfs) != len(sample_names):
+        LOGGER.warning(f'{len(dfs)} dfs != {len(sample_names)} samples names for {datadir}')
 
     samples._signal_df = pd.concat(dfs, axis=1, keys=sample_names)
 
