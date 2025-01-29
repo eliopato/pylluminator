@@ -7,6 +7,16 @@ data/
 .ipynb_checkpoints/
 .gitattributes
 build
+notebooks/
+
+# tests
+.coverage
+coverage.xml
+htmlcov
+
+# tutorial files that are not ipynb (saved models)
+docs/tutorials/*
+!docs/tutorials/*.ipynb
 
 # data
 *.gz
