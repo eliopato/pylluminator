@@ -1,4 +1,5 @@
 from pylluminator.samples import Samples
+import os
 
 def test_get_item(test_samples):
     # access via sample index
@@ -34,6 +35,7 @@ def test_get_no_probes(test_samples):
 def test_save_load(test_samples):
     test_samples.save('test_samples')
     test_samples2 = Samples.load('test_samples')
+    os.remove('test_samples')
     assert test_samples.nb_samples == test_samples2.nb_samples
     assert test_samples.nb_probes == test_samples2.nb_probes
     assert test_samples.sample_sheet.equals(test_samples2.sample_sheet)

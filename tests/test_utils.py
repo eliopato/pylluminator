@@ -44,6 +44,7 @@ def test_remove_probe_suffix():
 def test_save_load(test_samples):
     save_object(test_samples, 'test_samples')
     test_samples2 = load_object('test_samples')
+    os.remove('test_samples')
     assert test_samples.nb_samples == test_samples2.nb_samples
     assert test_samples.nb_probes == test_samples2.nb_probes
     assert test_samples.sample_sheet.equals(test_samples2.sample_sheet)

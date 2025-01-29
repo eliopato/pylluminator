@@ -7,12 +7,6 @@ def test_wrong_input():
     with pytest.raises(ValueError):
         MaskCollection().add_mask('test')
 
-def test_mask_collection(test_samples):
-    with pytest.raises(ValueError):
-        Mask('test', 'test', 'test')
-    with pytest.raises(ValueError):
-        MaskCollection().add_mask('test')
-
 def test_reset_masks(test_samples):
     test_samples.masks.reset_masks()
     assert len(test_samples.masks.masks) == 0

@@ -197,3 +197,6 @@ def test_from_sesame(test_samples):
     assert samples.nb_probes == 9
     assert samples.masks.number_probes_masked(sample_name='sesame1') == 2
     assert samples.masks.number_probes_masked(sample_name='sesame2') == 0
+
+    os.remove('sesame1.csv')
+    os.remove('sesame2.csv')
