@@ -1287,8 +1287,15 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
         LOGGER.error('You can\'t provide both a sample sheet dataframe and name. Please only provide one parameter.')
         return None
     elif sample_sheet_df is None and sample_sheet_name is None:
-        LOGGER.debug('No sample sheet provided, creating one')
-        sample_sheet_df, _ = sample_sheet.create_from_idats(datadir)
+        if os.path.exists(f'{datadir}/samplesheet.csv'):
+            LOGGER.info('Found a samplesheet.csv file in data directory')
+            sample_sheet_df = sample_sheet.read_from_file(f'{datadir}/samplesheet.csv')
+            if sample_sheet_df is None:
+                LOGGER.error('Invalid samplesheet.csv file, can\'t read the samples')
+                return None
+        else:
+            LOGGER.info('No sample sheet provided nor found, creating one')
+            sample_sheet_df, _ = sample_sheet.create_from_idats(datadir)
     elif sample_sheet_name is not None:
         sample_sheet_df = sample_sheet.read_from_file(f'{datadir}/{sample_sheet_name}')
 

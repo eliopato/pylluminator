@@ -1,4 +1,4 @@
-"""Methods to plot data, usually from Sample(s) objects or beta values dataframe"""
+"""Functions to plot data from Samples object or DMP/DMR dataframes"""
 
 import os.path
 
@@ -414,7 +414,7 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
 
 
 def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=None,
-                     nb_probes: int = 100, figsize=(10,15),
+                     nb_probes: int = 100, figsize=(15,15),
                      var: str | None | list[str] =None, custom_sheet: pd.DataFrame | None=None,
                      drop_na=True, save_path: None | str=None) -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
@@ -429,7 +429,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
     :type contrast: str | None
     :param nb_probes: number of probes to plot. Default: 100
     :type nb_probes: int
-    :param figsize: size of the plot. Default: (10, 15)
+    :param figsize: size of the plot. Default: (15, 15)
     :type figsize: tuple
     :param var: name of the variable to use for the columns of the heatmap. If None, will use the sample names. Default: None
     :type var: str | list[str] | None
@@ -469,11 +469,11 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
     sorted_betas = betas.loc[sorted_probes][:nb_probes].T
 
     if drop_na:
-        plot = sns.clustermap(sorted_betas, yticklabels=True, xticklabels=True, figsize=figsize)
+        plot = sns.clustermap(sorted_betas, yticklabels=True, xticklabels=True, figsize=figsize, cmap='Spectral')
         if save_path is not None:
             plot.savefig(os.path.expanduser(save_path))
     else:
-        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), yticklabels=True, xticklabels=True, figsize=figsize)
+        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), yticklabels=True, xticklabels=True, figsize=figsize, cmap='Spectral')
         if save_path is not None:
             plot.get_figure().savefig(os.path.expanduser(save_path))
 
@@ -852,11 +852,11 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
 
     if keep_na:
         fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
-        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, xticklabels=True, yticklabels=True)
+        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, xticklabels=True, yticklabels=True, cmap='Spectral')
     else:
         dendrogram_ratio = 0.05
         g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False,
-                           dendrogram_ratio=dendrogram_ratio, xticklabels=True, yticklabels=True)
+                           dendrogram_ratio=dendrogram_ratio, xticklabels=True, yticklabels=True, cmap='Spectral')
         shift_ratio = np.sum(height_ratios[:-1])
         g.gs.update(top=shift_ratio)  # shift the heatmap to the bottom of the figure
         gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio, height_ratios=height_ratios[:-1])

@@ -14,7 +14,7 @@ class Mask:
     :var sample_name: the name of the sample the mask is applied to
     :vartype sample_name: str
     :var series: a pandas Series of booleans, where True indicates that the probe is masked
-    :vartype series: pd.Series
+    :vartype series: pandas.Series
     """
     def __init__(self, mask_name: str, sample_name: str | None, series: pd.Series):
         """Create a new Mask object.
@@ -24,7 +24,7 @@ class Mask:
         :param sample_name: the name of the sample the mask is applied to. Default: None
         :type sample_name: str | None
         :param series: a pandas Series of booleans, where True indicates that the probe is masked
-        :type series: pd.Series"""
+        :type series: pandas.Series"""
         self.mask_name = mask_name
         self.sample_name = sample_name
         if not isinstance(series, pd.Series):
@@ -78,7 +78,7 @@ class MaskCollection:
         :type sample_name: str | None
 
         :return: a pandas Series of booleans, where True indicates that the probe is masked
-        :rtype: pd.Series | None"""
+        :rtype: pandas.Series | None"""
 
         # to get a specific sample mask, retrieve the common mask and apply the sample mask on top of it
         if sample_name is None:
