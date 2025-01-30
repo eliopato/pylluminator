@@ -8,6 +8,10 @@ def data_path():
     return os.path.expanduser('~/data/pylluminator-utest')
 
 @pytest.fixture(scope='session')
+def data_path_tmp():
+    return os.path.expanduser('~/data_tmp')
+
+@pytest.fixture(scope='session')
 def test_samples_ini(data_path):
     geo_ids = ['GSM7698438', 'GSM7698446', 'GSM7698462', 'GSM7698435', 'GSM7698443', 'GSM7698459']
     download_from_geo(geo_ids, data_path)

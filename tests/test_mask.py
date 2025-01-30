@@ -15,6 +15,10 @@ def test_reset_masks_2(test_samples):
     test_samples.masks.remove_masks()
     assert len(test_samples.masks.masks) == 0
 
+def test_no_mask(test_samples):
+    test_samples.apply_mask_by_names('')
+    test_samples.apply_mask_by_names(None)
+
 def test_remove_sample_mask(test_samples):
     assert test_samples.masks.number_probes_masked(sample_name='LNCAP_500_3') == 26
     assert test_samples.masks.number_probes_masked(sample_name='PREC_500_2') == 21

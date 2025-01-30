@@ -1,6 +1,18 @@
 import pytest
-from pylluminator.cnv import copy_number_variation
 
+from pylluminator.annotations import Annotations, ArrayType, GenomeVersion
+from pylluminator.cnv import copy_number_variation, get_normalization_samples
+
+def test_norm_samples():
+    norm_samples_ev2 = get_normalization_samples(Annotations(ArrayType.HUMAN_EPIC_V2, GenomeVersion.HG38))
+    assert norm_samples_ev2 is not None
+    assert norm_samples_ev2.nb_samples == 2
+
+    norm_samples_e = get_normalization_samples(Annotations(ArrayType.HUMAN_EPIC, GenomeVersion.HG38))
+    assert norm_samples_e is not None
+    assert norm_samples_e.nb_samples == 5
+
+    assert get_normalization_samples(Annotations(ArrayType.MOUSE_MM285, GenomeVersion.MM39)) is None
 
 def test_cnv_default(test_samples):
     ranges, signal_bins_df, segments_df = copy_number_variation(test_samples, sample_name='PREC_500_3')

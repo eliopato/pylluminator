@@ -40,13 +40,13 @@ def get_or_download_annotation_data(annotation_name: str, data_type:str,  output
     filepath = convert_to_path(output_folder).joinpath(filename)
 
     if not filepath.exists():
+
         filename = f'{data_type}.csv.zip'
         filepath = convert_to_path(output_folder).joinpath(filename)
 
-    if not filepath.exists():
-        if annotation_name == 'default':
-            dl_link = dl_link + filename
-            download_from_link(dl_link, output_folder, filename)
+        if not filepath.exists():
+            if annotation_name == 'default':
+                download_from_link(dl_link + filename, output_folder)
 
     # download failed
     if not filepath.exists():
@@ -253,8 +253,13 @@ class Annotations:
             LOGGER.info(f'Dropping {sum(idx_to_drop)} probes with missing design type or channel')
             df = df[~idx_to_drop]
 
+        # in case channel are encoded Grn and Red instead of G and R
+        df['channel'] = df.channel.str[0]
+
         categories_columns = ['type', 'probe_type', 'channel', 'chromosome']
         df[categories_columns] = df[categories_columns].astype('category')
+        if 'mask_info' not in df.columns:
+            df['mask_info'] = ''
 
         self.probe_infos = df
         self.genomic_ranges = self.make_genomic_ranges()
@@ -325,10 +330,10 @@ def detect_array(probe_count: int) -> ArrayType:
     :return: the array type
     :rtype: ArrayType"""
 
-    if 1060000 < probe_count < 1200000 :
+    if 1070000 < probe_count < 1200000 :
         return ArrayType.HUMAN_EPIC_V2
 
-    if probe_count == 1055583 or probe_count == 868578:
+    if 1053000 < probe_count <= 1070000:
         return ArrayType.HUMAN_EPIC_PLUS
 
     if 1050000 <= probe_count <= 1053000:
@@ -337,14 +342,18 @@ def detect_array(probe_count: int) -> ArrayType:
     if 622000 <= probe_count <= 623000:
         return ArrayType.HUMAN_450K
 
-    if 54000 <= probe_count <= 56000:
-        return ArrayType.HUMAN_27K
-
-    # if  <= probe_count <= :
-    #     return ArrayType.HUMAN_MSA
+    if 370000 <= probe_count <= 400000:
+        return ArrayType.HUMAN_MSA
 
     if 315000 <= probe_count <= 362000:
         return ArrayType.MOUSE_MM285
+
+    if 54000 <= probe_count <= 56000:
+        return ArrayType.HUMAN_27K
+
+    if 35000 <= probe_count <= 45000:
+        return ArrayType.MAMMAL_40
+
 
     LOGGER.warning(f'Could not detect array type from probe count ({probe_count:,}). It could be due to having samples '
                     'of mixed array types. Setting it to the most recent human type, EPIC v2')

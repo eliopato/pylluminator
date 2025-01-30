@@ -40,11 +40,12 @@ def copy_number_variation(samples: Samples, sample_name: str, normalization_samp
     if sample_name not in available_samples:
         LOGGER.error(f'Sample {sample_name} not found in the Samples object')
 
-    # make sure it's a list
-    if isinstance(normalization_samples_names, str):
-        normalization_samples_names = [normalization_samples_names]
-
     if normalization_samples_names is not None:
+
+        # make sure it's a list
+        if isinstance(normalization_samples_names, str):
+            normalization_samples_names = [normalization_samples_names]
+
         # extract normalization samples from the samples object.
         for norm_sample_name in normalization_samples_names:
             if norm_sample_name not in available_samples:

@@ -515,10 +515,6 @@ class Samples:
 
         :return: None"""
 
-        if 'mask_info' not in self.annotation.probe_infos.columns:
-            LOGGER.warning('No mask is defined')
-            return
-
         if names_to_mask is None or len(names_to_mask) == 0:
             return
 
@@ -853,7 +849,7 @@ class Samples:
             filtered_samples = [col for col in custom_sheet.sample_name.values if col in betas.columns]
             if len(filtered_samples) == 0:
                 LOGGER.error('No samples found')
-                return pd.DataFrame()
+                return None
             betas = betas[filtered_samples]
 
         if sample_name is not None:
@@ -979,10 +975,13 @@ class Samples:
             top_20_median_red = np.median(total_intensity_type1.loc['R'].nlargest(20))  # 0.25 sec
             top_20_median_green = np.median(total_intensity_type1.loc['G'].nlargest(20))  # 0.25 sec
 
-            red_green_distortion = (top_20_median_red / top_20_median_green) / (median_red / median_green)
+            if top_20_median_green == 0 or median_green == 0:
+                red_green_distortion = None
+            else:
+                red_green_distortion = (top_20_median_red / top_20_median_green) / (median_red / median_green)
 
-            if red_green_distortion is None or red_green_distortion > 10:
-                LOGGER.debug(f'Red-Green distortion is too high ({red_green_distortion}. Masking green probes')
+            if red_green_distortion is None or red_green_distortion is np.nan or red_green_distortion > 10:
+                LOGGER.warning(f'Red-Green distortion is too high or None ({red_green_distortion}). Masking green probes')
                 type1_mask = pd.Series(self._signal_df.index.get_level_values('channel') == 'G', self._signal_df.index)
                 self.masks.add_mask(Mask('dye bias nl', sample_name, type1_mask))
                 return

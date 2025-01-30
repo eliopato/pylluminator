@@ -1,8 +1,8 @@
 import os
 import numpy as np
 import pandas as pd
-
-from pylluminator.annotations import ArrayType
+import shutil
+from pylluminator.annotations import ArrayType, GenomeVersion
 from pylluminator.samples import read_samples, from_sesame
 from pylluminator.utils import download_from_geo
 
@@ -27,7 +27,48 @@ def test_download_from_geo(data_path):
 
     for file_name in expected_files:
         file_path = f'{data_path}/{file_name}'
-        assert os.path.exists(file_path), f"File {file_path} does not exist"
+        assert os.path.exists(file_path), f'File {file_path} does not exist'
+
+def wrapper_array_version(path, gsm_id, expected_array_type, expected_genome_type):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    download_from_geo(gsm_id, path)
+    samples = read_samples(path, annotation=None)
+    assert samples.annotation.array_type == expected_array_type
+    assert samples.annotation.genome_version == expected_genome_type
+
+    # test some specificities (eg no control probes)
+    if expected_array_type == ArrayType.HUMAN_27K:
+        samples.controls()
+        samples.apply_xy_mask()
+        samples.apply_quality_mask()
+        samples.get_normalization_controls()
+        samples.dye_bias_correction()
+    shutil.rmtree(path)
+
+def test_mm285(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM5587107', ArrayType.MOUSE_MM285, GenomeVersion.MM39)
+
+def test_hm27(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM443819', ArrayType.HUMAN_27K, GenomeVersion.HG38)
+
+def test_hm450(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM2796256', ArrayType.HUMAN_450K, GenomeVersion.HG38)
+
+def test_msa(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM8217992', ArrayType.HUMAN_MSA, GenomeVersion.HG38)
+
+def test_epic(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM2432891', ArrayType.HUMAN_EPIC, GenomeVersion.HG38)
+
+def test_epic_plus(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM5099142', ArrayType.HUMAN_EPIC_PLUS, GenomeVersion.HG38)
+
+def test_epic_v2(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM7698446', ArrayType.HUMAN_EPIC_V2, GenomeVersion.HG38)
+
+def test_mammal40(data_path_tmp):
+    wrapper_array_version(data_path_tmp, 'GSM5581045', ArrayType.MAMMAL_40, GenomeVersion.HG38)
 
 def test_read_samples(data_path):
     min_beads = 0

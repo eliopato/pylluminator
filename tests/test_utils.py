@@ -57,6 +57,7 @@ def test_load_nonexistent():
 def test_merge_chromosome_string():
     assert merge_alt_chromosomes(1) == '1'
     assert merge_alt_chromosomes(np.nan) == '*'
+    assert merge_alt_chromosomes(None) == '*'
     assert merge_alt_chromosomes('12') == '12'
     assert merge_alt_chromosomes('chr22') == '22'
     assert merge_alt_chromosomes('chrX') == 'x'
@@ -67,6 +68,7 @@ def test_merge_chromosome_string():
 def test_get_chromosome_number():
     assert get_chromosome_number(1) == 1
     assert get_chromosome_number(np.nan) is None
+    assert get_chromosome_number(None) is None
     assert get_chromosome_number('12') == 12
     assert get_chromosome_number('chr22') == 22
     assert get_chromosome_number('chrX', convert_string=False) is None

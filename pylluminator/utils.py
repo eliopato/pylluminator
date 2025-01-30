@@ -257,14 +257,15 @@ def get_files_matching(root_path: str | os.PathLike | MultiplexedPath, pattern: 
     return [p for p in convert_to_path(root_path).rglob(pattern)]
 
 
-def merge_alt_chromosomes(chromosome_id: str | list[str] | pd.Series) -> list[str] | str | None:
-    """Merges the alternative chromosomes with their respective reference chromosome, e.g. 22_KI270928V1_ALT-> 22
+def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[str] | str:
+    """Merges the alternative chromosomes with their respective reference chromosome, e.g. 22_KI270928V1_ALT-> 22. If
+    given an unconventional format (None, wrong type) return '*'
 
     :param chromosome_id: chromosome ID(s) to merge
-    :type chromosome_id: str |̀ list[str] | pandas.Series
+    :type chromosome_id: str |̀ int | list[str] | list[int] | pandas.Series
 
     :return: merged ID(s)
-    :rtype: list[str] | str | None"""
+    :rtype: list[str] | str"""
 
     # for list and series, call the function on each member
     if isinstance(chromosome_id, list) or isinstance(chromosome_id, pd.Series):
@@ -274,14 +275,14 @@ def merge_alt_chromosomes(chromosome_id: str | list[str] | pd.Series) -> list[st
     if isinstance(chromosome_id, int) or isinstance(chromosome_id, float):
         if np.isnan(chromosome_id):
             return '*'
-        return str(chromosome_id)
+        return str(int(chromosome_id))
 
     if chromosome_id is None:
-        return None
+        return '*'
 
     if not isinstance(chromosome_id, str):
         LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
-        return None
+        return '*'
 
     trimmed_str = str(chromosome_id).lower().replace('chr', '')
 
@@ -424,8 +425,8 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
     :param output_folder: where the file will be saved
     :type output_folder: str
 
-    :param filename: name of the file to download
-    :type filename: str
+    :param filename: specify the expected filename to check if the file already exists before downloaded. Default = None = last part of the dl_link url (after the last slash)
+    :type filename: str | None
 
     :param decompress: set to True to decompress the output and delete the compressed file (works with .zip and .tar). Default: False
     :type decompress: bool
@@ -448,8 +449,8 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
         os.makedirs(output_folder, exist_ok=True)  # create destination directory
 
         try:
-            urllib.request.urlretrieve(dl_link, target_filepath)
-            LOGGER.info('download successful')
+            target_filepath, _  = urllib.request.urlretrieve(dl_link, target_filepath)
+            LOGGER.info(f'download successful in {target_filepath}')
         except:
             LOGGER.error(f'download from {dl_link} failed, try downloading it manually and save it in {output_folder}')
             LOGGER.error(traceback.format_exc())

@@ -38,6 +38,13 @@ def test_betas_options(test_samples):
     assert len(test_df.columns) == 1
     assert test_df['LNCAP_500_3'].iloc[0] == test_samples.get_betas()['LNCAP_500_3'].iloc[0]
 
+   # test missing sample sheet column
+    assert test_samples.get_betas(custom_sheet=custom_sheet.drop(columns='sample_name')) is None
+
+   # test no samples name matching beta columns
+    custom_sheet['sample_name'] = custom_sheet['sample_type']
+    assert test_samples.get_betas(custom_sheet=custom_sheet) is None
+
 
 
 # def test_plot_betas(test_samples):
