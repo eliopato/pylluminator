@@ -5,6 +5,7 @@ import pickle
 import tarfile
 import logging
 import urllib.request
+import traceback
 from pathlib import Path, PosixPath
 import zipfile
 from importlib.resources import files
@@ -81,23 +82,24 @@ def column_names_to_snake_case(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [c.replace(' ', '_') for c in df.columns]
     return df
 
+# function used by pylluminator-data
+def concatenate_non_na(row: pd.Series, col_names: list[str]) -> list:
+    """Function to concatenate values of N columns into a list, excluding NaN
 
-# def concatenate_non_na(row: pd.Series, col_names: list[str]) -> list:
-#     """Function to concatenate values of N columns into a list, excluding NaN
-#
-#     :param row: the input row
-#     :type row: pandas.Series
-#
-#     :param col_names: list of columns to concatenate
-#     :type col_names: list[str]
-#
-#     :return: concatenated values
-#     :rtype: list[Any]"""
-#     values = []
-#     for col_name in col_names:
-#         if pd.notna(row[col_name]):
-#             values.append(row[col_name])
-#     return values
+    :param row: the input row
+    :type row: pandas.Series
+
+    :param col_names: list of columns to concatenate
+    :type col_names: list[str]
+
+    :return: concatenated values
+    :rtype: list[Any]"""
+
+    values = []
+    for col_name in col_names:
+        if pd.notna(row[col_name]):
+            values.append(row[col_name])
+    return values
 
 
 def get_column_as_flat_array(df: pd.DataFrame, column: str | list, remove_na: bool = False):
@@ -435,22 +437,22 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
     :rtype: int"""
 
     output_folder = convert_to_path(output_folder)
-    if filename is not None:
-        target_filepath = output_folder.joinpath(filename)
-    else:
-        target_filepath = output_folder.joinpath(dl_link.split('/')[-1])
+    if filename is None:
+        filename = dl_link.split('/')[-1]
+    target_filepath = output_folder.joinpath(filename)
 
     if not target_filepath.exists():
 
-        LOGGER.debug(f'file {filename} not found in {output_folder}, trying to download it from {dl_link}')
+        LOGGER.info(f'{filename} not found, trying to download it')
 
         os.makedirs(output_folder, exist_ok=True)  # create destination directory
 
         try:
             urllib.request.urlretrieve(dl_link, target_filepath)
-            LOGGER.info(f'{filename} download successful')
+            LOGGER.info('download successful')
         except:
-            LOGGER.info(f'download of {filename} from {dl_link} failed, try downloading it manually and save it in {output_folder}')
+            LOGGER.error(f'download from {dl_link} failed, try downloading it manually and save it in {output_folder}')
+            LOGGER.error(traceback.format_exc())
             return -1
 
     if decompress:
