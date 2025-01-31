@@ -39,6 +39,7 @@ def copy_number_variation(samples: Samples, sample_name: str, normalization_samp
     available_samples = samples.sample_names
     if sample_name not in available_samples:
         LOGGER.error(f'Sample {sample_name} not found in the Samples object')
+        return None
 
     if normalization_samples_names is not None:
 
@@ -52,19 +53,22 @@ def copy_number_variation(samples: Samples, sample_name: str, normalization_samp
                 LOGGER.error(f'Normalization sample {norm_sample_name} not found in the Samples object')
         normalization_samples_names = [n for n in normalization_samples_names if n in available_samples]
 
-    # get normalization samples
-    if normalization_samples_names is None or len(normalization_samples_names) == 0:
+        if len(normalization_samples_names) == 0:
+            LOGGER.error('None of the normalization samples were found in the Samples object, exiting')
+            return None
+
+        norm_intensities = samples.get_total_ib_intensity()[normalization_samples_names]
+
+    else:
+
         # load default normalization samples for the given array version
         normal_samples = get_normalization_samples(samples.annotation)
 
         if normal_samples is None:
             print('Please provide samples to use as normalization')
-            # return None
+            return None
 
         norm_intensities = normal_samples.get_total_ib_intensity()
-
-    else:
-        norm_intensities = samples.get_total_ib_intensity()[normalization_samples_names]
 
     genome_info = samples.annotation.genome_info
     probe_coords_df = samples.annotation.genomic_ranges

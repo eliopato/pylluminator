@@ -33,3 +33,20 @@ def test_cnv_control(test_samples):
     # hard to really test the values are there is randomness in the results
     chr3 = segments_df[segments_df.chromosome == '3']
     assert chr3.values[0].tolist() == pytest.approx(['3', 180000, 198092780, 1320, -0.091685], rel=1e-4)
+
+def test_cnv_single_control(test_samples):
+    ranges, signal_bins_df, segments_df = copy_number_variation(test_samples, sample_name='PREC_500_3',
+                                                                normalization_samples_names='LNCAP_500_2')
+    assert ranges is not None
+    assert signal_bins_df is not None
+    assert segments_df is not None
+
+def test_cnv_wrong_sample_name(test_samples):
+    assert copy_number_variation(test_samples, 'wrongname') is None
+
+def test_cnv_wrong_normalization_sample_name(test_samples):
+    assert copy_number_variation(test_samples, 'PREC_500_3', 'wrongname') is None
+
+def test_cnv_non_existent_normalization(test_samples):
+    test_samples.annotation = Annotations(ArrayType.HUMAN_MSA, GenomeVersion.HG38)
+    assert copy_number_variation(test_samples, 'PREC_500_3') is None

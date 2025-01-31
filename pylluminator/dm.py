@@ -84,9 +84,12 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
 
     LOGGER.info('>>> Start get DMP')
 
-    # check the input
-    if 'sample_name' not in samples.sample_sheet.columns:
-        LOGGER.error('get_dmp() :  dataframe sample_sheet must have a sample_name column')
+    if custom_sheet is None:
+        custom_sheet = samples.sample_sheet
+
+    # check the sample sheet
+    if 'sample_name' not in custom_sheet.columns:
+        LOGGER.error('get_dmp() : the provided sample sheet must have a "sample_name" column')
         return None
 
     betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, mask=mask, custom_sheet=custom_sheet)
@@ -95,7 +98,7 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     if probe_ids is not None:
         betas = betas.loc[probe_ids]
 
-    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
+    sheet = custom_sheet[custom_sheet.sample_name.isin(betas.columns)]
 
     # make the design matrix
     sample_info = sheet.set_index('sample_name')
@@ -112,7 +115,10 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
                 order = [value] + [v for v in set(sample_info[column_name]) if v != value]
                 sample_info[column_name] = pd.Categorical(sample_info[column_name], categories=order, ordered=True)
 
-    design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
+    try:
+        design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
+    except:
+        design_matrix = pd.DataFrame()
 
     # check that the design matrix is not empty (it happens for example if the variable used in the formula is constant)
     if len(design_matrix.columns) < 2:

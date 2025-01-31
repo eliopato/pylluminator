@@ -38,10 +38,10 @@ def wrapper_array_version(path, gsm_id, expected_array_type, expected_genome_typ
     assert samples.annotation.genome_version == expected_genome_type
 
     # test some specificities (eg no control probes)
+    samples.controls()
+    samples.apply_xy_mask()
+    samples.apply_quality_mask()
     if expected_array_type == ArrayType.HUMAN_27K:
-        samples.controls()
-        samples.apply_xy_mask()
-        samples.apply_quality_mask()
         samples.get_normalization_controls()
         samples.dye_bias_correction()
     shutil.rmtree(path)

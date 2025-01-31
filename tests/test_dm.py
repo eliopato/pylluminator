@@ -24,6 +24,13 @@ def test_dmp(test_samples):
     assert dmps.loc['cg00000029_TC21', 'effect_size'] == pytest.approx(0.7096783705055711)  # Eff_sample_type
 
 
+def test_dmp_bad_sample_sheet(test_samples):
+    test_samples.sample_sheet = test_samples.sample_sheet.drop(columns='sample_name')
+    assert get_dmp(test_samples, '~ sample_type') is None
+
+def test_dmp_bad_wrong_formula(test_samples):
+    assert get_dmp(test_samples, '~ nonexistent_factor') is None
+
 def test_ols_na():
     nb_factors = 3
     params = _get_model_parameters([np.nan] * 5, pd.DataFrame(), ['factor'] * nb_factors)

@@ -157,7 +157,7 @@ class GenomeInfo:
 
         if genome_version is None:
             LOGGER.warning('You must set genome version to load genome information')
-            return
+            raise ValueError
 
         folder_genome = get_resource_folder(f'genome_info.{name}.{genome_version}')
         dl_link = f'{PYLLUMINA_DATA_LINK}/genome_info/{genome_version}/'
@@ -168,7 +168,8 @@ class GenomeInfo:
             df = get_or_download_annotation_data(name, info, folder_genome, dl_link)
 
             if df is None:
-                continue
+                LOGGER.warning(f'No data found for annotation {name} and genome version {genome_version}')
+                raise ValueError
 
             if info == 'gap_info':
                 df.end = df.end.astype('int')
@@ -185,6 +186,8 @@ class GenomeInfo:
                 gen_info = df.set_index('chromosome')
             else:
                 gen_info = df
+
+
 
             self.__setattr__(info, gen_info)
 
@@ -243,7 +246,7 @@ class Annotations:
 
         if df is None:
             LOGGER.error(f'No probe_infos.csv input file found for {self.name}, {self.genome_version}, {self.array_type}')
-            return
+            raise ValueError
 
         df = df.set_index('illumina_id')
 
