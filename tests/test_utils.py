@@ -72,9 +72,9 @@ def test_get_chromosome_number():
     assert get_chromosome_number('12') == 12
     assert get_chromosome_number('chr22') == 22
     assert get_chromosome_number('chrX', convert_string=False) is None
-    assert get_chromosome_number('chrX', convert_string=True) == 97
-    assert get_chromosome_number('chrY', convert_string=True) == 98
-    assert get_chromosome_number('chrM', convert_string=True) == 99
+    assert get_chromosome_number('chrX', convert_string=True) == 98
+    assert get_chromosome_number('chrY', convert_string=True) == 99
+    assert get_chromosome_number('chrM', convert_string=True) == 100
     assert get_chromosome_number('chrA', convert_string=True) == 100
     assert get_chromosome_number(['chr88', 'chrM', '12', 90, '*', '22_ALTG66']) == [88, None, 12, 90, None, None]
 

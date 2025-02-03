@@ -308,7 +308,7 @@ def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_st
     :param chromosome_id: input string(s) to extract the number from
     :type chromosome_id: str | list[str] | pandas.Series
 
-    :param convert_string: convert any non-numbered chromosome to a number. Gives X the ID 97, Y the ID 98 and M the ID 99.
+    :param convert_string: convert any non-numbered chromosome to a number. Gives X the ID 98, Y the ID 99.
         Any other string will be given the ID 100. Default: False
     :type convert_string: bool
 
@@ -341,7 +341,7 @@ def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_st
     # if the chromosome name is a string, only convert it if the parameter is set to true
     if convert_string:
         # give letter chromosomes a number ID (they're lowercased earlier)
-        supported_chrs = {'x': 97, 'y': 98, 'm': 99}
+        supported_chrs = {'x': 98, 'y': 99}
         if trimmed_str in supported_chrs.keys():
             chromosome_number = supported_chrs[trimmed_str]
         else:

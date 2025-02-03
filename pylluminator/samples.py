@@ -419,7 +419,7 @@ class Samples:
         # prepare dataframes for merge
         indexes = ['type', 'channel', 'probe_type', 'probe_id', 'mask_info']
         probe_info = annotation.probe_infos[indexes + ['address_a', 'address_b']]
-        probe_df = probe_df.reset_index().rename(columns={'channel': 'signal_channel'})
+        probe_df = probe_df.reset_index().rename(columns={'channel': 'signal_channel'}).drop_duplicates()
         nb_probes_before_merge = len(probe_df)
         sample_df = pd.merge(probe_df, probe_info, how='inner', on='illumina_id')
 
@@ -455,6 +455,8 @@ class Samples:
         sample_df['mask_info'] = sample_df.index.get_level_values('mask_info').fillna('').values
         sample_df = sample_df.reset_index(level='mask_info', drop=True)
         sample_df = sample_df.sort_index(axis=1)
+        sample_df.columns = sample_df.columns.rename('sample_name', level=0)
+
         self._signal_df = sample_df
 
         for sample_name in self.sample_names:
@@ -796,6 +798,12 @@ class Samples:
             self._signal_df.loc[:, (sample_name, 'beta', '')] = beta_serie
 
         self._signal_df = self._signal_df.sort_index(axis=1)  # sort columns after adding beta values
+
+    def reset_columns(self) -> None:
+        """Remove all calculated columns (poobah p values, betas)
+
+        :return None"""
+        self._signal_df = self._signal_df.drop(['beta', 'p_value'], level='signal_channel', axis=1, errors='ignore')
 
     def reset_betas(self) -> None:
         """Remove beta columns from signal df
