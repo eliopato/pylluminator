@@ -26,7 +26,7 @@ def test_cnv_default(test_samples):
 def test_cnv_control(test_samples):
     normalization_samples = ['LNCAP_500_1', 'LNCAP_500_2', 'LNCAP_500_3']
     ranges, signal_bins_df, segments_df = copy_number_variation(test_samples, sample_label='PREC_500_3',
-                                                                normalization_samples_ids=normalization_samples)
+                                                                normalization_sample_labels=normalization_samples)
     assert ranges is not None
     assert signal_bins_df is not None
     assert segments_df is not None
@@ -36,7 +36,7 @@ def test_cnv_control(test_samples):
 
 def test_cnv_single_control(test_samples):
     ranges, signal_bins_df, segments_df = copy_number_variation(test_samples, sample_label='PREC_500_3',
-                                                                normalization_samples_ids='LNCAP_500_2')
+                                                                normalization_sample_labels='LNCAP_500_2')
     assert ranges is not None
     assert signal_bins_df is not None
     assert segments_df is not None

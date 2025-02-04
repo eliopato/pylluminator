@@ -259,7 +259,7 @@ def get_files_matching(root_path: str | os.PathLike | MultiplexedPath, pattern: 
 
 def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[str] | str:
     """Merges the alternative chromosomes with their respective reference chromosome, e.g. 22_KI270928V1_ALT-> 22. If
-    given an unconventional format (None, wrong type) return '*'
+    given an unconventional format (None, wrong type) or an unrecognized string, return '*'
 
     :param chromosome_id: chromosome ID(s) to merge
     :type chromosome_id: str |̀ int | list[str] | list[int] | pandas.Series
@@ -290,15 +290,15 @@ def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[s
     if trimmed_str.isdigit():
         return trimmed_str
 
-    if trimmed_str in ['x', 'y', 'm', '*']:
+    if trimmed_str in ['x', 'y', '*']:
         return trimmed_str
 
     first_str_part = trimmed_str.split('_')[0]
-    if first_str_part.isdigit() or first_str_part in ['x', 'y', 'm', '*']:
+    if first_str_part.isdigit() or first_str_part in ['x', 'y', '*']:
         return first_str_part
 
     LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
-    return chromosome_id
+    return '*'
 
 
 def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_string=False) -> list[int] | int | None:
@@ -319,7 +319,7 @@ def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_st
     if isinstance(chromosome_id, list) or isinstance(chromosome_id, pd.Series):
         return [get_chromosome_number(chr_id, convert_string) for chr_id in chromosome_id]
 
-    # juste checking that it's not already an int to avoid a useless error...
+    # just checking that it's not already an int to avoid a useless error...
     if isinstance(chromosome_id, int):
         return chromosome_id
 

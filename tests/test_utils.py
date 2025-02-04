@@ -62,8 +62,8 @@ def test_merge_chromosome_string():
     assert merge_alt_chromosomes('chr22') == '22'
     assert merge_alt_chromosomes('chrX') == 'x'
     assert merge_alt_chromosomes('chr12_altJI_OIJE') == '12'
-    assert merge_alt_chromosomes('chrunk_altJI_OIJE') == 'chrunk_altJI_OIJE' # unknown chromosome
-    assert merge_alt_chromosomes(['chr88', 'chrM', '12', 90, '*', '22_ALTG66']) == ['88', 'm', '12', '90', '*', '22']
+    assert merge_alt_chromosomes('chrunk_altJI_OIJE') == '*' # unknown chromosome
+    assert merge_alt_chromosomes(['chr88', 'chrM', '12', 90, '*', '22_ALTG66']) == ['88', '*', '12', '90', '*', '22']
 
 def test_get_chromosome_number():
     assert get_chromosome_number(1) == 1
