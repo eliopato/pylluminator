@@ -92,8 +92,8 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict | No
 
 
 def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, group_column: None | str | list[str] = None,
-               color_column='sample_name',  linestyle_column=None,
-               custom_sheet: None | pd.DataFrame = None, mask=True, save_path: None | str=None) -> None:
+               color_column: str | None = None,  linestyle_column=None,
+               custom_sheet: None | pd.DataFrame = None, apply_mask=True, save_path: None | str=None) -> None:
     """Plot beta values density for each sample
 
     :param samples: with beta values already calculated
@@ -105,7 +105,7 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
     :param title: custom title for the plot to override generated title. Default: None
     :type title: str | None
 
-    :param color_column: name of a Sample Sheet column to define which samples get the same color. Default: sample_name
+    :param color_column: name of a Sample Sheet column to define which samples get the same color. Default: None
     :type color_column: str
 
     :param group_column: compute the average beta values per group of samples. Default: None
@@ -117,8 +117,8 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
     :type custom_sheet: pandas.DataFrame
 
-    :param mask: true removes masked probes from betas, False keeps them. Default: True
-    :type mask: bool
+    :param apply_mask: true removes masked probes from betas, False keeps them. Default: True
+    :type apply_mask: bool
 
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str
@@ -128,15 +128,15 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
     # initialize values
     plt.style.use('ggplot')
     # get betas with or without masked probes and samples
-    betas = samples.get_betas(mask = mask, custom_sheet=custom_sheet)
-    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
+    betas = samples.get_betas(apply_mask = apply_mask, custom_sheet=custom_sheet)
+    sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
 
     if group_column is not None:
 
         grouped_sheet = sheet.groupby(group_column)
         avg_betas_list = []
         group_names = []
-        for name, line in grouped_sheet.sample_name.apply(list).items():
+        for name, line in grouped_sheet[samples.sample_label_name].apply(list).items():
             avg_betas_list.append(betas[line].mean(axis=1))
             group_names.append(name)
 
@@ -203,18 +203,18 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 #     plt.show()
 
 
-def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str = 'sample_name',
-              nb_probes: int=1000, random_state: int = 42, title: None | str = None, mask=True,
+def betas_mds(samples: Samples, label_column: str | None=None, color_column: str | None=None,
+              nb_probes: int=1000, random_state: int = 42, title: None | str = None, apply_mask=True,
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
     """Plot samples in 2D space according to their beta distances.
 
     :param samples : samples to plot
     :type samples: Samples
 
-    :param label_column: name of the column containing the labels
+    :param label_column: name of the column containing the labels. Default: None
     :type label_column: str | None
 
-    :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: sample_name
+    :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: None
     :type color_column: str
 
     :param nb_probes: number of probes to use for the model. Default: 1000
@@ -226,8 +226,8 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str 
     :param title: custom title for the plot. Default: None
     :type title: str | None
 
-    :param mask: True removes masked probes from betas, False keeps them. Default: True
-    :type mask: bool
+    :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
+    :type apply_mask: bool
 
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
         samples to display. Default: None
@@ -240,11 +240,16 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str 
 
     plt.style.use('ggplot')
 
+    if label_column is None:
+        label_column = samples.sample_label_name
+    if color_column is None:
+        color_column = samples.sample_label_name
+
     # get betas with or without masked probes and samples
-    betas = samples.get_betas(mask=mask, custom_sheet=custom_sheet)
+    betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet)
 
     # keep only samples that are both in sample sheet and betas columns
-    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
+    sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
 
     # get betas with the most variance across samples
     betas_variance = np.var(betas, axis=1)
@@ -258,7 +263,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str 
     legend_handles, colors_dict = _get_colors(sheet, color_column)
 
     plt.figure(figsize=(15, 10))
-    labels = [sheet.loc[sheet.sample_name == name, label_column].values[0] for name in betas.columns]
+    labels = [sheet.loc[sheet[samples.sample_label_name] == name, label_column].values[0] for name in betas.columns]
     plt.scatter(x=fit[:, 0], y=fit[:, 1], label=labels, c=[colors_dict[label] for label in labels])
 
     for index, name in enumerate(labels):
@@ -278,7 +283,7 @@ def betas_mds(samples: Samples, label_column = 'sample_name', color_column: str 
     plt.show()
 
 
-def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None, custom_sheet: pd.DataFrame | None = None, mask: bool = True, save_path: None | str=None) -> None:
+def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None, custom_sheet: pd.DataFrame | None = None, apply_mask: bool = True, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
     :param samples: samples to plot
@@ -287,8 +292,8 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     :param title: custom title for the plot. Default: None
     :type title: str | None
 
-    :param mask: True removes masked probes from betas, False keeps them. Default: True
-    :type mask: bool
+    :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
+    :type apply_mask: bool
 
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
         samples to display. Default: None
@@ -301,8 +306,8 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     plt.style.use('ggplot')
     plt.figure(figsize=(15, 10))
 
-    betas = samples.get_betas(drop_na=True, mask=mask, custom_sheet=custom_sheet)
-    sheet = samples.sample_sheet[samples.sample_sheet.sample_name.isin(betas.columns)]
+    betas = samples.get_betas(drop_na=True, apply_mask=apply_mask, custom_sheet=custom_sheet)
+    sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
 
     linkage_matrix = linkage(betas.T.values, optimal_ordering=True, method='complete')
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
@@ -353,8 +358,8 @@ def get_nb_probes_per_chr_and_type(samples: Samples) -> (pd.DataFrame, pd.DataFr
 
     # for name, masked in [('not masked', True), ('masked', False)]:
     masked_probes = set()
-    for current_sample in samples.sample_names:
-        mask = samples.masks.get_mask(sample_name=current_sample)
+    for current_sample in samples.sample_labels:
+        mask = samples.masks.get_mask(sample_label=current_sample)
         if mask is not None:
             masked_probes.update(mask[mask].index.get_level_values('probe_id'))
 
@@ -461,7 +466,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
         if isinstance(var, str):
             var = [var]
         sheet = samples.sample_sheet
-        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet.sample_name == c, v].iloc[0]) for v in var]) + ')' for c in betas.columns]
+        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet[samples.sample_label_name] == c, v].iloc[0]) for v in var]) + ')' for c in betas.columns]
         betas.columns = colnames
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
     sorted_probes = sorted_probes[sorted_probes.isin(betas.index)]
@@ -754,7 +759,7 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
 
 ########################################################################################################################
 
-def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=1500, keep_na: bool=False,
+def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
                    protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
                    figsize=(20, 20), save_path: None | str=None) -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
@@ -765,8 +770,8 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
     :param gene_name : name of the gene to visualize
     :type gene_name: str
 
-    :param mask: True removes masked probes from betas, False keeps them. Default: True
-    :type mask: bool
+    :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
+    :type apply_mask: bool
 
     :param padding: length in kb pairs to add at the end and beginning of the transcription zone. Default: 1500
     :type: int
@@ -822,7 +827,7 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
     is_gene_in_interval &= (probe_info_df.start >= gene_transcript_start) & (probe_info_df.start <= gene_transcript_end)
     is_gene_in_interval &= (probe_info_df.end >= gene_transcript_start) & (probe_info_df.end <= gene_transcript_end)
     gene_probes = probe_info_df[is_gene_in_interval][['probe_id', 'start', 'end']].drop_duplicates().set_index('probe_id')
-    gene_betas = samples.get_betas(mask=mask, custom_sheet=custom_sheet)
+    gene_betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet)
     gene_betas = set_level_as_index(gene_betas, 'probe_id', drop_others=True)
     betas_location = gene_betas.join(gene_probes, how='inner').sort_values('start')
 
@@ -847,7 +852,7 @@ def visualize_gene(samples: Samples, gene_name: str, mask: bool=True, padding=15
         if isinstance(var, str):
             var = [var]
         sheet = samples.sample_sheet
-        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet.sample_name == c, v].iloc[0]) for v in var]) + ')' for c in heatmap_data.index]
+        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet[samples.sample_label_name] == c, v].iloc[0]) for v in var]) + ')' for c in heatmap_data.index]
         heatmap_data.index = colnames
 
     if keep_na:

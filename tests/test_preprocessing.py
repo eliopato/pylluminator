@@ -9,13 +9,13 @@ def test_poobah(test_samples):
     assert isinstance(test_df[('PREC_500_3', 'p_value')], pd.Series)
     poobah = test_df[('PREC_500_3', 'p_value')]
     assert sum(np.isnan(poobah)) == 46259
-    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 46259
+    assert test_samples.masks.number_probes_masked(sample_label='PREC_500_3') == 46259
     assert test_samples.masks.number_probes_masked('poobah_0.05') == 0
     assert test_samples.masks.number_probes_masked('poobah_0.05', 'PREC_500_3') == 46212
 
 def test_quality_mask(test_samples):
     test_samples.apply_quality_mask()
-    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 32948
+    assert test_samples.masks.number_probes_masked(sample_label='PREC_500_3') == 32948
 
 def test_infer_infinium_I_channel(test_samples):
     summary = test_samples.infer_type1_channel('PREC_500_3')
@@ -182,8 +182,8 @@ def test_apply_xy(test_samples):
 def test_apply_non_unique_mask(test_samples):
     test_samples.apply_non_unique_mask()
     assert test_samples.masks.number_probes_masked() == 23664
-    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 23716
-    assert test_samples.masks.number_probes_masked(mask_name='min_beads_1', sample_name='PREC_500_3') == 52
+    assert test_samples.masks.number_probes_masked(sample_label='PREC_500_3') == 23716
+    assert test_samples.masks.number_probes_masked(mask_name='min_beads_1', sample_label='PREC_500_3') == 52
 
 def test_normalization_controls(test_samples):
     norm_controls = test_samples.get_normalization_controls()

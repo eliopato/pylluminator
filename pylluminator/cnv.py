@@ -18,46 +18,46 @@ from pylluminator.utils import get_logger
 LOGGER = get_logger()
 
 
-def copy_number_variation(samples: Samples, sample_name: str, normalization_samples_names: str | list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
+def copy_number_variation(samples: Samples, sample_label: str, normalization_sample_labels: str | list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
     """Perform copy number variation (CNV) and copy number segmentation for a sample
 
     :param samples: samples to be analyzed
     :type samples: Samples
 
-    :param sample_name: name of the samples to calculate CNV of.
-    :type sample_name: str
+    :param sample_label: name of the samples to calculate CNV of.
+    :type sample_label: str
 
-    :param normalization_samples_names: names of the samples to use for normalization, that have to be part of the passed
+    :param normalization_sample_labels: names of the samples to use for normalization, that have to be part of the passed
         Samples object. If empty (default), default normalization samples will be loaded from a database - but this only
         work for EPIC/hg38 and EPICv2/hg38; for other array versions, you **need** to provide samples. Default []
-    :type normalization_samples_names: str | list[str]
+    :type normalization_sample_labels: str | list[str]
 
     :return: a tuple with : the bins coordinates, the bins signal, the segments
     :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
     """
 
-    available_samples = samples.sample_names
-    if sample_name not in available_samples:
-        LOGGER.error(f'Sample {sample_name} not found in the Samples object')
+    available_samples = samples.sample_labels
+    if sample_label not in available_samples:
+        LOGGER.error(f'Sample {sample_label} not found in the Samples object')
         return None
 
-    if normalization_samples_names is not None:
+    if normalization_sample_labels is not None:
 
         # make sure it's a list
-        if isinstance(normalization_samples_names, str):
-            normalization_samples_names = [normalization_samples_names]
+        if isinstance(normalization_sample_labels, str):
+            normalization_sample_labels = [normalization_sample_labels]
 
         # extract normalization samples from the samples object.
-        for norm_sample_name in normalization_samples_names:
+        for norm_sample_name in normalization_sample_labels:
             if norm_sample_name not in available_samples:
                 LOGGER.error(f'Normalization sample {norm_sample_name} not found in the Samples object')
-        normalization_samples_names = [n for n in normalization_samples_names if n in available_samples]
+        normalization_sample_labels = [n for n in normalization_sample_labels if n in available_samples]
 
-        if len(normalization_samples_names) == 0:
+        if len(normalization_sample_labels) == 0:
             LOGGER.error('None of the normalization samples were found in the Samples object, exiting')
             return None
 
-        norm_intensities = samples.get_total_ib_intensity()[normalization_samples_names]
+        norm_intensities = samples.get_total_ib_intensity()[normalization_sample_labels]
 
     else:
 
@@ -74,7 +74,7 @@ def copy_number_variation(samples: Samples, sample_name: str, normalization_samp
     probe_coords_df = samples.annotation.genomic_ranges
 
     # get total intensity per probe and drop unnecessary indexes
-    target_intensity = samples.get_total_ib_intensity(sample_name)
+    target_intensity = samples.get_total_ib_intensity(sample_label)
     target_intensity = target_intensity.droplevel(['channel', 'type', 'probe_type']).dropna()
 
     norm_intensities = norm_intensities.droplevel(['channel', 'type', 'probe_type']).dropna()

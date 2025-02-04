@@ -12,7 +12,7 @@ def test_print_samples(test_samples):
 
 def test_get_item(test_samples):
     # access via sample index
-    first_name = test_samples.sample_names[0]
+    first_name = test_samples.sample_labels[0]
     assert len(test_samples[0].columns) == 4
     assert test_samples[0].columns[0] == (first_name, 'G', 'M')
     # access via non existent sample index
@@ -55,4 +55,12 @@ def test_load_nonexistent():
     assert test_object is None
 
 def test_get_sigdf(test_samples):
-    assert test_samples.get_signal_df(mask=True).equals(test_samples.get_signal_df(mask='wrong value'))
+    assert test_samples.get_signal_df(apply_mask=True).equals(test_samples.get_signal_df(apply_mask='wrong value'))
+
+def test_merge_samples(test_samples):
+    test_samples.merge_samples_by('patient_id')
+    assert test_samples.sample_label_name == 'sample_name'  # it should not have changed
+    test_samples.merge_samples_by('sample_type')
+    assert test_samples.sample_label_name == 'sample_type'
+    assert test_samples.masks.number_probes_masked(sample_label='LNCAP') == 54
+    assert test_samples.masks.number_probes_masked(sample_label='PREC') == 98

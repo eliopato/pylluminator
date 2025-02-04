@@ -15,41 +15,41 @@ def test_calculate_betas(test_samples):
     assert betas.xs('rs9363764_BC21', level="probe_id").values == 0.373386 # Type II
 
 def test_betas_options(test_samples):
-    # test sample_name and custom_sheet options
-    assert test_samples.get_betas(sample_name="unkwown") is None
+    # test sample_label and custom_sheet options
+    assert test_samples.get_betas(sample_label="unkwown") is None
 
-    # test sample_name option
-    test_df = test_samples.get_betas(sample_name="PREC_500_3")
+    # test sample_label option
+    test_df = test_samples.get_betas(sample_label="PREC_500_3")
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.Series)
     assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0]
 
-    # test sample_name and custom_sheet options (a warning should be triggered for using both sample_name and custom_sheet)
-    test_df = test_samples.get_betas(sample_name="PREC_500_3", custom_sheet=pd.DataFrame())
+    # test sample_label and custom_sheet options (a warning should be triggered for using both sample_label and custom_sheet)
+    test_df = test_samples.get_betas(sample_label="PREC_500_3", custom_sheet=pd.DataFrame())
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.Series)
     assert test_df.iloc[0] == test_samples.get_betas()['PREC_500_3'].iloc[0]
 
     # test custom_sheet option
-    custom_sheet = test_samples.sample_sheet[test_samples.sample_sheet.sample_name == 'LNCAP_500_3']
+    custom_sheet = test_samples.sample_sheet[test_samples.sample_sheet[test_samples.sample_label_name] == 'LNCAP_500_3']
     test_df = test_samples.get_betas(custom_sheet=custom_sheet)
     assert len(test_df) == 937688
     assert isinstance(test_df, pd.DataFrame)
     assert len(test_df.columns) == 1
     assert test_df['LNCAP_500_3'].iloc[0] == test_samples.get_betas()['LNCAP_500_3'].iloc[0]
 
-   # test missing sample sheet column
-    assert test_samples.get_betas(custom_sheet=custom_sheet.drop(columns='sample_name')) is None
+    # test missing sample sheet column
+    assert test_samples.get_betas(custom_sheet=custom_sheet.drop(columns=test_samples.sample_label_name)) is None
 
-   # test no samples name matching beta columns
-    custom_sheet['sample_name'] = custom_sheet['sample_type']
+    # test no samples name matching beta columns
+    custom_sheet.loc[:, test_samples.sample_label_name] = custom_sheet['sample_type']
     assert test_samples.get_betas(custom_sheet=custom_sheet) is None
 
 
 
 # def test_plot_betas(test_samples):
-#     plot_betas(test_samples, color_column='sample_group', mask=True)
-#     plot_betas(test_samples, color_column='sample_group', mask=False)
-#     plot_betas(test_samples, group_column='sample_group', mask=True)
-#     plot_betas(test_samples, group_column=['sample_group', 'sample_name_group'], mask=True)
+#     plot_betas(test_samples, color_column='sample_group', apply_mask=True)
+#     plot_betas(test_samples, color_column='sample_group', apply_mask=False)
+#     plot_betas(test_samples, group_column='sample_group', apply_mask=True)
+#     plot_betas(test_samples, group_column=['sample_group', 'sample_name_group'], apply_mask=True)
 #     plot_betas(test_samples, color_column='sample_group', group_column=['sample_group', 'sample_name_group'])

@@ -57,7 +57,7 @@ def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_name
 
 
 def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, custom_sheet: None | pd.DataFrame=None,
-            drop_na=False, mask=True, probe_ids:None|list[str]=None) -> (pd.DataFrame | None, list[str]):
+            drop_na=False, apply_mask=True, probe_ids:None|list[str]=None) -> (pd.DataFrame | None, list[str]):
     """Find Differentially Methylated Probes (DMP)
 
     More info on  design matrices and formulas:
@@ -74,8 +74,8 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     :type custom_sheet: pandas.DataFrame
     :param drop_na: drop probes that have NA values. Default: False
     :type drop_na: bool
-    :param mask: set to True to apply mask. Default: True
-    :type mask: bool
+    :param apply_mask: set to True to apply mask. Default: True
+    :type apply_mask: bool
     :param probe_ids: list of probe IDs to use. Useful to work on a subset for testing purposes. Default: None
     :type probe_ids: list[str] | None
     :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
@@ -88,20 +88,20 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
         custom_sheet = samples.sample_sheet
 
     # check the sample sheet
-    if 'sample_name' not in custom_sheet.columns:
-        LOGGER.error('get_dmp() : the provided sample sheet must have a "sample_name" column')
+    if samples.sample_label_name not in custom_sheet.columns:
+        LOGGER.error(f'get_dmp() : the provided sample sheet must have a "{samples.sample_label_name}" column')
         return None
 
-    betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, mask=mask, custom_sheet=custom_sheet)
+    betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     if probe_ids is not None:
         betas = betas.loc[probe_ids]
 
-    sheet = custom_sheet[custom_sheet.sample_name.isin(betas.columns)]
+    sheet = custom_sheet[custom_sheet[samples.sample_label_name].isin(betas.columns)]
 
     # make the design matrix
-    sample_info = sheet.set_index('sample_name')
+    sample_info = sheet.set_index(samples.sample_label_name)
     # order betas and sample_info the same way
     sample_names_order = [c for c in betas.columns if c in sample_info.index]
     sample_info = sample_info.loc[sample_names_order]
@@ -203,8 +203,8 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     last_probe_in_chromosome = cpg_ranges['Chromosome'] != next_chromosome
 
     # compute Euclidian distance of beta values between two consecutive probes of each sample
-    sample_names = betas.columns
-    beta_euclidian_dist = (cpg_ranges[sample_names].diff(-1) ** 2).sum(axis=1)
+    sample_labels = betas.columns
+    beta_euclidian_dist = (cpg_ranges[sample_labels].diff(-1) ** 2).sum(axis=1)
     beta_euclidian_dist.iloc[-1] = None  # last probe shouldn't have a distance (default is 0 otherwise)
 
     # determine cut-off if not provided

@@ -20,11 +20,11 @@ def test_no_mask(test_samples):
     test_samples.apply_mask_by_names(None)
 
 def test_remove_sample_mask(test_samples):
-    assert test_samples.masks.number_probes_masked(sample_name='LNCAP_500_3') == 26
-    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_2') == 21
-    test_samples.masks.remove_masks(sample_name='LNCAP_500_3')
-    assert test_samples.masks.number_probes_masked(sample_name='LNCAP_500_3') == 0
-    assert test_samples.masks.number_probes_masked(sample_name='PREC_500_2') == 21
+    assert test_samples.masks.number_probes_masked(sample_label='LNCAP_500_3') == 26
+    assert test_samples.masks.number_probes_masked(sample_label='PREC_500_2') == 21
+    test_samples.masks.remove_masks(sample_label='LNCAP_500_3')
+    assert test_samples.masks.number_probes_masked(sample_label='LNCAP_500_3') == 0
+    assert test_samples.masks.number_probes_masked(sample_label='PREC_500_2') == 21
     assert len(test_samples.masks.masks) == 5
 
 def test_remove_specific_mask(test_samples):
@@ -36,7 +36,7 @@ def test_remove_specific_mask(test_samples):
     assert len(test_samples.masks.masks) == 5
 
 def test_remove_mask(test_samples):
-    assert test_samples.masks.number_probes_masked(sample_name='LNCAP_500_3') == 26
+    assert test_samples.masks.number_probes_masked(sample_label='LNCAP_500_3') == 26
     test_samples.masks.remove_masks(mask_name='min_beads_1')
     assert len(test_samples.masks.masks) == 0
 

@@ -81,7 +81,7 @@ def test_read_samples(data_path):
     assert len(my_samples.idata ) == max_samples
     assert my_samples.nb_samples == max_samples
     assert my_samples.annotation.array_type == ArrayType.HUMAN_EPIC_V2
-    assert my_samples.masks.number_probes_masked(sample_name='PREC_500_3') == 52
+    assert my_samples.masks.number_probes_masked(sample_label='PREC_500_3') == 52
 
     # Check that the samples are correctly loaded
     sample = my_samples['PREC_500_3']
@@ -227,17 +227,17 @@ def test_from_sesame(test_samples):
 
     sample1 = from_sesame('sesame1.csv', test_samples.annotation)
     assert sample1 is not None
-    assert sample1.sample_names == ['sesame1']
+    assert sample1.sample_labels == ['sesame1']
     assert sample1.nb_probes == 9
-    assert sample1.masks.number_probes_masked(sample_name='sesame1') == 2
+    assert sample1.masks.number_probes_masked(sample_label='sesame1') == 2
 
     samples = from_sesame('.', test_samples.annotation)
     assert samples is not None
-    assert 'sesame1' in samples.sample_names
-    assert 'sesame2' in samples.sample_names
+    assert 'sesame1' in samples.sample_labels
+    assert 'sesame2' in samples.sample_labels
     assert samples.nb_probes == 9
-    assert samples.masks.number_probes_masked(sample_name='sesame1') == 2
-    assert samples.masks.number_probes_masked(sample_name='sesame2') == 0
+    assert samples.masks.number_probes_masked(sample_label='sesame1') == 2
+    assert samples.masks.number_probes_masked(sample_label='sesame2') == 0
 
     os.remove('sesame1.csv')
     os.remove('sesame2.csv')
