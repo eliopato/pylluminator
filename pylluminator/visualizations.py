@@ -20,7 +20,8 @@ from pylluminator.utils import get_chromosome_number, set_level_as_index, get_lo
 
 LOGGER = get_logger()
 
-def _get_colors(sheet: pd.DataFrame, color_column: str | None, group_column: str | list[str] | None = None, cmap_name: str = 'Spectral') -> (list, dict | None):
+def _get_colors(sheet: pd.DataFrame, sample_label_name: str, color_column: str | None,
+                group_column: str | list[str] | None = None, cmap_name: str = 'Spectral') -> (list, dict | None):
     """Define the colors to use for each sample, depending on the columns used to categorized them.
 
     :param sheet: sample sheet data frame
@@ -34,6 +35,7 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, group_column: str
 
     :return: the list of legend handles and a dict of color categories, with keys being the values of color_column
     :rtype: tuple[list,dict | None]"""
+
     if color_column is None and group_column is None:
         return [], None
 
@@ -46,8 +48,9 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, group_column: str
         nb_colors = len(grouped_sheet)
         for i, (group_name, group) in enumerate(grouped_sheet):
             color_categories[str(group_name).replace("'", "")] = cmap(i / max(1, nb_colors - 1))
-    elif color_column == 'sample_name':
-        color_categories = {name: cmap(i / len(sheet)) for i, name in enumerate(sheet.sample_name)}
+    # if there is one sample per color, avoid creating one category per sample
+    elif sample_label_name is not None and color_column == sample_label_name:
+        color_categories = {name: cmap(i / len(sheet)) for i, name in enumerate(sheet[sample_label_name])}
         legend_handles += [Line2D([0], [0], color=color, label=label) for label, color in color_categories.items()]
     else:
         grouped_sheet = sheet.groupby(color_column)
@@ -55,7 +58,7 @@ def _get_colors(sheet: pd.DataFrame, color_column: str | None, group_column: str
         legend_handles += [Line2D([0], [0], color='black', linestyle='', label=color_column)]
         for i, (group_name, group) in enumerate(grouped_sheet):
             color = cmap(i / max(1, nb_colors - 1))
-            for name in group.sample_name:
+            for name in group[sample_label_name]:
                 color_categories[name] = color
             group_name = str(group_name).replace("'", "").replace('(','').replace(')','')
             legend_handles += [mpatches.Patch(color=color, label=group_name)]
@@ -144,7 +147,7 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
         betas.columns = group_names
 
     # define the color and line style of each sample
-    c_legend_handles, colors = _get_colors(sheet, color_column, group_column)
+    c_legend_handles, colors = _get_colors(sheet, samples.sample_label_name, color_column, group_column)
     ls_legend_handles, linestyles = _get_linestyles(sheet, linestyle_column)
     legend_handles = c_legend_handles + ls_legend_handles
 
@@ -260,8 +263,7 @@ def betas_mds(samples: Samples, label_column: str | None=None, color_column: str
     mds = MDS(n_components=2, random_state=random_state)
     fit = mds.fit_transform(betas_most_variance.T)
 
-    legend_handles, colors_dict = _get_colors(sheet, color_column)
-
+    legend_handles, colors_dict = _get_colors(sheet, samples.sample_label_name, color_column)
     plt.figure(figsize=(15, 10))
     labels = [sheet.loc[sheet[samples.sample_label_name] == name, label_column].values[0] for name in betas.columns]
     plt.scatter(x=fit[:, 0], y=fit[:, 1], label=labels, c=[colors_dict[label] for label in labels])
@@ -292,6 +294,9 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     :param title: custom title for the plot. Default: None
     :type title: str | None
 
+    :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: None
+    :type color_column: str
+
     :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
     :type apply_mask: bool
 
@@ -313,7 +318,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
 
     if color_column is not None:
-        legend_handles, label_colors = _get_colors(sheet, color_column=color_column)
+        legend_handles, label_colors = _get_colors(sheet, samples.sample_label_name, color_column=color_column)
 
         for lbl in plt.gca().get_ymajorticklabels():
             lbl.set_color(label_colors[lbl.get_text()])
@@ -486,7 +491,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
                     x_col='start', y_col='p_value', log10=False, figsize=(20,14),
                     annotation: Annotations | None = None, annotation_col: str = 'genes',
-                    medium_threshold=1e-05, high_threshold=5e-08,
+                    medium_threshold: float | None = None, high_threshold: float | None = None,
                     title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given data.
 
@@ -514,11 +519,11 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     :type annotation_col: str | None
 
     :param medium_threshold: set the threshold used for displaying annotation (and significance line if d
-        raw_significance is True). Default: 1e-05
+        raw_significance is True). If None, takes the value of the 100th probe. Default: None
     :type medium_threshold: float
 
-    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True).
-        Default: 1e-08
+    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True). If
+        None, takes the value of the 20th probe. Default: None
     :type high_threshold: float
 
     :param log10: apply -log10 on the value column. Default: True
@@ -559,15 +564,28 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     chrom_start, chrom_end = 0, 0
     x_labels, x_major_ticks, x_minor_ticks = [], [], [0]
 
+    # cant plot 0s
+    zero_idxs = data_to_plot[y_col] == 0
+    if sum(zero_idxs) > 0:
+        new_min = np.min(data_to_plot.loc[~zero_idxs, y_col]) / 2
+        data_to_plot.loc[zero_idxs, y_col] = new_min
+        LOGGER.warning(f'{sum(zero_idxs)} probes = 0 found, replacing their value with {new_min}')
+
     # apply -log10 to p-values if needed
     if log10:
         data_to_plot[y_col] = -np.log10(data_to_plot[y_col])
-        high_threshold = -np.log10(high_threshold)
-        medium_threshold = -np.log10(medium_threshold)
+
+    if high_threshold is None or medium_threshold is None:
+        sorted_pvals = data_to_plot[y_col].sort_values()
+        if high_threshold is None:
+            high_threshold = sorted_pvals.iloc[-20]
+        if medium_threshold is None:
+            medium_threshold = sorted_pvals.iloc[-100]
 
     # define colormap and limits
     v_max = np.max(data_to_plot[y_col])
     v_min = np.min(data_to_plot[y_col])
+
     if v_min < 0:
         cmap = colormaps.get_cmap('jet')
     else:
@@ -671,13 +689,15 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
                        chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation: Annotations | None = None, annotation_col='genes', log10=True,
                        draw_significance=True, figsize=(20, 14),
-                       medium_threshold=1e-05, high_threshold=5e-08,
+                       medium_threshold: float | None = None, high_threshold: float | None = None,
                        title: None | str = None, save_path: None | str=None):
     """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
 
-
     :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
     :type data_to_plot: pandas.DataFrame
+
+    :param contrast: name of the contrast from DMP calculation to use.
+    :type contrast: str
 
     :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
     :type chromosome_col: str
@@ -696,12 +716,12 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
     :type annotation_col: str | None
 
     :param medium_threshold: set the threshold used for displaying annotation (and significance line if
-        raw_significance is True). Default: 1e-05
-    :type medium_threshold: float
+        raw_significance is True). If None, takes the value of the 100th probe. Default: None
+    :type medium_threshold: float | None
 
-    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True).
-        Default: 1e-08
-    :type high_threshold: float
+    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True). If
+        None, takes the value of the 20th probe. Default: None
+    :type high_threshold: float | None
 
     :param log10: apply -log10 on the value column. Default: True
     :type log10: bool
@@ -724,8 +744,7 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
 
 def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
                        x_col='start_bin', chromosome_col='chromosome', y_col='cnv',
-                       figsize=(20, 14),
-                       title: None | str = None, save_path: None | str=None) -> None:
+                       figsize=(20, 14), title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
 
@@ -781,6 +800,12 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     :param protein_coding_only: limit displayed transcripts to protein coding ones. Default: True
     :type protein_coding_only: bool
+
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
+    :type custom_sheet: pandas.DataFrame
+
+    :param var: a column name or list of column names from the samplesheet to add to the heatmap labels. Default: None
+    :type var: None | str | list[str]
 
     :param figsize: size of the whole plot. Default: (20, 20)
     :type figsize: tuple[int, int]

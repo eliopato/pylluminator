@@ -524,14 +524,20 @@ class Samples:
         if by not in self.sample_sheet.columns:
             LOGGER.error(f'Column {by} not found in sample sheet in columns')
             return
+
         level_name_ini = self.sample_label_name
+
+        if by == level_name_ini:
+            LOGGER.info(f'samples are already merged by {by}, nothing to do')
+            return
+
+        self.reset_columns()  # remove beta, p_values columns
         column_names_ini = self._signal_df.columns.get_level_values(0)
-        new_column_names = self._signal_df.columns.rename(by, level=0).names
         sheet = self.sample_sheet[self.sample_sheet[level_name_ini].isin(column_names_ini)]
 
-        new_columns = pd.MultiIndex.from_product([set(sheet[by]), ['G', 'R'], ['M', 'U']], names=new_column_names)
-        new_df = pd.DataFrame(index=self._signal_df.index, columns=new_columns)
+        signal_df =  self.get_signal_df(apply_mask=apply_mask)
 
+        df_list = {}
         for new_name, group in sheet.groupby(by):
             old_names = group[level_name_ini].values.tolist()
             for mask_name in self.masks.get_mask_names(sample_label=old_names):
@@ -539,11 +545,13 @@ class Samples:
                 self.masks.remove_masks(mask_name=mask_name, sample_label=old_names)
                 self.masks.add_mask(Mask(mask_name, new_name, mask))
             if len(old_names) == 1:
-                new_df[new_name] = self.get_signal_df(apply_mask=apply_mask)[old_names[0]]
+                df_list[new_name] = signal_df[old_names[0]]
             else:
-                new_df[new_name] = self.get_signal_df(apply_mask=apply_mask)[old_names].T.groupby(['signal_channel', 'methylation_state']).mean().T
+                df_list[new_name] = signal_df[old_names].T.groupby(['signal_channel', 'methylation_state']).mean().T
 
-        new_df['mask_info'] = self._signal_df['mask_info']
+        new_df = pd.concat(df_list, axis=1)
+        new_df['mask_info'] = signal_df['mask_info']
+        new_df.columns = new_df.columns.rename(by, level=0)
         self._signal_df = new_df
 
     ####################################################################################################################
