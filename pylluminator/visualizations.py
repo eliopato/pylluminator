@@ -11,6 +11,9 @@ from matplotlib import gridspec
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
+from sklearn.decomposition import PCA, DictionaryLearning, FactorAnalysis, FastICA, IncrementalPCA, KernelPCA
+from sklearn.decomposition import LatentDirichletAllocation, MiniBatchDictionaryLearning, MiniBatchNMF
+from sklearn.decomposition  import NMF, SparsePCA, TruncatedSVD, MiniBatchSparsePCA
 from scipy.cluster.hierarchy import linkage, dendrogram
 import seaborn as sns
 
@@ -206,9 +209,9 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 #     plt.show()
 
 
-def betas_mds(samples: Samples, label_column: str | None=None, color_column: str | None=None,
-              nb_probes: int=1000, random_state: int = 42, title: None | str = None, apply_mask=True,
-              custom_sheet: None | pd.DataFrame = None, save_path: None | str=None) -> None:
+def betas_2D(samples: Samples, label_column: str | None=None, color_column: str | None=None,
+              nb_probes: int=1000, title: None | str = None, apply_mask=True,
+              custom_sheet: None | pd.DataFrame = None, save_path: None | str=None, model='PCA', **kwargs) -> None:
     """Plot samples in 2D space according to their beta distances.
 
     :param samples : samples to plot
@@ -223,9 +226,6 @@ def betas_mds(samples: Samples, label_column: str | None=None, color_column: str
     :param nb_probes: number of probes to use for the model. Default: 1000
     :type nb_probes: int
 
-    :param random_state: seed for the MDS model. Assigning a seed makes the graphe reproducible across calls. Default: 42
-    :type random_state: int
-
     :param title: custom title for the plot. Default: None
     :type title: str | None
 
@@ -239,9 +239,26 @@ def betas_mds(samples: Samples, label_column: str | None=None, color_column: str
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
+    :param model: identifier of the model to use. Available models are 'PCA': PCA, 'MDS': MDS, 'DL': DictionaryLearning,
+        'FA': FactorAnalysis, 'FICA': FastICA, 'IPCA': IncrementalPCA, 'KPCA': KernelPCA, 'LDA': LatentDirichletAllocation,
+        'MBDL': MiniBatchDictionaryLearning, 'MBNMF': MiniBatchNMF, 'MBSPCA': MiniBatchSparsePCA, 'NMF': NMF,
+        'SPCA': SparsePCA, 'TSVD': TruncatedSVD. Default: 'PCA'
+    :type model: str
+
+    :param kwargs: parameters passed to the model
+
     :return: None"""
 
     plt.style.use('ggplot')
+    models = {'PCA': PCA, 'MDS': MDS, 'DL': DictionaryLearning, 'FA': FactorAnalysis, 'FICA': FastICA,
+              'IPCA': IncrementalPCA, 'KPCA': KernelPCA, 'LDA': LatentDirichletAllocation,
+              'MBDL': MiniBatchDictionaryLearning, 'MBNMF': MiniBatchNMF, 'MBSPCA': MiniBatchSparsePCA, 'NMF': NMF,
+               'SPCA': SparsePCA, 'TSVD': TruncatedSVD}
+
+    if model not in models.keys():
+        LOGGER.error(f'Unknown model {model}. Known models are {models.keys()}')
+        return
+    sk_model = models[model]
 
     if label_column is None:
         label_column = samples.sample_label_name
@@ -259,9 +276,13 @@ def betas_mds(samples: Samples, label_column: str | None=None, color_column: str
     indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
     betas_most_variance = betas.loc[indexes_most_variance].dropna()  # MDS doesn't support NAs
 
-    # perform MDS
-    mds = MDS(n_components=2, random_state=random_state)
-    fit = mds.fit_transform(betas_most_variance.T)
+    # fit the PCA or MDS
+    if 'n_components' not in kwargs:
+        kwargs['n_components'] = 2
+    if 'random_state' not in kwargs and model not in ['IPCA']:
+        kwargs['random_state'] = 42
+    model_ini = sk_model(**kwargs)
+    fit = model_ini.fit_transform(betas_most_variance.T)
 
     legend_handles, colors_dict = _get_colors(sheet, samples.sample_label_name, color_column)
     plt.figure(figsize=(15, 10))
@@ -271,7 +292,7 @@ def betas_mds(samples: Samples, label_column: str | None=None, color_column: str
     for index, name in enumerate(labels):
         plt.annotate(name, (fit[index, 0], fit[index, 1]), fontsize=9)
 
-    title = title if title is not None else f'MDS of the {nb_probes} most variable probes'
+    title = title if title is not None else f'{model} of the {nb_probes} most variable probes'
     plt.title(title)
 
     if len(legend_handles) > 0:

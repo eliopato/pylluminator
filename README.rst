@@ -1,6 +1,10 @@
 |logo| Welcome to pylluminator
 ==============================
 
+.. image:: https://img.shields.io/github/last-commit/eliopato/pylluminator.svg?style=flat-square
+   :target: https://github.com/eliopato/pylluminator/commits/master
+   :alt: Last commit
+
 .. image:: https://img.shields.io/github/actions/workflow/status/eliopato/pylluminator/run_test.yml?branch=main
    :target: https://github.com/eliopato/pylluminator/actions
    :alt: Test Status
@@ -48,7 +52,7 @@ Main functionalities
 
 * data analysis and visualisation
 
-  * beta values
+  * beta values (density, PCA, MDS, dendrogram...)
   * DMP and DMR
   * CNV
 
