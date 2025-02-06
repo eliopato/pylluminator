@@ -868,7 +868,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     heatmap_data = betas_data.drop(columns=['start', 'end']).T
 
-    if len(heatmap_data) == 0:
+    if heatmap_data.empty:
         LOGGER.error('no beta data to plot')
         return
 
