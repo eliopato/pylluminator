@@ -19,7 +19,12 @@ import seaborn as sns
 
 from pylluminator.samples import Samples
 from pylluminator.annotations import Annotations
-from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes
+from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes, \
+    merge_series_values
+from pylluminator.utils import merge_series_values
+
+from matplotlib.patches import Patch
+import matplotlib.text as mtext
 
 LOGGER = get_logger()
 
@@ -443,11 +448,76 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
 
 ########################################################################################################################
 
+class _LegendTitle(object):
+    def __init__(self, text_props=None):
+        self.text_props = text_props or {}
+        super(_LegendTitle, self).__init__()
 
-def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=None,
-                     nb_probes: int = 100, figsize=(15,15),
-                     var: str | None | list[str] =None, custom_sheet: pd.DataFrame | None=None,
-                     drop_na=True, save_path: None | str=None) -> None:
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        x0, y0 = handlebox.xdescent, handlebox.ydescent
+        title = mtext.Text(x0, y0, orig_handle, **self.text_props)
+        handlebox.add_artist(title)
+        return title
+
+
+def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str] | None):
+    """Treat each column of the dataframe as a distinct category, and convert its values to colors. If the values are
+    string, treat them as categories, if they are numbers, use a continuous colormap. Generate the associated legend
+    handles for the specified names.
+
+    :param input_df: dataframe
+    :type input_df: pandas.DataFrame
+
+    :param legend_names: list of columns to generate legend handles for. If None or empty, don't generate any. Default: None
+    :type legend_names: list[str] | None
+
+    :return: the colors dataframe and the legend handles as a list of tuples (legend name, df[value name, corresponding color])
+    :rtype: tuple(pandas.DataFrame, list)
+    """
+    string_cmap_index = 0
+    number_cmap_index = 0
+    string_cmaps = ['hls', 'pastel', 'dark']
+    number_cmaps = ['viridis', 'plasma', 'cool', 'spring']
+
+    def get_string_color(val, nb_cats):
+        return sns.color_palette(string_cmaps[string_cmap_index % len(string_cmaps)], nb_cats)[val]
+
+    def get_numeric_color(val, cmin, cmax):
+        norm = plt.Normalize(cmin, cmax)
+        return colormaps.get_cmap(number_cmaps[number_cmap_index % len(number_cmaps)])(norm(val))
+
+    how_to = {column: merge_series_values for column in input_df.columns}
+    input_df = input_df.groupby(input_df.index.name).agg(how_to)
+    color_df = input_df.copy()
+
+    handles = []
+    labels = []
+
+    for col in input_df.columns:
+        # get colors
+        if input_df[col].dtype == 'object':
+            # convert string category codes to easily get a color index for each string
+            color_df[col] = pd.Categorical(input_df[col]).codes
+            color_df[col] = color_df[col].apply(get_string_color, args=(len(set(input_df[col])),))
+            string_cmap_index += 1
+        elif np.issubdtype(input_df[col].dtype, np.number):
+            color_df[col] = input_df[col].apply(get_numeric_color, args=(input_df[col].min(), input_df[col].max()))
+            number_cmap_index += 1
+        # make legends (category title + colors & labels)
+        if legend_names is not None and col in legend_names:
+            legend_df = pd.concat([color_df[col], input_df[col]], axis=1).drop_duplicates()
+            legend_df.columns = ['color', 'name']
+            legend_df = legend_df.sort_values('name')
+            handles += [col] + legend_df.color.apply(lambda x: Patch(color=x)).tolist()
+            labels += [''] + legend_df.name.values.tolist()
+
+    return color_df, handles, labels
+
+def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None = None,
+                     nb_probes: int = 100, figsize=(15, 15),
+                     var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
+                     drop_na=True, save_path: None | str = None,
+                     row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = None) -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
@@ -472,6 +542,12 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
     :type drop_na: bool
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
+    :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
+        columns of the sample sheet. Default: None
+    :type row_factors: str | list[str] | None
+    :param row_legends: list of columns to generate a legend for. None for no legends. Only work for columns also
+        specified in row_factors. Default: None
+    :type row_legends: str | list[str] | None
 
     :return: None"""
 
@@ -481,30 +557,55 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None=
     if isinstance(contrast, list):
         LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
+
     if contrast is None:
         sorted_probes = dmps.sort_values('f_pvalue').index
     else:
         sorted_probes = dmps.sort_values(f'{contrast}_p_value').index
 
-    # sort betas per p-value
+    label = samples.sample_label_name
     betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
+
+    # add values next to sample labels if var is specified and use the new labels as betas column names
     if var is not None:
         if isinstance(var, str):
             var = [var]
         sheet = samples.sample_sheet
-        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet[samples.sample_label_name] == c, v].iloc[0]) for v in var]) + ')' for c in betas.columns]
+        colnames = [f'{c} ({",".join([str(sheet.loc[sheet[label] == c, v].iloc[0]) for v in var])})' for c in betas.columns]
         betas.columns = colnames
+
+    # sort betas per p-value and take the n_probes first probes
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
     sorted_probes = sorted_probes[sorted_probes.isin(betas.index)]
     nb_probes = min(nb_probes, len(sorted_probes))
     sorted_betas = betas.loc[sorted_probes][:nb_probes].T
 
+    # common parameters to clustermap and heatmap
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'figsize': figsize, 'cmap': 'Spectral'}
+    legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
+
     if drop_na:
-        plot = sns.clustermap(sorted_betas, yticklabels=True, xticklabels=True, figsize=figsize, cmap='Spectral')
+        handles, labels = [], []
+        # convert categories to colors and get legends if specified
+        if row_factors is not None:
+            row_factors = [row_factors] if isinstance(row_factors, str) else row_factors
+            row_legends = [row_legends] if isinstance(row_legends, str) else row_legends
+            subset = samples.sample_sheet.set_index(label)[row_factors]
+            row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
+        # plot the heatmap
+        plot = sns.clustermap(sorted_betas, row_colors=row_factors, **heatmap_params)
+        # add the legends if they exist
+        if len(handles) > 0 and len(labels) > 0:
+            plt.legend(handles=handles, labels=labels, **legend_params)
+        # save plot
         if save_path is not None:
             plot.savefig(os.path.expanduser(save_path))
     else:
-        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), yticklabels=True, xticklabels=True, figsize=figsize, cmap='Spectral')
+        if row_factors is not None:
+            LOGGER.warning(f'Parameter {row_factors} is ignored when drop_na is False')
+
+        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), **heatmap_params)
+
         if save_path is not None:
             plot.get_figure().savefig(os.path.expanduser(save_path))
 

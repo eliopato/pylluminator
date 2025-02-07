@@ -1,9 +1,11 @@
 import logging
 import numpy as np
 import os
+import pandas as pd
 
 from pylluminator.utils import (set_logger, get_logger_level, get_logger, remove_probe_suffix, save_object, load_object,
-                                merge_alt_chromosomes, get_chromosome_number, set_level_as_index, download_from_link)
+                                merge_alt_chromosomes, get_chromosome_number, set_level_as_index, download_from_link,
+                                merge_series_values)
 
 def test_set_logger():
     set_logger('WARNING')
@@ -92,3 +94,19 @@ def test_set_level_as_index(test_samples):
 
 def test_failed_download():
     assert download_from_link('https://www.fakeurl.co/fakefile', 'data') == -1
+
+
+def test_deduplicate_strings_dupindex():
+    data = pd.Series([1, 2, 3])
+    assert merge_series_values(data) == 2.0
+
+    data = pd.Series([2, 2, 2])
+    assert merge_series_values(data) == 2.0
+
+    data = pd.Series(['jo', 'juju', 'bi'])
+    assert 'jo' in merge_series_values(data)
+    assert 'juju' in merge_series_values(data)
+    assert 'bi' in merge_series_values(data)
+
+    data = pd.Series(['jo', 2, 'bi'])
+    assert 'jo' in data

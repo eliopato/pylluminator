@@ -505,3 +505,12 @@ def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFra
         df['channel'] = df[column]  # copy values in a new column
 
     return df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order).sort_index()
+
+
+def merge_series_values(items: pd.Series):
+    if items.dtypes == 'object':
+        return ', '.join(set(items.astype('str')))
+    if np.issubdtype(items.dtypes, np.number):
+        return items.mean()
+    LOGGER.warning(f'unable to find an aggregation function for dtype {items.dtypes}')
+    return items.iloc[0]
