@@ -19,8 +19,7 @@ import seaborn as sns
 
 from pylluminator.samples import Samples
 from pylluminator.annotations import Annotations
-from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes, \
-    merge_series_values
+from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes
 from pylluminator.utils import merge_series_values
 
 from matplotlib.patches import Patch
@@ -558,10 +557,8 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
 
-    if contrast is None:
-        sorted_probes = dmps.sort_values('f_pvalue').index
-    else:
-        sorted_probes = dmps.sort_values(f'{contrast}_p_value').index
+    pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value'
+    sorted_probes = dmps.sort_values(pval_column).index
 
     label = samples.sample_label_name
     betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
@@ -581,7 +578,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
     sorted_betas = betas.loc[sorted_probes][:nb_probes].T
 
     # common parameters to clustermap and heatmap
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'figsize': figsize, 'cmap': 'Spectral'}
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
 
     if drop_na:
@@ -593,7 +590,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
             subset = samples.sample_sheet.set_index(label)[row_factors]
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         # plot the heatmap
-        plot = sns.clustermap(sorted_betas, row_colors=row_factors, **heatmap_params)
+        plot = sns.clustermap(sorted_betas, row_colors=row_factors, figsize=figsize, **heatmap_params)
         # add the legends if they exist
         if len(handles) > 0 and len(labels) > 0:
             plt.legend(handles=handles, labels=labels, **legend_params)
@@ -604,7 +601,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         if row_factors is not None:
             LOGGER.warning(f'Parameter {row_factors} is ignored when drop_na is False')
 
-        plot = sns.heatmap(sorted_betas.sort_values(betas.columns[0]), **heatmap_params)
+        plot = sns.heatmap(sorted_betas, **heatmap_params)
 
         if save_path is not None:
             plot.get_figure().savefig(os.path.expanduser(save_path))
@@ -902,38 +899,36 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
 
 def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
                    protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
-                   figsize=(20, 20), save_path: None | str=None) -> None:
+                   figsize=(20, 20), save_path: None | str=None,
+                   row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = None) -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
     :param samples : samples with beta values already calculated
     :type samples: Samples
-
     :param gene_name : name of the gene to visualize
     :type gene_name: str
-
     :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
     :type apply_mask: bool
-
     :param padding: length in kb pairs to add at the end and beginning of the transcription zone. Default: 1500
     :type: int
-
     :param keep_na : set to True to only output probes with no NA value for any sample. Default: False
     :type keep_na: bool
-
     :param protein_coding_only: limit displayed transcripts to protein coding ones. Default: True
     :type protein_coding_only: bool
-
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
     :type custom_sheet: pandas.DataFrame
-
     :param var: a column name or list of column names from the samplesheet to add to the heatmap labels. Default: None
     :type var: None | str | list[str]
-
     :param figsize: size of the whole plot. Default: (20, 20)
     :type figsize: tuple[int, int]
-
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
+    :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
+        columns of the sample sheet. Default: None
+    :type row_factors: str | list[str] | None
+    :param row_legends: list of columns to generate a legend for. None for no legends. Only work for columns also
+        specified in row_factors. Default: None
+    :type row_legends: str | list[str] | None
 
     :return: None"""
 
@@ -1002,13 +997,25 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet[samples.sample_label_name] == c, v].iloc[0]) for v in var]) + ')' for c in heatmap_data.index]
         heatmap_data.index = colnames
 
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral'}
+
     if keep_na:
         fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
-        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, xticklabels=True, yticklabels=True, cmap='Spectral')
+        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, **heatmap_params)
     else:
+        handles, labels = [], []
+        # convert categories to colors and get legends if specified
+        if row_factors is not None:
+            row_factors = [row_factors] if isinstance(row_factors, str) else row_factors
+            row_legends = [row_legends] if isinstance(row_legends, str) else row_legends
+            subset = samples.sample_sheet.set_index(samples.sample_label_name)[row_factors]
+            row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         dendrogram_ratio = 0.05
-        g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False,
-                           dendrogram_ratio=dendrogram_ratio, xticklabels=True, yticklabels=True, cmap='Spectral')
+        g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False, row_colors=row_factors,
+                           dendrogram_ratio=dendrogram_ratio, **heatmap_params)
+        if len(handles) > 0 and len(labels) > 0:
+            plt.legend(handles=handles, labels=labels, handler_map={str: _LegendTitle({'fontweight': 'bold'})},
+                       loc='upper left', bbox_to_anchor=(-0.1 * len(row_factors.columns), 1))
         shift_ratio = np.sum(height_ratios[:-1])
         g.gs.update(top=shift_ratio)  # shift the heatmap to the bottom of the figure
         gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio, height_ratios=height_ratios[:-1])
@@ -1099,13 +1106,14 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     lin_ax = axes[3]
 
+    nb_factors = len(row_factors.columns) if row_factors is not None else 0
     nb_probes = len(betas_data)
-    probe_shift = 1 / (2 * nb_probes)
+    probe_shift = nb_factors*0.03 + (1 - nb_factors*0.03) / (2 * nb_probes)
 
     for i, beta_row in enumerate(betas_data.itertuples()):
         probe_loc = beta_row.start - gene_transcript_start + (beta_row.end - beta_row.start) / 2
         x_transcript = probe_loc / gene_transcript_length
-        x_beta = i / nb_probes + probe_shift
+        x_beta = (1 - nb_factors * 0.03) * i / nb_probes + probe_shift
         lin_ax.plot([x_beta, x_transcript, x_transcript], [0, 1.5, 2], **links_args)
 
     lin_ax.set_xlim(0, 1)
