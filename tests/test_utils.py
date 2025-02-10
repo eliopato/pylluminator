@@ -96,7 +96,7 @@ def test_failed_download():
     assert download_from_link('https://www.fakeurl.co/fakefile', 'data') == -1
 
 
-def test_deduplicate_strings_dupindex():
+def test_merge_series():
     data = pd.Series([1, 2, 3])
     assert merge_series_values(data) == 2.0
 
@@ -109,4 +109,4 @@ def test_deduplicate_strings_dupindex():
     assert 'bi' in merge_series_values(data)
 
     data = pd.Series(['jo', 2, 'bi'])
-    assert 'jo' in data
+    assert 'jo' in merge_series_values(data)
