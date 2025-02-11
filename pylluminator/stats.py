@@ -6,6 +6,7 @@ from scipy.stats import norm
 
 from pylluminator.utils import get_logger
 
+
 LOGGER = get_logger()
 
 

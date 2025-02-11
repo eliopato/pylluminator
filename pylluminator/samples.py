@@ -11,7 +11,7 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
-from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix
+from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_series_values
 from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
@@ -386,7 +386,7 @@ class Samples:
     # Data loading
     ####################################################################################################################
 
-    def merge_annotation_info(self, annotation: Annotations, keep_idat=False, min_beads=1) -> None:
+    def add_annotation_info(self, annotation: Annotations, keep_idat=False, min_beads=1) -> None:
         """Merge manifest dataframe with probe signal values read from idat files to build the signal dataframe, adding
         channel information, methylation state and apply_mask names for each probe.
 
@@ -518,9 +518,15 @@ class Samples:
 
         return sigdf
 
-    def merge_samples_by(self, by: str, apply_mask=True):
+    def merge_samples_by(self, by: str, apply_mask=True) -> None:
         """Merge the beads signal values of different samples by averaging them. Modifies the signal dataframe directly
         and removes any calculated column (beta values, poobah p values...) since their values need to be updated.
+
+        :param by: the column name in the sample sheet to group samples by
+        :type by: str
+
+        :param apply_mask: skip masked probes values when merging samples if True. Default: True
+        :type apply_mask: bool
         """
         if by not in self.sample_sheet.columns:
             LOGGER.error(f'Column {by} not found in sample sheet in columns')
@@ -554,6 +560,7 @@ class Samples:
         new_df['mask_info'] = signal_df['mask_info']
         new_df.columns = new_df.columns.rename(by, level=0)
         self._signal_df = new_df
+        self.sample_sheet = self.sample_sheet.groupby(by).agg(merge_series_values).reset_index()
 
     ####################################################################################################################
     # Mask functions
@@ -1378,7 +1385,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
         LOGGER.error('no idat files found')
         return None
 
-    samples.merge_annotation_info(annotation, keep_idat, min_beads)
+    samples.add_annotation_info(annotation, keep_idat, min_beads)
 
     LOGGER.info('reading sample files done\n')
     return samples

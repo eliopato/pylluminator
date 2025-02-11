@@ -7,23 +7,22 @@ from matplotlib import colormaps
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 from matplotlib import gridspec
+from matplotlib.patches import Patch
+import matplotlib.text as mtext
 
 import numpy as np
 import pandas as pd
-from sklearn.manifold import MDS
-from sklearn.decomposition import PCA, DictionaryLearning, FactorAnalysis, FastICA, IncrementalPCA, KernelPCA
-from sklearn.decomposition import LatentDirichletAllocation, MiniBatchDictionaryLearning, MiniBatchNMF
-from sklearn.decomposition  import NMF, SparsePCA, TruncatedSVD, MiniBatchSparsePCA
 from scipy.cluster.hierarchy import linkage, dendrogram
+from patsy import dmatrix
+from statsmodels.api import OLS
 import seaborn as sns
 
 from pylluminator.samples import Samples
 from pylluminator.annotations import Annotations
+from pylluminator.ml import dimensionality_reduction
 from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes
 from pylluminator.utils import merge_series_values
 
-from matplotlib.patches import Patch
-import matplotlib.text as mtext
 
 LOGGER = get_logger()
 
@@ -233,7 +232,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: None
     :type color_column: str
 
-    :param nb_probes: number of probes to use for the model. Default: 1000
+    :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance. Default: 1000
     :type nb_probes: int
 
     :param title: custom title for the plot. Default: None
@@ -259,56 +258,41 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
 
     :return: None"""
 
-    plt.style.use('ggplot')
-    models = {'PCA': PCA, 'MDS': MDS, 'DL': DictionaryLearning, 'FA': FactorAnalysis, 'FICA': FastICA,
-              'IPCA': IncrementalPCA, 'KPCA': KernelPCA, 'LDA': LatentDirichletAllocation,
-              'MBDL': MiniBatchDictionaryLearning, 'MBNMF': MiniBatchNMF, 'MBSPCA': MiniBatchSparsePCA, 'NMF': NMF,
-               'SPCA': SparsePCA, 'TSVD': TruncatedSVD}
-
-    if model not in models.keys():
-        LOGGER.error(f'Unknown model {model}. Known models are {models.keys()}')
-        return
-    sk_model = models[model]
-
-    if label_column is None or label_column not in samples.sample_sheet.columns:
+    # check input parameters
+    if label_column is None:
         label_column = samples.sample_label_name
-    if color_column is None or color_column not in samples.sample_sheet.columns:
+    if label_column not in samples.sample_sheet.columns:
+        LOGGER.warning(f'Label column {label_column} not found in the sample sheet, setting it to default')
+        label_column = samples.sample_label_name
+    if color_column is None:
+        color_column = samples.sample_label_name
+    if color_column not in samples.sample_sheet.columns:
+        LOGGER.warning(f'Color column {color_column} not found in the sample sheet, setting it to default')
         color_column = samples.sample_label_name
 
-    # get betas with or without masked probes and samples
-    betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet)
-
-    if betas is None or len(betas) == 0:
-        LOGGER.error('No betas to plot')
-        return
-
-    # keep only samples that are both in sample sheet and betas columns
-    sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
-
-    # get betas with the most variance across samples
-    betas_variance = np.var(betas.dropna() , axis=1)  # remove NA
-    nb_probes = min(nb_probes, len(betas_variance))
-    indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
-    betas_most_variance = betas.loc[indexes_most_variance]
-
-    # fit the PCA or MDS
     if 'n_components' not in kwargs:
         kwargs['n_components'] = 2
     if 'random_state' not in kwargs and model not in ['IPCA']:
         kwargs['random_state'] = 42
 
-    model_ini = sk_model(**kwargs)
-    fit = model_ini.fit_transform(betas_most_variance.T)
+    sk_model, fit, labels = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
+                                                     custom_sheet=custom_sheet, apply_mask=apply_mask, **kwargs)
+    if sk_model is None:
+        return
 
+    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
     legend_handles, colors_dict = _get_colors(sheet, label_column, color_column)
+    if label_column != samples.sample_label_name:
+        labels = [sheet[sheet[samples.sample_label_name] == label][label_column].values[0] for label in labels]
+
+    plt.style.use('ggplot')
     plt.figure(figsize=(15, 10))
-    labels = [sheet.loc[sheet[samples.sample_label_name] == name, label_column].values[0] for name in betas.columns]
     plt.scatter(x=fit[:, 0], y=fit[:, 1], label=labels, c=[colors_dict[label] for label in labels])
 
     if model in ['PCA', 'ICPA', 'TSVD']:
     # if hasattr(model_ini, 'explained_variance_ratio_'):
-        plt.xlabel('1st component :{0:.2f}%'.format(model_ini.explained_variance_ratio_[0]*100))
-        plt.ylabel('2nd component :{0:.2f}%'.format(model_ini.explained_variance_ratio_[1]*100))
+        plt.xlabel('1st component :{0:.2f}%'.format(sk_model.explained_variance_ratio_[0]*100))
+        plt.ylabel('2nd component :{0:.2f}%'.format(sk_model.explained_variance_ratio_[1]*100))
 
     for index, name in enumerate(labels):
         plt.annotate(name, (fit[index, 0], fit[index, 1]), fontsize=9)
@@ -323,6 +307,47 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
+
+
+def check_pc_bias(samples: Samples, params: list[str], nb_probes: int = 1000, apply_mask=True, vmax=0.05,
+                  custom_sheet: None | pd.DataFrame = None, save_path: None | str = None, model='PCA', **kwargs):
+
+    # fit the model
+    sk_model, fit, labels = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
+                                                     custom_sheet=custom_sheet, apply_mask=apply_mask, **kwargs)
+    if sk_model is None:
+        return
+
+    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
+    sample_info = sheet[sheet[samples.sample_label_name].isin(labels)]
+    # drop columns with only NaN values that cant be used in the model
+    sample_info = sample_info.dropna(axis=1, how='all')
+    result = pd.DataFrame(dtype=float)
+
+    n_components = fit.shape[1]
+
+    for param in params:
+
+        if param not in sample_info.columns:
+            LOGGER.warning(f'Parameter {param} not found in the sample sheet, skipping')
+            continue
+
+        design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
+        if design_matrix.empty:
+            LOGGER.warning(f'Parameter {param} has no effect, skipping')
+            continue
+
+        for i, n_comp in enumerate(range(n_components)):
+            fitted_ols = OLS(fit[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
+            result.loc[str(i), param] = fitted_ols.f_pvalue
+            result.loc[str(i), 'name'] = f'pc {i}'
+
+    result = result.set_index('name')
+    plt.subplots(figsize=(len(params) * 2, n_components * 1))
+    plot = sns.heatmap(result, annot=True, fmt=".0e", vmax=vmax, vmin=0)
+
+    if save_path is not None:
+        plot.get_figure().savefig(os.path.expanduser(save_path))
 
 
 def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None,
@@ -531,7 +556,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
     return color_df, handles, labels
 
 def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None = None,
-                     nb_probes: int = 100, figsize=(15, 15),
+                     nb_probes: int = 100, figsize: tuple[float, float]=(15, 15),
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
                      row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = None) -> None:
@@ -1161,3 +1186,4 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
+
