@@ -428,6 +428,7 @@ class Samples:
                 annotation = Annotations(array_type, genome_version=GenomeVersion.HG38)
             else:
                 annotation = Annotations(array_type, genome_version=GenomeVersion.MM39)
+            LOGGER.info(f'Annotation auto-detected to be {annotation.array_type} - genome version set to {annotation.genome_version}')
 
         self.annotation = annotation
 

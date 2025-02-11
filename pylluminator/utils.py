@@ -365,6 +365,7 @@ def set_level_as_index(df: pd.DataFrame, level: str, drop_others=False) -> pd.Da
 
     :return: the data frame with the new index
     :rtype: pandas.DataFrame"""
+
     if drop_others:
         return df.reset_index(level).reset_index(drop=True).set_index(level)
     else:

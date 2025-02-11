@@ -88,7 +88,7 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict | No
 
     linestyle_categories = dict()
     legend_handles = []
-    line_styles = ['-', ':', '--', '-.']
+    line_styles = ['solid', 'dotted', 'dashed', 'dashdot']
 
     # determine the line style
     categories = sorted(set(sheet[column]))
@@ -139,6 +139,10 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
     plt.style.use('ggplot')
     # get betas with or without masked probes and samples
     betas = samples.get_betas(apply_mask = apply_mask, custom_sheet=custom_sheet)
+    if betas is None or len(betas) == 0:
+        LOGGER.error('No betas to plot')
+        return
+
     sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
 
     if group_column is not None:
@@ -163,8 +167,11 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
         n_ind = 10
 
     inds = [(n-2)*(1/n_ind) for n in range(1, n_ind+4)]
-    betas.plot.density(ind=inds, figsize=(15, 10), color=colors, linestyle=linestyles)
-
+    if linestyles is None:
+        betas.plot.density(ind=inds, figsize=(15, 10), color=colors)
+    else:
+        for name, linestyle in linestyles.items():
+            betas[name].plot.density(ind=inds, figsize=(15, 10), color=colors[name], linestyle=linestyle)
 
     title = title if title is not None else f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes'
     plt.title(title)
@@ -177,7 +184,6 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
 
-    plt.show()
 
 # # todo
 # def plot_betas_per_design(betas: pd.DataFrame, n_bins: int = 100, title: None | str = None, save_path: None | str=None) -> None:
@@ -264,34 +270,45 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         return
     sk_model = models[model]
 
-    if label_column is None:
+    if label_column is None or label_column not in samples.sample_sheet.columns:
         label_column = samples.sample_label_name
-    if color_column is None:
+    if color_column is None or color_column not in samples.sample_sheet.columns:
         color_column = samples.sample_label_name
 
     # get betas with or without masked probes and samples
     betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet)
 
+    if betas is None or len(betas) == 0:
+        LOGGER.error('No betas to plot')
+        return
+
     # keep only samples that are both in sample sheet and betas columns
     sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
 
     # get betas with the most variance across samples
-    betas_variance = np.var(betas, axis=1)
+    betas_variance = np.var(betas.dropna() , axis=1)  # remove NA
+    nb_probes = min(nb_probes, len(betas_variance))
     indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
-    betas_most_variance = betas.loc[indexes_most_variance].dropna()  # MDS doesn't support NAs
+    betas_most_variance = betas.loc[indexes_most_variance]
 
     # fit the PCA or MDS
     if 'n_components' not in kwargs:
         kwargs['n_components'] = 2
     if 'random_state' not in kwargs and model not in ['IPCA']:
         kwargs['random_state'] = 42
+
     model_ini = sk_model(**kwargs)
     fit = model_ini.fit_transform(betas_most_variance.T)
 
-    legend_handles, colors_dict = _get_colors(sheet, samples.sample_label_name, color_column)
+    legend_handles, colors_dict = _get_colors(sheet, label_column, color_column)
     plt.figure(figsize=(15, 10))
     labels = [sheet.loc[sheet[samples.sample_label_name] == name, label_column].values[0] for name in betas.columns]
     plt.scatter(x=fit[:, 0], y=fit[:, 1], label=labels, c=[colors_dict[label] for label in labels])
+
+    if model in ['PCA', 'ICPA', 'TSVD']:
+    # if hasattr(model_ini, 'explained_variance_ratio_'):
+        plt.xlabel('1st component :{0:.2f}%'.format(model_ini.explained_variance_ratio_[0]*100))
+        plt.ylabel('2nd component :{0:.2f}%'.format(model_ini.explained_variance_ratio_[1]*100))
 
     for index, name in enumerate(labels):
         plt.annotate(name, (fit[index, 0], fit[index, 1]), fontsize=9)
@@ -307,10 +324,9 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
 
-    plt.show()
 
-
-def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None, custom_sheet: pd.DataFrame | None = None, apply_mask: bool = True, save_path: None | str=None) -> None:
+def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None,
+                     custom_sheet: pd.DataFrame | None = None, apply_mask: bool = True, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
     :param samples: samples to plot
@@ -337,6 +353,10 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     plt.figure(figsize=(15, 10))
 
     betas = samples.get_betas(drop_na=True, apply_mask=apply_mask, custom_sheet=custom_sheet)
+    if betas is None or len(betas) == 0:
+        LOGGER.error('No betas to plot')
+        return
+
     sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
 
     linkage_matrix = linkage(betas.T.values, optimal_ordering=True, method='complete')
@@ -366,8 +386,6 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
-
-    plt.show()
 
 
 ########################################################################################################################
@@ -563,6 +581,10 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
     label = samples.sample_label_name
     betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
 
+    if betas is None or len(betas) == 0:
+        LOGGER.error('No betas to plot')
+        return
+
     # add values next to sample labels if var is specified and use the new labels as betas column names
     if var is not None:
         if isinstance(var, str):
@@ -663,7 +685,13 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         return
 
     # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
-    data_to_plot = data_to_plot.reset_index().dropna(subset=y_col)
+    data_to_plot = data_to_plot.reset_index()
+
+    if x_col not in data_to_plot.columns or y_col not in data_to_plot.columns or chromosome_col not in data_to_plot.columns:
+        LOGGER.error(f'Columns {x_col}, {y_col} and {chromosome_col} must be in the dataframe')
+        return
+
+    data_to_plot = data_to_plot.dropna(subset=y_col)
 
     data_to_plot['merged_chr'] = merge_alt_chromosomes(data_to_plot[chromosome_col])
 
@@ -800,8 +828,6 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
-
-    plt.show()
 
 
 def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
@@ -970,6 +996,11 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     is_gene_in_interval &= (probe_info_df.end >= gene_transcript_start) & (probe_info_df.end <= gene_transcript_end)
     gene_probes = probe_info_df[is_gene_in_interval][['probe_id', 'start', 'end']].drop_duplicates().set_index('probe_id')
     gene_betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet)
+
+    if gene_betas is None or len(gene_betas) == 0:
+        LOGGER.error('No betas to plot')
+        return
+
     gene_betas = set_level_as_index(gene_betas, 'probe_id', drop_others=True)
     betas_location = gene_betas.join(gene_probes, how='inner').sort_values('start')
 
@@ -1002,6 +1033,9 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     if keep_na:
         fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
         sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, **heatmap_params)
+        if row_factors is not None:
+            LOGGER.warning('Parameter row_factors is ignored when keep_na is True')
+            row_factors = None
     else:
         handles, labels = [], []
         # convert categories to colors and get legends if specified
@@ -1127,5 +1161,3 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
-
-    plt.show()
