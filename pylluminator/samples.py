@@ -562,6 +562,26 @@ class Samples:
         self._signal_df = new_df
         self.sample_sheet = self.sample_sheet.groupby(by).agg(merge_series_values).reset_index()
 
+    def merge_probes_by_suffix(self, apply_mask=True):
+        index_cols = ['type', 'channel', 'probe_type', 'probe_id']
+        self.reset_columns()
+        sigdf = self.get_signal_df(apply_mask=apply_mask).reset_index('probe_id')
+        sigdf.probe_id = sigdf.probe_id.map(remove_probe_suffix)
+        sigdf = sigdf.set_index([sigdf.index, 'probe_id'])
+        dup_indexes = sigdf.index.duplicated(keep=False)
+        # todo instead of using merge_series_values, use the values of the probe with the best poobah pvalue (as ChAMP)
+        sigdf_merged = sigdf.loc[dup_indexes].groupby(index_cols, observed=True).agg(merge_series_values)
+        self._signal_df = pd.concat([sigdf.loc[~dup_indexes], sigdf_merged])
+
+        LOGGER.info('update masks with merged probes')
+        for mask in self.masks:
+            mask_series = mask.series.reset_index('probe_id')
+            mask_series.probe_id = mask_series.probe_id.map(remove_probe_suffix)
+            mask_series = mask_series.set_index([mask_series.index, 'probe_id'])
+            mask_series_merged = mask_series[dup_indexes].groupby(index_cols, observed=True).agg(merge_series_values, bool='all')
+            mask.series = pd.concat([mask_series[~dup_indexes], mask_series_merged])['mask_info']
+
+
     ####################################################################################################################
     # Mask functions
     ####################################################################################################################

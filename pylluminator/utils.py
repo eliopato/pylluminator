@@ -508,10 +508,24 @@ def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFra
     return df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order).sort_index()
 
 
-def merge_series_values(items: pd.Series):
-    if items.dtypes == 'object':
+def merge_series_values(items: pd.Series, bool:str='any'):
+    """Merge the values of a series into a single value. If the series contains strings, return a list of unique
+    strings. If the series contains numbers, return the mean. If the series contains booleans, return the result of
+    the operation specified by the `bool` parameter. Default is 'any'
+
+    :param items: input series
+    :type items: pandas.Series
+    :param bool: operation to apply on boolean series. 'any' or 'all'. Default: 'any'
+    :type bool: str
+    """
+    if items.dtypes == 'object' or items.dtypes == 'category':
         return ', '.join(set(items.astype('str')))
     if np.issubdtype(items.dtypes, np.number):
         return items.mean()
+    if items.dtypes == 'bool':
+        if bool == 'any':
+            return items.any()
+        if bool == 'all':
+            return items.all()
     LOGGER.warning(f'unable to find an aggregation function for dtype {items.dtypes}')
     return items.iloc[0]

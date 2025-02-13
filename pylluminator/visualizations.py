@@ -219,7 +219,7 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 
 
 def betas_2D(samples: Samples, label_column: str | None=None, color_column: str | None=None,
-              nb_probes: int=1000, title: None | str = None, apply_mask=True,
+              nb_probes: int | None=1000, title: None | str = None, apply_mask=True,
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None, model='PCA', **kwargs) -> None:
     """Plot samples in 2D space according to their beta distances.
 
@@ -232,8 +232,9 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: None
     :type color_column: str
 
-    :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance. Default: 1000
-    :type nb_probes: int
+    :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance.
+        If None, use all the probes. Default: 1000
+    :type nb_probes: int | None
 
     :param title: custom title for the plot. Default: None
     :type title: str | None
@@ -275,7 +276,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     if 'random_state' not in kwargs and model not in ['IPCA']:
         kwargs['random_state'] = 42
 
-    sk_model, fit, labels = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
+    sk_model, fit, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
                                                      custom_sheet=custom_sheet, apply_mask=apply_mask, **kwargs)
     if sk_model is None:
         return
@@ -309,11 +310,11 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         plt.savefig(os.path.expanduser(save_path))
 
 
-def check_pc_bias(samples: Samples, params: list[str], nb_probes: int = 1000, apply_mask=True, vmax=0.05,
+def check_pc_bias(samples: Samples, params: list[str], nb_probes: int | None = 1000, apply_mask=True, vmax=0.05,
                   custom_sheet: None | pd.DataFrame = None, save_path: None | str = None, model='PCA', **kwargs):
 
     # fit the model
-    sk_model, fit, labels = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
+    sk_model, fit, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
                                                      custom_sheet=custom_sheet, apply_mask=apply_mask, **kwargs)
     if sk_model is None:
         return
@@ -340,11 +341,11 @@ def check_pc_bias(samples: Samples, params: list[str], nb_probes: int = 1000, ap
         for i, n_comp in enumerate(range(n_components)):
             fitted_ols = OLS(fit[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
             result.loc[str(i), param] = fitted_ols.f_pvalue
-            result.loc[str(i), 'name'] = f'pc {i}'
+            result.loc[str(i), 'principal component'] = i
 
-    result = result.set_index('name')
-    plt.subplots(figsize=(len(params) * 2, n_components * 1))
-    plot = sns.heatmap(result, annot=True, fmt=".0e", vmax=vmax, vmin=0)
+    result = result.set_index('principal component')
+    plt.subplots(figsize=(n_components, len(params)))
+    plot = sns.heatmap(result.T, annot=True, fmt=".0e", vmax=vmax, vmin=0)
 
     if save_path is not None:
         plot.get_figure().savefig(os.path.expanduser(save_path))
