@@ -2,8 +2,6 @@
 region of the genome, and splits the genome in segments with similar CNV.
 """
 
-import zipfile
-
 import pandas as pd
 import pyranges as pr
 import numpy as np

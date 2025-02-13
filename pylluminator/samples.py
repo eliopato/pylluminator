@@ -309,7 +309,7 @@ class Samples:
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        if probe_type not in self.get_signal_df(apply_mask).index.get_level_values('probe_type'):
+        if probe_type not in self._signal_df.index.get_level_values('probe_type'):
             LOGGER.warning(f'no {probe_type} probes found')
             return pd.DataFrame()
 
@@ -356,7 +356,7 @@ class Samples:
         :return: a copy of the object
         :rtype: Samples"""
         new_samples = Samples(self.sample_sheet)
-        new_samples.annotation = self.annotation
+        new_samples.annotation = self.annotation.copy()
         new_samples.min_beads = self.min_beads
         new_samples.idata = None if self.idata is None else self.idata.copy()
         new_samples.masks =  None if self.masks is None else self.masks.copy()
@@ -476,8 +476,8 @@ class Samples:
         self._signal_df = sample_df
 
         for sample_label in self.sample_labels:
-            subset = sample_df[[(sample_label, 'G', 'M'), (sample_label, 'R', 'U')]]
-            self.masks.add_mask(Mask(f'min_beads_{min_beads}', sample_label, subset.isna().any(axis=1)))
+            has_na = sample_df[[(sample_label, 'G', 'M'), (sample_label, 'R', 'U')]].isna().any(axis=1)
+            self.masks.add_mask(Mask(f'min_beads_{min_beads}', sample_label, has_na.index[has_na]))
 
         # if we don't want to keep idata, make sure we free the memory
         if not keep_idat:
@@ -491,27 +491,22 @@ class Samples:
     def get_signal_df(self, apply_mask: bool = True) -> pd.DataFrame:
         """Get the methylation signal dataframe, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True set masked probes values to None. Default: True
         :type apply_mask: bool
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
         sigdf = self._signal_df.copy()
-        sample_labels = self.sample_labels
 
         if not isinstance(apply_mask, bool):
             LOGGER.warning('Mask should be a boolean, setting it to True')
             apply_mask = True
 
         if apply_mask:
-            # set probes to NA for all samples with the common apply_mask
-            common_mask = self.masks.get_mask()
-            if common_mask is not None and len(common_mask) > 0:
-                sigdf.loc[common_mask, sample_labels] = None
 
-            # then apply_mask probes per sample if needed
-            for sample_label in sample_labels:
+            # apply masks sample per sample (each time, the masks common to all samples are included)
+            for sample_label in self.sample_labels:
                 sample_mask = self.masks.get_mask(sample_label=sample_label)
                 if sample_mask is not None and len(sample_mask) > 0:
                     sigdf.loc[sample_mask, sample_label] = None
@@ -562,45 +557,67 @@ class Samples:
         self._signal_df = new_df
         self.sample_sheet = self.sample_sheet.groupby(by).agg(merge_series_values).reset_index()
 
-    def merge_probes_by_suffix(self, apply_mask=True):
+    def remove_probes_suffix(self, apply_mask=True):
+        """Merge probes that have the same ID but different suffixes (e.g. _BC11, _TC21..) by averaging their signal
+        values. TODO: to match ChAMP, take the values of the probe with the best poobah pvalue
+
+        :param apply_mask: skip masked probes values when merging samples if True. Default: True
+        :type apply_mask: bool
+        """
+        # todo: optimize this function
+        LOGGER.info('Merge probes suffixes..')
         index_cols = ['type', 'channel', 'probe_type', 'probe_id']
         self.reset_columns()
-        sigdf = self.get_signal_df(apply_mask=apply_mask).reset_index('probe_id')
+        sigdf = self.get_signal_df(apply_mask=apply_mask).reset_index().sort_index(axis=1)
         sigdf.probe_id = sigdf.probe_id.map(remove_probe_suffix)
-        sigdf = sigdf.set_index([sigdf.index, 'probe_id'])
-        dup_indexes = sigdf.index.duplicated(keep=False)
+        dup_indexes = sigdf.probe_id.duplicated(keep=False)
+        LOGGER.info('Average duplicated probes values..')
         # todo instead of using merge_series_values, use the values of the probe with the best poobah pvalue (as ChAMP)
-        sigdf_merged = sigdf.loc[dup_indexes].groupby(index_cols, observed=True).agg(merge_series_values)
-        self._signal_df = pd.concat([sigdf.loc[~dup_indexes], sigdf_merged])
+        sigdf_merged = sigdf.loc[dup_indexes].groupby(index_cols, observed=True, sort=False, dropna=False,
+                                                      as_index=False).agg(merge_series_values)
+        self._signal_df = pd.concat([sigdf.loc[~dup_indexes], sigdf_merged], ignore_index=True)
+        self._signal_df = self._signal_df.set_index(index_cols).sort_index()
 
-        LOGGER.info('update masks with merged probes')
+        LOGGER.info('Update masks with merged probes')
         for mask in self.masks:
-            mask_series = mask.series.reset_index('probe_id')
-            mask_series.probe_id = mask_series.probe_id.map(remove_probe_suffix)
-            mask_series = mask_series.set_index([mask_series.index, 'probe_id'])
-            mask_series_merged = mask_series[dup_indexes].groupby(index_cols, observed=True).agg(merge_series_values, bool='all')
-            mask.series = pd.concat([mask_series[~dup_indexes], mask_series_merged])['mask_info']
+            masked_probes = mask.indexes.to_frame().reset_index(drop=True)
+            masked_probes.probe_id = masked_probes.probe_id.map(remove_probe_suffix)
+            mask.indexes = pd.MultiIndex.from_frame(masked_probes).drop_duplicates()
 
+        LOGGER.info('Update annotations')
+        self.annotation.probe_infos.probe_id = self.annotation.probe_infos.probe_id.map(remove_probe_suffix)
+        self.annotation.genomic_ranges.index = self.annotation.genomic_ranges.index.map(remove_probe_suffix)
+        self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
     ####################################################################################################################
     # Mask functions
     ####################################################################################################################
 
-    def apply_mask_by_names(self, names_to_mask: str, sample_label: str | None = None) -> None:
+    def apply_mask_by_names(self, names_to_mask: str | list[str], sample_label: str | None = None) -> None:
         """Match the names provided in `names_to_mask` with the probes apply_mask info and apply_mask these probes, adding them to
         the current apply_mask if there is any.
 
         :param names_to_mask: can be a regex
-        :type names_to_mask: str
+        :type names_to_mask: str | list[str]
         :param sample_label: The name of the sample to get masked indexes for. If None, returns masked indexes for all samples.
         :type sample_label: str | None
 
         :return: None"""
 
         if names_to_mask is None or len(names_to_mask) == 0:
+            LOGGER.warning('No names to mask')
             return
 
-        new_mask = Mask(names_to_mask, sample_label, self._signal_df.mask_info.str.contains(names_to_mask))
+        if isinstance(names_to_mask, list):
+            for name in names_to_mask:
+                self.apply_mask_by_names(name, sample_label)
+            return
+
+        if not isinstance(names_to_mask, str):
+            LOGGER.error(f'names_to_mask should be a string or a list of strings, not {type(names_to_mask)}')
+            return
+
+        new_mask = Mask(names_to_mask, sample_label, self._signal_df.index[self._signal_df.mask_info.str.contains(names_to_mask)])
 
         self.masks.add_mask(new_mask)
 
@@ -626,8 +643,8 @@ class Samples:
         :param sample_label: The name of the sample to apply_mask. If None, apply_mask indexes for all samples.
         :type sample_label: str | None
         :return: None"""
-        xy_probes_ids = self.annotation.probe_infos[self.annotation.probe_infos.chromosome.isin(['X', 'Y'])].probe_id
-        xy_mask = pd.Series(self._signal_df.index.get_level_values('probe_id').isin(xy_probes_ids), self._signal_df.index)
+        xy_probes_ids = self.annotation.probe_infos.probe_id[self.annotation.probe_infos.chromosome.isin(['X', 'Y'])]
+        xy_mask = self._signal_df.index[self._signal_df.index.get_level_values('probe_id').isin(xy_probes_ids)]
         self.masks.add_mask(Mask('XY', sample_label, xy_mask))
 
     ####################################################################################################################
@@ -761,27 +778,26 @@ class Samples:
             if not switch_failed:
                 type1_df.loc[failed_idxs, 'inferred_channel'] = type1_df[failed_idxs].index.get_level_values('channel')
 
-            # apply_mask failed probes
+            # mask failed probes
             if mask_failed:
                 # failed_ids misses the "type" index level, so we need to add it back - maybe there is a better way
-                probe_ids = self._signal_df.index.get_level_values('probe_id')
-                failed_probe_ids = failed_idxs[failed_idxs].index.get_level_values('probe_id')
-                mask_series = pd.Series(probe_ids.isin(failed_probe_ids), index=self._signal_df.index)
-                self.masks.add_mask(Mask('failed_probes_inferTypeI', None, mask_series))
+                # failed_probe_ids = failed_idxs[failed_idxs].index.get_level_values('probe_id')
+                failed_probe_ids = failed_idxs.index.get_level_values('probe_id')
+                mask_indexes = self._signal_df.index[self._signal_df.index.get_level_values('probe_id').isin(failed_probe_ids)]
+                self.masks.add_mask(Mask('failed_probes_inferTypeI', None, mask_indexes))
 
         # set the inferred channel as the new 'channel' index
         if not summary_only:
             # propagate the inferred channel to the signal dataframe
             self._signal_df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
-
-            # propagate the inferred channel to the masks indexes
-            for apply_mask in self.masks.masks.values():
-                mask_df = pd.concat([apply_mask.series, self._signal_df['inferred_channel']], axis=1)
-                mask_df = set_channel_index_as(mask_df, 'inferred_channel', drop=True)
-                apply_mask.series = mask_df.iloc[:, 0]
-
             self._signal_df = set_channel_index_as(self._signal_df, 'inferred_channel', drop=True)  # make the inferred channel the new channel index
             self._signal_df = self._signal_df.sort_index(axis=1)
+
+            # propagate the inferred channel to the masks indexes
+            probe_ids = self._signal_df.index.get_level_values('probe_id')
+            for mask in self.masks:
+                masked_probes = mask.indexes.get_level_values('probe_id')
+                mask.indexes = self._signal_df.index[probe_ids.isin(masked_probes)]
 
         cols = ['channel', 'inferred_channel']
         return type1_df['inferred_channel'].reset_index().groupby(cols, observed=True).count()['probe_id']
@@ -857,7 +873,7 @@ class Samples:
 
         :return: None"""
 
-        df = self.get_signal_df(False).sort_index()
+        df = self._signal_df.sort_index()  # sort indexes returns a copy
         idx = pd.IndexSlice
         # set NAs for Type II probes to 0, only where no methylation signal is expected
         df.loc['II', idx[:, 'R', 'M']] = 0
@@ -874,8 +890,8 @@ class Samples:
             unmethylated_signal = sample_df['R', 'U'] + sample_df['G', 'U']
 
             # use clip function to set minimum values for each term as set in sesame
-            beta_serie = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
-            self._signal_df.loc[:, (sample_label, 'beta', '')] = beta_serie
+            col = (sample_label, 'beta', '')
+            self._signal_df.loc[:, col] = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
 
         self._signal_df = self._signal_df.sort_index(axis=1)  # sort columns after adding beta values
 
@@ -1070,7 +1086,7 @@ class Samples:
 
             if red_green_distortion is None or red_green_distortion is np.nan or red_green_distortion > 10:
                 LOGGER.warning(f'Red-Green distortion is too high or None ({red_green_distortion}). Masking green probes')
-                type1_mask = pd.Series(self._signal_df.index.get_level_values('channel') == 'G', self._signal_df.index)
+                type1_mask = self._signal_df.index[self._signal_df.index.get_level_values('channel') == 'G']
                 self.masks.add_mask(Mask('dye bias nl', sample_label, type1_mask))
                 return
 
@@ -1269,9 +1285,9 @@ class Samples:
             self._signal_df[(sample_label, 'p_value', '')] = p_value
             self._signal_df = self._signal_df.sort_index(axis=1)  # sort the columns after adding a new one
 
-            # add a apply_mask for the sample, depending on the threshold
-            apply_mask = self._signal_df[(sample_label, 'p_value', '')] >= threshold
-            poobah_mask = Mask(f'poobah_{threshold}', sample_label, apply_mask)
+            # add a mask for the sample, depending on the threshold
+            mask_indexes = self._signal_df.index[self._signal_df[(sample_label, 'p_value', '')] >= threshold]
+            poobah_mask = Mask(f'poobah_{threshold}', sample_label, mask_indexes)
             self.masks.add_mask(poobah_mask)
 
 
@@ -1494,7 +1510,7 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
         sample_df.columns = pd.MultiIndex.from_tuples([('R', 'U'), ('R', 'M'), ('G', 'M'), ('G', 'U'), ('mask', ''), ('mask_info', '')])
 
         # set apply_mask as specified in the input file, then drop the mask column
-        samples.masks.add_mask(Mask('sesame', name, sample_df['mask']))
+        samples.masks.add_mask(Mask('sesame', name, sample_df.index[sample_df['mask']]))
         sample_df = sample_df.sort_index(axis=1).drop(columns='mask')
         dfs.append(sample_df)
 

@@ -427,22 +427,20 @@ def get_nb_probes_per_chr_and_type(samples: Samples) -> (pd.DataFrame, pd.DataFr
 
     chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
     type_df = pd.DataFrame(columns=['not masked', 'masked'])
-    manifest = samples.annotation.probe_infos.copy()
+    manifest = samples.annotation.probe_infos[['probe_id', 'chromosome', 'type']].drop_duplicates()
     manifest['chromosome'] = merge_alt_chromosomes(manifest['chromosome'])
 
     # for name, masked in [('not masked', True), ('masked', False)]:
-    masked_probes = set()
-    for current_sample in samples.sample_labels:
-        mask = samples.masks.get_mask(sample_label=current_sample)
-        if mask is not None:
-            masked_probes.update(mask[mask].index.get_level_values('probe_id'))
+    masked_probe_ids = samples.masks.get_mask(sample_label=samples.sample_labels).get_level_values('probe_id')
+    manifest_masked_probes = manifest.probe_id.isin(masked_probe_ids)
 
-    unmasked_probes = samples.get_signal_df(False).index.get_level_values('probe_id').difference(masked_probes)
-
-    for name, probes in [('not masked', unmasked_probes), ('masked', masked_probes)]:
-        chrm_and_type = manifest.loc[manifest.probe_id.isin(probes), ['probe_id', 'chromosome', 'type']].drop_duplicates()
-        chromosome_df[name] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
-        type_df[name] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
+    # for name, probes in [('not masked', unmasked_probes), ('masked', masked_probes)]:
+    chrm_and_type = manifest.loc[manifest_masked_probes]
+    chromosome_df['masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
+    type_df['masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
+    chrm_and_type = manifest.loc[~manifest_masked_probes]
+    chromosome_df['not masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
+    type_df['not masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
 
     # chromosome_df['masked'] = chromosome_df['masked'] - chromosome_df['not masked']
     # type_df['masked'] = type_df['masked'] - type_df['not masked']

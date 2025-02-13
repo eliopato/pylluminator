@@ -159,6 +159,13 @@ class GenomeInfo:
             LOGGER.warning('You must set genome version to load genome information')
             raise ValueError
 
+        # initialize the attributes for readability
+        self.gap_info = None
+        self.seq_length = None
+        self.chromosome_regions = None
+        self.transcripts_exons = None
+        self.transcripts_list = None
+
         folder_genome = get_resource_folder(f'genome_info.{name}.{genome_version}')
         dl_link = f'{PYLLUMINA_DATA_LINK}/genome_info/{genome_version}/'
 
@@ -187,10 +194,17 @@ class GenomeInfo:
             else:
                 gen_info = df
 
-
-
             self.__setattr__(info, gen_info)
 
+    def copy(self):
+        """Return a copy of the GenomeInfo object"""
+        new_gi = type(self).__new__(self.__class__)
+        new_gi.gap_info = self.gap_info.copy()
+        new_gi.seq_length = self.seq_length.copy()
+        new_gi.chromosome_regions = self.chromosome_regions.copy()
+        new_gi.transcripts_exons = self.transcripts_exons.copy()
+        new_gi.transcripts_list = self.transcripts_list.copy()
+        return new_gi
 
 class Annotations:
     """This class contains all the metadata associated with a certain genome version (HG39, MM10...) and array type
@@ -321,6 +335,17 @@ class Annotations:
 
     def __repr__(self):
         return self.__str__()
+
+    def copy(self):
+        """Return a copy of the Annotations object"""
+        new_anno = type(self).__new__(self.__class__)
+        new_anno.name = self.name
+        new_anno.array_type = self.array_type
+        new_anno.genome_version = self.genome_version
+        new_anno.probe_infos = self.probe_infos.copy()
+        new_anno.genome_info = self.genome_info.copy()
+        new_anno.genomic_ranges = self.genomic_ranges.copy()
+        return new_anno
 
 
 def detect_array(probe_count: int) -> ArrayType:

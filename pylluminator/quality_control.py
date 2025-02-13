@@ -71,7 +71,7 @@ def detection_stats(samples: Samples, sample_label: str, apply_mask=False) -> No
     # p_values_df = samples.get_signal_df(apply_mask).xs('p_value', level='signal_channel', axis=1)
     p_values_df = samples.get_signal_df(apply_mask)[(sample_label, 'p_value')]
 
-    sample_probe_ids = samples.get_signal_df(apply_mask).index.get_level_values('probe_id')
+    sample_probe_ids = p_values_df.index.get_level_values('probe_id')
     manifest_probe_ids = set(samples.annotation.probe_infos.probe_id)
     missing_from_manifest = len([probe for probe in manifest_probe_ids if probe not in sample_probe_ids])
 

@@ -20,6 +20,9 @@ def test_quality_mask(test_samples):
 def test_infer_infinium_I_channel(test_samples):
     summary = test_samples.infer_type1_channel('PREC_500_3')
     assert summary.values.tolist() == [44984, 701, 52, 82558]
+    assert len(test_samples.type1_red()) == 83259
+    assert len(test_samples.type1_green()) == 45036
+
     # comparison with R - one probe is different (cg09773691_BC11) because it has < 0 beads in a channel and is set to NA
     # in pylluminator, while in R the other channel values are kept
     # df_r = pd.read_csv('~/diff_r.csv', index_col='Probe_ID')
@@ -27,7 +30,6 @@ def test_infer_infinium_I_channel(test_samples):
     # df_py = test_samples['PREC_500_3'].reset_index().set_index('probe_id')
     # dfs_after = df_r.join(df_py.droplevel('methylation_state', axis=1))
     # dfs_after[dfs_after.col != dfs_after.channel]
-
 
 def test_infer_infinium_I_channel_switch(test_samples):
     summary = test_samples.infer_type1_channel('PREC_500_3', switch_failed=True, mask_failed=True)

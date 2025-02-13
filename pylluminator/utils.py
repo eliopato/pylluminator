@@ -281,7 +281,7 @@ def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[s
         return '*'
 
     if not isinstance(chromosome_id, str):
-        LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
+        # LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
         return '*'
 
     trimmed_str = str(chromosome_id).lower().replace('chr', '')
@@ -297,7 +297,7 @@ def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[s
     if first_str_part.isdigit() or first_str_part in ['x', 'y', '*']:
         return first_str_part
 
-    LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
+    # LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
     return '*'
 
 
@@ -327,7 +327,7 @@ def get_chromosome_number(chromosome_id: str | list[str] | pd.Series, convert_st
         return None
 
     if not isinstance(chromosome_id, str):
-        LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
+        # LOGGER.warning(f'Can\'t find the chromosome number for {chromosome_id} {type(chromosome_id)}')
         return None
 
     # remove the 'chr' part of the string to keep only the number
@@ -508,24 +508,24 @@ def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFra
     return df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order).sort_index()
 
 
-def merge_series_values(items: pd.Series, bool:str='any'):
+def merge_series_values(items: pd.Series, how:str='any'):
     """Merge the values of a series into a single value. If the series contains strings, return a list of unique
     strings. If the series contains numbers, return the mean. If the series contains booleans, return the result of
-    the operation specified by the `bool` parameter. Default is 'any'
+    the operation specified by the `how` parameter. Default is 'any'
 
     :param items: input series
     :type items: pandas.Series
-    :param bool: operation to apply on boolean series. 'any' or 'all'. Default: 'any'
-    :type bool: str
+    :param how: operation to apply on boolean series. 'any' or 'all'. Default: 'any'
+    :type how: str
     """
     if items.dtypes == 'object' or items.dtypes == 'category':
         return ', '.join(set(items.astype('str')))
     if np.issubdtype(items.dtypes, np.number):
         return items.mean()
     if items.dtypes == 'bool':
-        if bool == 'any':
+        if how == 'any':
             return items.any()
-        if bool == 'all':
+        if how == 'all':
             return items.all()
     LOGGER.warning(f'unable to find an aggregation function for dtype {items.dtypes}')
     return items.iloc[0]

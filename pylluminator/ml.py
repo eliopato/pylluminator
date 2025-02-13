@@ -45,7 +45,7 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
 
     if model not in models.keys():
         LOGGER.error(f'Unknown model {model}. Known models are {models.keys()}')
-        return None, None, None
+        return None, None, None, None
 
     sk_model = models[model]
 
@@ -54,11 +54,11 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
 
     if betas is None or len(betas) == 0:
         LOGGER.error('No betas to plot')
-        return None, None, None
+        return None, None, None, None
 
     if model in ['PCA'] and 'n_components' in kwargs and kwargs['n_components'] > len(betas.columns):
         LOGGER.error(f'Number of components {kwargs["n_components"]} is greater than the number of samples {len(betas.columns)}')
-        return None, None, None
+        return None, None, None, None
 
     # get betas with the most variance across samples
     betas_variance = np.var(betas.dropna() , axis=1)  # remove NA

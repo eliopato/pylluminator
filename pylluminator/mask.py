@@ -16,7 +16,7 @@ class Mask:
     :var series: a pandas Series of booleans, where True indicates that the probe is masked
     :vartype series: pandas.Series
     """
-    def __init__(self, mask_name: str, sample_label: str | None, series: pd.Series):
+    def __init__(self, mask_name: str, sample_label: str | None, indexes: pd.MultiIndex):
         """Create a new Mask object.
         
         :param mask_name: the name of the mask
@@ -27,13 +27,13 @@ class Mask:
         :type series: pandas.Series"""
         self.mask_name = mask_name
         self.sample_label = sample_label
-        if not isinstance(series, pd.Series):
-            raise ValueError("series must be a pandas Series.")
-        self.series = series
+        if not isinstance(indexes, pd.MultiIndex):
+            raise ValueError("indexes must be a pandas MultiIndex.")
+        self.indexes = indexes
 
     def __str__(self):
         scope_str = f'sample {self.sample_label}' if self.sample_label is not None else 'all samples'
-        return f"Mask(name: {self.mask_name}, scope: {scope_str}, # masked probes: {sum(self.series):,})"
+        return f"Mask(name: {self.mask_name}, scope: {scope_str}, # masked probes: {len(self.indexes):,})"
 
     def __repr__(self):
         return self.__str__()
@@ -41,7 +41,7 @@ class Mask:
     # define a copy method
     def copy(self):
         """Creates a copy of the Mask object."""
-        return Mask(self.mask_name, self.sample_label, self.series.copy())
+        return Mask(self.mask_name, self.sample_label, self.indexes.copy())
 
 class MaskCollection:
     """A collection of masks, each mask is a set of probes that are masked for a specific sample or for all samples.
@@ -60,8 +60,8 @@ class MaskCollection:
         if not isinstance(mask, Mask):
             raise ValueError("mask must be an instance of Mask.")
 
-        if mask.series is None:
-            LOGGER.info(f"{mask} has no masked probes.")
+        if mask.indexes is None or len(mask.indexes) == 0:
+            LOGGER.info(f"{mask} has no masked probes, skipping it.")
             return None
 
         if (mask.mask_name, mask.sample_label) in self.masks:
@@ -69,11 +69,11 @@ class MaskCollection:
 
         self.masks[(mask.mask_name, mask.sample_label)] = mask
 
-    def get_mask(self, mask_name: str | list[str] | None=None, sample_label: str | list[str] | None=None) -> pd.Series | None:
+    def get_mask(self, mask_name: str | list[str] | None=None, sample_label: str | list[str] | None=None) -> pd.MultiIndex | None:
         """Retrieve a mask by name and scope. If no sample_label is defined, return the mask that applies to all
-        samples, without considering masks of specific samples. If a sample_label is defined, the mask includes the
-        masks that applies to all samples combined with the masks of the samples(s) defined. If one or more mask_name
-        are defined, only these masks will be considered.
+        samples, without considering masks of specific samples. If one or more sample_labels are defined, the mask
+        includes the masks that applies to all samples combined with the masks of the samples(s) defined. If one or more
+        mask_name are defined, only these masks will be considered.
 
         :param mask_name: the name of the mask. Default: None
         :type mask_name: str | list[str] | None
@@ -83,26 +83,23 @@ class MaskCollection:
         :return: a pandas Series of booleans, where True indicates that the probe is masked
         :rtype: pandas.Series | None"""
 
-        # to get a specific sample mask, retrieve the common mask and apply the sample mask on top of it
-        mask_series = None
-
-        if isinstance(sample_label, list):
-            for si in sample_label:
-                si_mask = self.get_mask(mask_name, si)
-                mask_series = si_mask if mask_series is None else mask_series | si_mask
-
-        elif isinstance(sample_label, str):
-            mask_series = self.get_mask(mask_name, None)
+        mask_indexes_dfs = []
 
         if isinstance(mask_name, str):
             mask_name = [mask_name]
 
+        if isinstance(sample_label, str):
+            sample_label = [sample_label]
+
         for mask in self.masks.values():
             if mask_name is None or mask.mask_name in mask_name:
-                if mask.sample_label == sample_label:
-                    mask_series = mask.series if mask_series is None else mask_series | mask.series
+                if mask.sample_label is None or (sample_label is not None and mask.sample_label in sample_label):
+                    mask_indexes_dfs.append(mask.indexes.to_frame().reset_index(drop=True))
 
-        return mask_series
+        if len(mask_indexes_dfs) == 0:
+            return None
+
+        return pd.concat(mask_indexes_dfs).drop_duplicates().set_index(['type', 'channel', 'probe_type', 'probe_id']).index
 
     def get_mask_names(self, sample_label: str | list[str] | None) -> set:
         """Return the names of the masks existing for specific sample(s)
@@ -131,7 +128,7 @@ class MaskCollection:
         mask = self.get_mask(mask_name, sample_label)
         if mask is None:
             return 0
-        return sum(mask)
+        return len(mask)
 
     def reset_masks(self):
         """Reset all masks."""
@@ -192,3 +189,6 @@ class MaskCollection:
             return list(self.masks.values())[item]
 
         return None
+
+    def __iter__(self):
+        return iter(self.masks.values())
