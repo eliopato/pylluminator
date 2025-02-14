@@ -1,7 +1,7 @@
 |logo| Welcome to pylluminator
 ==============================
 
-.. image:: https://img.shields.io/github/last-commit/eliopato/pylluminator.svg?style=flat-square
+.. image:: https://img.shields.io/github/last-commit/eliopato/pylluminator.svg
    :target: https://github.com/eliopato/pylluminator/commits/master
    :alt: Last commit
 
