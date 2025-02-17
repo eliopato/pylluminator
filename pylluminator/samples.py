@@ -46,6 +46,7 @@ class Samples:
         self.idata = {}
         self.masks = MaskCollection()
         self._signal_df = None
+        self._betas = None
 
     def __getitem__(self, item: int | str | list[str]) -> pd.DataFrame | None:
         if self._signal_df is not None:
@@ -872,28 +873,30 @@ class Samples:
         :type include_out_of_band: bool
 
         :return: None"""
-
-        df = self._signal_df.sort_index()  # sort indexes returns a copy
+        df = self.get_signal_df(False).sort_index()  # sort indexes returns a copy
+        
         idx = pd.IndexSlice
         # set NAs for Type II probes to 0, only where no methylation signal is expected
         df.loc['II', idx[:, 'R', 'M']] = 0
         df.loc['II', idx[:, 'G', 'U']] = 0
+
         # set out-of-band signal to 0 if the option include_out_of_band is not activated
         if not include_out_of_band:
             df.loc[idx['I', 'G'], idx[:, 'R']] = 0
             df.loc[idx['I', 'R'], idx[:, 'G']] = 0
 
+        betas = []
         for sample_label in self.sample_labels:
-            sample_df = df[sample_label]
             # now we can calculate beta values
-            methylated_signal = sample_df['R', 'M'] + sample_df['G', 'M']
-            unmethylated_signal = sample_df['R', 'U'] + sample_df['G', 'U']
+            methylated_signal = df[sample_label, 'R', 'M'] + df[sample_label, 'G', 'M']
+            unmethylated_signal = df[sample_label, 'R', 'U'] + df[sample_label, 'G', 'U']
 
             # use clip function to set minimum values for each term as set in sesame
-            col = (sample_label, 'beta', '')
-            self._signal_df.loc[:, col] = methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2)
+            betas.append(methylated_signal.clip(lower=1) / (methylated_signal + unmethylated_signal).clip(lower=2))
 
-        self._signal_df = self._signal_df.sort_index(axis=1)  # sort columns after adding beta values
+        self._betas = pd.concat(betas, axis=1)
+        self._betas.columns = self.sample_labels
+        self._betas = self._betas.sort_index(axis=1)
 
     def reset_columns(self) -> None:
         """Remove all calculated columns (poobah p values, betas)
@@ -905,10 +908,10 @@ class Samples:
         """Remove beta columns from signal df
 
         :return: None"""
-        self._signal_df = self._signal_df.drop('beta', level='signal_channel', axis=1, errors='ignore')
+        self._betas = None
 
     def has_betas(self) -> bool:
-        return 'beta' in self._signal_df.columns.get_level_values('signal_channel')
+        return self._betas is not None
 
     def get_betas(self, sample_label: str | None = None, include_out_of_band = None, drop_na: bool = False,
                   custom_sheet: pd.DataFrame | None = None, apply_mask: bool = False) -> pd.DataFrame | pd.Series | None:
@@ -934,7 +937,13 @@ class Samples:
         elif not self.has_betas():
             self.calculate_betas()
 
-        betas = self.get_signal_df(apply_mask).xs('beta', level='signal_channel', axis=1).droplevel('methylation_state', axis=1)
+        betas = self._betas
+
+        if apply_mask:
+            for label in self.sample_labels:
+                sample_mask = self.masks.get_mask(sample_label=label)
+                if sample_mask is not None and len(sample_mask) > 0:
+                    betas.loc[sample_mask, label] = None
 
         if custom_sheet is not None and sample_label is not None:
             LOGGER.warning('Both sample_label and custom_sheet are provided. Ignoring custom_sheet')
