@@ -118,194 +118,260 @@ class Samples:
         :rtype: list[str]"""
         return self._signal_df.index.get_level_values('probe_id').tolist()
 
-    def type1(self, apply_mask: bool = True) -> pd.DataFrame:
+    def type1(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of Infinium type I probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(apply_mask).xs('I', level='type', drop_level=False)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
 
-    def type2(self, apply_mask: bool = True) -> pd.DataFrame:
+        return sigdf.xs('I', level='type', drop_level=False)
+
+    def type2(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of Infinium type II probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        # idx = pd.IndexSlice
-        type_ii_df = self.get_signal_df(apply_mask).xs('II', level='type', drop_level=False)  # get only type II probes
-        # type_ii_df = type_ii_df.loc[:, ((type_ii_df.columns.get_level_values('signal_channel') == 'R')
-        #                                 & (type_ii_df.columns.get_level_values('methylation_state') == 'U'))
-        #                                | ((type_ii_df.columns.get_level_values('signal_channel') == 'G')
-        #                                   & (type_ii_df.columns.get_level_values('methylation_state') == 'M'))]
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        type_ii_df = sigdf.xs('II', level='type', drop_level=False)  # get only type II probes
         type_ii_df = type_ii_df.loc[:, type_ii_df.columns.get_level_values('signal_channel').isin(['R', 'G'])]
-        # return type_ii_df.loc[[idx[:, 'R', 'U'], idx[:, 'G', 'M']]]  # select non-NAN columns
         return type_ii_df.dropna(axis=1, how='all')
-        # return type_ii_df
 
-    def oob(self, apply_mask: bool=True) -> pd.DataFrame | None:
+    def oob(self, apply_mask: bool=True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame | None:
         """Get the subset of out-of-band probes (for type I probes only), and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame | None
         """
-        return pd.concat([self.oob_green(apply_mask), self.oob_red(apply_mask)]).sort_index(axis=1)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        return pd.concat([self.oob_green(sigdf=sigdf), self.oob_red(sigdf=sigdf)]).sort_index(axis=1)
 
-    def oob_red(self, apply_mask: bool = True) -> pd.DataFrame:
+    def oob_red(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of out-of-band red probes (for type I probes only), and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        green_probes = self.get_signal_df(apply_mask).xs('G', level='channel', drop_level=False)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        green_probes = sigdf.xs('G', level='channel', drop_level=False)
         return green_probes.loc[:, (slice(None), 'R')]
 
-    def oob_green(self, apply_mask: bool = True) -> pd.DataFrame:
+    def oob_green(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of out-of-band green probes (for type I probes only), and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        red_probes = self.get_signal_df(apply_mask).xs('R', level='channel', drop_level=False)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        red_probes = sigdf.xs('R', level='channel', drop_level=False)
         return red_probes.loc[:, (slice(None), 'G')]
 
-    def ib_red(self, apply_mask: bool = True) -> pd.DataFrame:
+    def ib_red(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of in-band red probes (for type I probes only), and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        red_probes = self.get_signal_df(apply_mask).xs('R', level='channel', drop_level=False)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        red_probes = sigdf.xs('R', level='channel', drop_level=False)
         return red_probes.loc[:, (slice(None), 'R')]
 
-    def ib_green(self, apply_mask: bool = True) -> pd.DataFrame:
+    def ib_green(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of in-band green probes (for type I probes only), and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        green_probes = self.get_signal_df(apply_mask).xs('G', level='channel', drop_level=False)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        green_probes = sigdf.xs('G', level='channel', drop_level=False)
         return green_probes.loc[:, (slice(None), 'G')]
 
-    def ib(self, apply_mask: bool = True) -> pd.DataFrame:
+    def ib(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of in-band probes (for type I probes only), and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return pd.concat([self.ib_red(apply_mask), self.ib_green(apply_mask)]).sort_index(axis=1)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        return pd.concat([self.ib_red(sigdf=sigdf), self.ib_green(sigdf=sigdf)]).sort_index(axis=1)
 
-    def type1_green(self, apply_mask: bool = True) -> pd.DataFrame:
+    def type1_green(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of type I green probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(apply_mask).xs( 'G', level='channel', drop_level=False)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        return sigdf.xs( 'G', level='channel', drop_level=False)
 
-    def type1_red(self, apply_mask: bool = True) -> pd.DataFrame:
+    def type1_red(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of type I red probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(apply_mask).xs('R', level='channel', drop_level=False)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        return sigdf.xs('R', level='channel', drop_level=False)
 
-    def meth(self, apply_mask: bool = True) -> pd.DataFrame:
+    def meth(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of methylated probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(apply_mask).xs('M', level='methylation_state', drop_level=False, axis=1)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        return sigdf.xs('M', level='methylation_state', drop_level=False, axis=1)
 
-    def unmeth(self, apply_mask: bool = True) -> pd.DataFrame:
+    def unmeth(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get the subset of unmethylated probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_signal_df(apply_mask).xs('U', level='methylation_state', drop_level=False, axis=1)
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+        return sigdf.xs('U', level='methylation_state', drop_level=False, axis=1)
 
-    def cg_probes(self, apply_mask: bool = True) -> pd.DataFrame:
+    def cg_probes(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get CG (CpG) type probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_probes_with_probe_type('cg', apply_mask)
+        return self.get_probes_with_probe_type('cg', apply_mask, sigdf)
 
-    def ch_probes(self, apply_mask: bool = True) -> pd.DataFrame:
+    def ch_probes(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get CH (CpH) type probes, and apply the mask if `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_probes_with_probe_type('ch', apply_mask)
+        return self.get_probes_with_probe_type('ch', apply_mask, sigdf)
 
-    def snp_probes(self, apply_mask: bool = True) -> pd.DataFrame:
+    def snp_probes(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Get SNP type probes ('rs' probes in manifest, but replaced by 'snp' when loaded), and apply the mask if
         `apply_mask` is True
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
         """
-        return self.get_probes_with_probe_type('snp', apply_mask)
+        return self.get_probes_with_probe_type('snp', apply_mask, sigdf)
 
-    def get_probes_with_probe_type(self, probe_type: str, apply_mask: bool = True) -> pd.DataFrame:
+    def get_probes_with_probe_type(self, probe_type: str, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Select probes by probe type, meaning e.g. CG, Control, SNP... (not infinium type I/II type), and apply the
         apply_mask if `apply_mask` is True
 
         :param probe_type: the type of probe to select (e.g. 'cg', 'snp'...)
         :type probe_type: str
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
@@ -314,16 +380,22 @@ class Samples:
             LOGGER.warning(f'no {probe_type} probes found')
             return pd.DataFrame()
 
-        return self.get_signal_df(apply_mask).xs(probe_type, level='probe_type', drop_level=False)#[['R', 'G']]
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
 
-    def get_probes(self, probe_ids: list[str] | str, apply_mask: bool = True) -> pd.DataFrame:
+        return sigdf.xs(probe_type, level='probe_type', drop_level=False)
+
+    def get_probes(self, probe_ids: list[str] | str, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Returns the probes dataframe filtered on a list of probe IDs
 
         :param probe_ids: the IDs of the probes to select
         :type probe_ids: list[str]
 
-        :param apply_mask: True removes masked probes, False keeps them. Default: True
+        :param apply_mask: True removes masked probes, False keeps them. Ignored if sigdf is provided. Default: True
         :type apply_mask: bool
+
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
 
         :return: methylation signal dataframe
         :rtype: pandas.DataFrame
@@ -334,8 +406,10 @@ class Samples:
         if isinstance(probe_ids, str):
             probe_ids = [probe_ids]
 
-        probes_mask = self.get_signal_df(apply_mask).index.get_level_values('probe_id').isin(probe_ids)
-        return self.get_signal_df(apply_mask)[probes_mask]
+        if sigdf is None:
+            sigdf =  self.get_signal_df(apply_mask)
+
+        return sigdf[sigdf.index.get_level_values('probe_id').isin(probe_ids)]
 
 
     ####################################################################################################################
@@ -652,7 +726,7 @@ class Samples:
     # Control functions
     ####################################################################################################################
 
-    def controls(self, apply_mask: bool = True, pattern: str | None = None) -> pd.DataFrame | None:
+    def controls(self, apply_mask: bool = True, pattern: str | None = None, sigdf:pd.DataFrame| None=None) -> pd.DataFrame | None:
         """Get the subset of control probes, matching the pattern with the probe_ids if a pattern is provided
 
         :param apply_mask: True removes masked probes, False keeps them. Default: True
@@ -661,10 +735,13 @@ class Samples:
         :param pattern: pattern to match against control probe IDs, case is ignored. Default: None
         :type pattern: str | None
 
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
+
         :return: methylation signal dataframe of the control probes, or None if None was found
         :rtype: pandas.DataFrame | None
         """
-        control_df = self.get_probes_with_probe_type('ctl', apply_mask)
+        control_df = self.get_probes_with_probe_type('ctl', apply_mask, sigdf=sigdf)
 
         if control_df is None or len(control_df) == 0:
             LOGGER.info('No control probes found')
@@ -677,7 +754,7 @@ class Samples:
         matched_ids = probe_ids.str.contains(pattern, flags=re.IGNORECASE)
         return control_df[matched_ids]  # [['R', 'G']]
 
-    def get_normalization_controls(self, apply_mask: bool = True, average=False) -> dict | pd.DataFrame | None:
+    def get_normalization_controls(self, apply_mask: bool = True, average=False, sigdf:pd.DataFrame| None=None) -> dict | pd.DataFrame | None:
         """Returns the control values to normalize green and red probes.
 
         :param apply_mask: True removes masked probes, False keeps them. Default: True
@@ -687,10 +764,16 @@ class Samples:
             probes. Otherwise, returns a dataframe with selected probes. Default: False
         :type average: bool
 
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
+
         :return: the normalization controls as a dict or a dataframe, or None if None were found
         :rtype: dict | pandas.DataFrame | None
         """
-        if self.controls(apply_mask) is None:
+        if sigdf is None:
+            sigdf = self.get_signal_df(apply_mask)
+
+        if self.controls(sigdf=sigdf) is None:
             return None
 
         # patterns to find the probe IDs we need
@@ -702,8 +785,8 @@ class Samples:
             pattern_red = r'norm_a|norm_t$'
 
         # find the red and green norm control probes according to their probe ID, and set the channel accordingly
-        norm_green_df = self.controls(apply_mask, pattern_green)
-        norm_red_df = self.controls(apply_mask, pattern_red)
+        norm_green_df = self.controls(pattern=pattern_green, sigdf=sigdf)
+        norm_red_df = self.controls(pattern=pattern_red, sigdf=sigdf)
 
         if len(norm_green_df) == 0 or len(norm_red_df) == 0:
             LOGGER.warning('No normalization control probes found for at least one channel')
@@ -721,16 +804,19 @@ class Samples:
 
         return norm_controls
 
-    def get_negative_controls(self, apply_mask: bool = True) -> pd.DataFrame | None:
+    def get_negative_controls(self, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame | None:
         """Get negative control signal
 
         :param apply_mask: True removes masked probes, False keeps them. Default: True
         :type apply_mask: bool
 
+        :param sigdf: signal dataframe to use. Useful to save time applying the mask. Default: None
+        :type sigdf: pd.DataFrame | None
+        
         :return: the negative controls, or None if None were found
         :rtype: pandas.DataFrame | None
         """
-        return self.controls(apply_mask, 'negative')
+        return self.controls(apply_mask, 'negative', sigdf)
 
     ####################################################################################################################
     # Channel functions
@@ -755,6 +841,7 @@ class Samples:
         :return: the summary of the switched channels
         :rtype: pandas.DataFrame"""
 
+        LOGGER.info('Infer type I channel..')
         # reset betas as we are modifying the signal dataframe
         self.reset_betas()
         sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
@@ -834,7 +921,7 @@ class Samples:
 
         return mean_intensity
 
-    def get_total_ib_intensity(self, sample_label: str | None = None, apply_mask: bool = True) -> pd.DataFrame:
+    def get_total_ib_intensity(self, sample_label: str | list[str] | None = None, apply_mask: bool = True) -> pd.DataFrame:
         """Computes the total intensity of all the in-band measurements. This includes all Type-I in-band measurements
         and all Type-II probe measurements. Both methylated and unmethylated alleles are considered.
 
@@ -848,20 +935,19 @@ class Samples:
         :return: the total in-band intensity values
         :rtype: pandas.DataFrame"""
 
-        sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
+        if isinstance(sample_label, str):
+            sample_label = [sample_label]
+        elif sample_label is None:
+            sample_label = self.sample_labels
 
-        series = []
+        sigdf = self.get_signal_df(apply_mask)[sample_label]
 
-        # sum the intensities for each probe (rows), but keep the columns separated by sample. Masked rows stay NaN
-        for sample_label in sample_labels:
-            ib_red = self.ib_red(apply_mask)[sample_label].sum(axis=1, min_count=1)
-            ib_green = self.ib_green(apply_mask)[sample_label].sum(axis=1, min_count=1)
-            type2 = self.type2(apply_mask)[sample_label].sum(axis=1, min_count=1)
-            series.append(pd.concat([ib_red, ib_green, type2]))
+        ib_red = self.ib_red(sigdf=sigdf)
+        ib_green = self.ib_green(sigdf=sigdf)
+        type2 = self.type2(sigdf=sigdf)
 
-        df = pd.concat(series, axis=1).sort_index()
-        df.columns = sample_labels
-        return df
+        ib = pd.concat([ib_red, ib_green, type2])
+        return ib.T.groupby('sample_name').sum().T
 
     def calculate_betas(self, include_out_of_band=False) -> None:
         """Calculate beta values for all probes. Values are stored in a dataframe and can be accessed via the betas()
@@ -873,6 +959,7 @@ class Samples:
         :type include_out_of_band: bool
 
         :return: None"""
+        LOGGER.info('Calculating beta values..')
         df = self.get_signal_df(False).sort_index()  # sort indexes returns a copy
         
         idx = pd.IndexSlice
@@ -902,10 +989,11 @@ class Samples:
         """Remove all calculated columns (poobah p values, betas)
 
         :return None"""
-        self._signal_df = self._signal_df.drop(['beta', 'p_value'], level='signal_channel', axis=1, errors='ignore')
+        self._signal_df = self._signal_df.drop(['p_value'], level='signal_channel', axis=1, errors='ignore')
+        self._betas = None
 
     def reset_betas(self) -> None:
-        """Remove beta columns from signal df
+        """Remove betas dataframe
 
         :return: None"""
         self._betas = None
@@ -991,7 +1079,7 @@ class Samples:
 
         :return: None
         """
-
+        LOGGER.info('Dye bias correction..')
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
         if sample_label is None:
             for sample_label in self.sample_labels:
@@ -1033,7 +1121,7 @@ class Samples:
 
         :return: None
         """
-
+        LOGGER.info('Dye bias correction by linear scaling..')
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
         if sample_label is None:
             for sample_label in self.sample_labels:
@@ -1073,14 +1161,17 @@ class Samples:
 
         :return: None
         """
+        LOGGER.info('Non linear dye bias correction..')
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
         sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
         type_1_green = self.type1_green(apply_mask)
         type_1_red = self.type1_red(apply_mask)
 
+        ib_t1_intensity = self.get_total_ib_intensity(apply_mask=False).loc['I'].sort_index()
+
         # check that there is not too much distortion between the two channels
         for sample_label in sample_labels:
-            total_intensity_type1 = self.get_total_ib_intensity(sample_label = sample_label, apply_mask=False).loc['I', sample_label].sort_index()  # 0.5 sec
+            total_intensity_type1 = ib_t1_intensity[sample_label]
 
             median_red = np.median(total_intensity_type1.loc['R'])
             median_green = np.median(total_intensity_type1.loc['G'])
@@ -1160,6 +1251,7 @@ class Samples:
 
         :return: None
         """
+        LOGGER.info('NOOB background correction..')
 
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
         sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
@@ -1220,7 +1312,7 @@ class Samples:
         :type apply_mask: bool
 
         :return: None"""
-
+        LOGGER.info('Scrub background correction..')
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
         sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
 
@@ -1255,6 +1347,8 @@ class Samples:
 
         :return: None"""
 
+        LOGGER.info('pOOBAH')
+
         # apply_mask non-unique probes - but first save previous apply_mask to reset it afterward
         initial_masks = self.masks.copy()
 
@@ -1264,9 +1358,10 @@ class Samples:
         self.apply_mask_by_names(self.annotation.non_unique_mask_names)
 
         # Background = out-of-band type 1 probes + (optionally) negative controls
-        background_df = self.oob(True)
+        masked_sigdf = self.get_signal_df(True)
+        background_df = self.oob(sigdf=masked_sigdf)
         if use_negative_controls:
-            neg_controls = self.get_negative_controls(True)
+            neg_controls = self.get_negative_controls(sigdf=masked_sigdf)
             background_df = pd.concat([background_df, neg_controls])
 
         # reset apply_mask

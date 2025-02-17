@@ -55,7 +55,7 @@ def copy_number_variation(samples: Samples, sample_label: str, normalization_sam
             LOGGER.error('None of the normalization samples were found in the Samples object, exiting')
             return None
 
-        norm_intensities = samples.get_total_ib_intensity()[normalization_sample_labels]
+        norm_intensities = samples.get_total_ib_intensity(normalization_sample_labels)
 
     else:
 
