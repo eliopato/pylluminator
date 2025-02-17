@@ -3,7 +3,7 @@
 import numpy as np
 from statsmodels.robust import mad
 from scipy.stats import norm
-
+import patsy
 from pylluminator.utils import get_logger
 
 
@@ -165,3 +165,22 @@ def quantile_normalization_using_target(source_array: np.array, target_array: np
     )
 
     return interp_target[source_ranks]
+
+def get_factors_from_formula(formula: str) -> list[str]:
+    """ Get the factors (column names) from a formula
+
+    :param formula: the formula to parse
+    :type formula: str
+
+    :return: the list of factors
+    :rtype: list[str]
+    """
+    md = patsy.ModelDesc.from_formula(formula)
+    termlist = md.rhs_termlist + md.lhs_termlist
+
+    factors = []
+    for term in termlist:
+        for factor in term.factors:
+            factors.append(factor.name())
+
+    return factors

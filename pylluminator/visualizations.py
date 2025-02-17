@@ -1052,7 +1052,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet[samples.sample_label_name] == c, v].iloc[0]) for v in var]) + ')' for c in heatmap_data.index]
         heatmap_data.index = colnames
 
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral'}
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
 
     if keep_na:
         fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)

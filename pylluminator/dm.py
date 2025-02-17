@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 
 from pylluminator.utils import remove_probe_suffix, set_level_as_index, get_logger
 from pylluminator.samples import Samples
+from pylluminator.stats import get_factors_from_formula
 
 LOGGER = get_logger()
 
@@ -125,7 +126,6 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
         LOGGER.error('The design matrix is empty. Please make sure the formula you provided is correct.')
         return None
 
-    # remove the intercept from the factors if it exists
     factor_names = [f for f in design_matrix.columns]
 
     column_names = ['f_pvalue', 'effect_size']
@@ -140,9 +140,24 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
             return _get_model_parameters(row, design_matrix, factor_names)
         result_array = Parallel(n_jobs=-1)(delayed(wrapper_get_model_parameters)(row[1:]) for row in betas.itertuples())
 
+    dmps = pd.DataFrame(result_array, index=betas.index, columns=column_names, dtype='float64')
+
+    LOGGER.info('add average beta delta between groups')
+
+    # get column names used in the formula that are categories or string
+    cat_column_names = [c for c in get_factors_from_formula(formula) if sample_info.dtypes[c] in ['category', 'object']]
+    for col in cat_column_names:
+        first_factor = None
+        for name, group in sample_info.groupby(col):
+            dmps[f'avg_beta_{col}_{name}'] = betas.loc[:, group.index].mean(axis=1)
+            if first_factor is None:
+                first_factor = name
+            else:
+                dmps[f'avg_beta_delta_{col}_{first_factor}_vs_{name}'] = dmps[f'avg_beta_{col}_{first_factor}'] - dmps[f'avg_beta_{col}_{name}']
+
     LOGGER.info('get DMP done')
 
-    return pd.DataFrame(result_array, index=betas.index, columns=column_names, dtype='float64'), factor_names[1:]
+    return dmps, factor_names[1:]
 
 
 def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dist_cutoff: float | None = None,
@@ -216,9 +231,9 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
             LOGGER.warning('Wrong input : euclidian distance cutoff for DMP should be > 0. Recalculating it.')
         dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
         # dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
-        LOGGER.debug(f'Segments per locus : {seg_per_locus}')
+        LOGGER.info(f'Segments per locus : {seg_per_locus}')
 
-    LOGGER.debug(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
+    LOGGER.info(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
 
     # find change points
     change_points = last_probe_in_chromosome | (beta_euclidian_dist > dist_cutoff)
@@ -270,7 +285,7 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
 
     # calculate estimates' means for each factor
     for c in dmps.columns:
-        if c.endswith('estimate'):
+        if c.endswith('estimate') or c.startswith('avg_beta_'):
             dmr[f'segment_{c}'] = segments_grouped[c].transform('mean')
 
     # dmr = dmr.drop(columns = dmps.columns, errors='ignore')
