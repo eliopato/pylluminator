@@ -3,7 +3,7 @@ import pandas as pd
 
 from pylluminator.visualizations import (betas_2D, plot_betas, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
                                          manhattan_plot_dmr, manhattan_plot_cnv, visualize_gene, betas_dendrogram,
-                                         check_pc_bias)
+                                         plot_pc_correlation)
 
 from pylluminator.dm import get_dmp, get_dmr
 from pylluminator.cnv import copy_number_variation
@@ -155,11 +155,11 @@ def test_betas_dendrogram(test_samples):
     assert os.path.exists('dendrogram.png')
     os.remove('dendrogram.png')
 
-def test_check_pc_bias(test_samples):
-    check_pc_bias(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', n_components=3)
+def test_plot_pc_correlation(test_samples):
+    plot_pc_correlation(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3)
     assert os.path.exists('pc_bias.png')
     os.remove('pc_bias.png')
 
     # more components than sample, fail
-    check_pc_bias(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', n_components=8)
+    plot_pc_correlation(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')

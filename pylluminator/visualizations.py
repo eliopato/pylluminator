@@ -219,7 +219,7 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 
 
 def betas_2D(samples: Samples, label_column: str | None=None, color_column: str | None=None,
-              nb_probes: int | None=1000, title: None | str = None, apply_mask=True,
+              nb_probes: int | None=None, title: None | str = None, apply_mask=True,
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None, model='PCA', **kwargs) -> None:
     """Plot samples in 2D space according to their beta distances.
 
@@ -233,7 +233,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     :type color_column: str
 
     :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance.
-        If None, use all the probes. Default: 1000
+        If None, use all the probes. Default: None
     :type nb_probes: int | None
 
     :param title: custom title for the plot. Default: None
@@ -310,8 +310,46 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         plt.savefig(os.path.expanduser(save_path))
 
 
-def check_pc_bias(samples: Samples, params: list[str], nb_probes: int | None = 1000, apply_mask=True, vmax=0.05,
-                  custom_sheet: None | pd.DataFrame = None, save_path: None | str = None, model='PCA', **kwargs):
+def plot_pc_correlation(samples: Samples, params: list[str], nb_probes: int | None = None, apply_mask=True, vmax=0.05,
+                        custom_sheet: None | pd.DataFrame = None, save_path: None | str = None, model='PCA',
+                        orientation='v', **kwargs):
+    """ Plot the correlation between the principal components and the parameters in the sample sheet.
+
+    :param samples: samples to plot
+    :type samples: Samples
+
+    :param params: list of parameters to correlate with the principal components. Must be columns of the sample sheet
+    :type params: list[str]
+
+    :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance.
+        If None, use all the probes. Default: None
+    :type nb_probes: int | None
+
+    :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
+    :type apply_mask: bool
+
+    :param vmax: maximum value for the color scale. Default: 0.05
+    :type vmax: float
+
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display. Default: None
+    :type custom_sheet: pandas.DataFrame | None
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+
+    :param model: identifier of the model to use. Available models are 'PCA': PCA, 'MDS': MDS, 'DL': DictionaryLearning,
+        'FA': FactorAnalysis, 'FICA': FastICA, 'IPCA': IncrementalPCA, 'KPCA': KernelPCA, 'LDA': LatentDirichletAllocation,
+        'MBDL': MiniBatchDictionaryLearning, 'MBNMF': MiniBatchNMF, 'MBSPCA': MiniBatchSparsePCA, 'NMF': NMF,
+        'SPCA': SparsePCA, 'TSVD': TruncatedSVD. Default: 'PCA'
+    :type model: str
+
+    :param orientation: orientation of the heatmap. Possible values: 'v', 'h'. Default: 'v'
+    :type orientation: str
+
+    :param kwargs: parameters passed to the model
+
+    :return: None
+    """
 
     # fit the model
     sk_model, fit, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
@@ -341,11 +379,14 @@ def check_pc_bias(samples: Samples, params: list[str], nb_probes: int | None = 1
         for i, n_comp in enumerate(range(n_components)):
             fitted_ols = OLS(fit[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
             result.loc[str(i), param] = fitted_ols.f_pvalue
-            result.loc[str(i), 'principal component'] = i
+            result.loc[str(i), 'principal component'] = str(int(i))
 
     result = result.set_index('principal component')
-    plt.subplots(figsize=(n_components, len(params)))
-    plot = sns.heatmap(result.T, annot=True, fmt=".0e", vmax=vmax, vmin=0)
+    if orientation == 'v':
+        result = result.T
+
+    plt.subplots(figsize=(len(result.columns), len(result)))
+    plot = sns.heatmap(result, annot=True, fmt=".0e", vmax=vmax, vmin=0)
 
     if save_path is not None:
         plot.get_figure().savefig(os.path.expanduser(save_path))
@@ -558,7 +599,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
                      nb_probes: int = 100, figsize: tuple[float, float]=(15, 15),
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
-                     row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = None) -> None:
+                     row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
@@ -586,8 +627,8 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
     :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
         columns of the sample sheet. Default: None
     :type row_factors: str | list[str] | None
-    :param row_legends: list of columns to generate a legend for. None for no legends. Only work for columns also
-        specified in row_factors. Default: None
+    :param row_legends: list of columns to generate a legend for. Set to None for no legends. Only work for columns also
+        specified in row_factors. Default: '' (generate all legends)
     :type row_legends: str | list[str] | None
 
     :return: None"""
@@ -632,7 +673,10 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         # convert categories to colors and get legends if specified
         if row_factors is not None:
             row_factors = [row_factors] if isinstance(row_factors, str) else row_factors
-            row_legends = [row_legends] if isinstance(row_legends, str) else row_legends
+            if row_legends == '':
+                row_legends = row_factors
+            elif isinstance(row_legends, str):
+                row_legends = [row_legends]
             subset = samples.sample_sheet.set_index(label)[row_factors]
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         # plot the heatmap
@@ -950,7 +994,7 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
 def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
                    protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
                    figsize=(20, 20), save_path: None | str=None,
-                   row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = None) -> None:
+                   row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
     :param samples : samples with beta values already calculated
@@ -976,8 +1020,8 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
         columns of the sample sheet. Default: None
     :type row_factors: str | list[str] | None
-    :param row_legends: list of columns to generate a legend for. None for no legends. Only work for columns also
-        specified in row_factors. Default: None
+    :param row_legends: list of columns to generate a legend for. Set to None for no legends. Only work for columns also
+        specified in row_factors. Default: '' (generate all legends)
     :type row_legends: str | list[str] | None
 
     :return: None"""
@@ -1065,7 +1109,10 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         # convert categories to colors and get legends if specified
         if row_factors is not None:
             row_factors = [row_factors] if isinstance(row_factors, str) else row_factors
-            row_legends = [row_legends] if isinstance(row_legends, str) else row_legends
+            if row_legends == '':
+                row_legends = row_factors
+            elif isinstance(row_legends, str):
+                row_legends = [row_legends]
             subset = samples.sample_sheet.set_index(samples.sample_label_name)[row_factors]
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         dendrogram_ratio = 0.05
@@ -1186,3 +1233,51 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
 
+
+def plot_hyper_methylation_distribution(samples: Samples, include_out_of_band: bool | None =None, annot_col: str| None=None,
+                                        what: list[str] | str = 'all',
+                                        save_path: None | str=None) -> None:
+
+    # add CGI annotations to betas
+    cgis = samples.annotation.probe_infos.set_index('probe_id')['cgi'].dropna()
+    betas = samples.get_betas(include_out_of_band=include_out_of_band)
+    cgi_betas = set_level_as_index(betas, 'probe_id', drop_others=True).join(cgis, how='inner')
+    cgi_betas.cgi = cgi_betas.cgi.apply(lambda x: x.split(';'))
+    cgi_betas = cgi_betas.explode('cgi')
+
+    # define aggregation functions
+    def hypo(x):
+        return 100 * sum(x == 0) / len(x)
+
+    def hyper(x):
+        return 100 * sum(x == 1) / len(x)
+
+    def nas(x):
+        return 100 * np.count_nonzero(np.isnan(x)) / len(x)
+
+    functions = {'all': [hypo, hyper, nas], 'hypo': hypo, 'hyper': hyper, 'nas': nas}
+    if isinstance(what, str):
+        what = [what]
+
+    meth_prop = cgi_betas.round().groupby('cgi').agg([functions[f] for f in what])
+    meth_prop = pd.DataFrame(meth_prop.unstack()).reset_index()
+    meth_prop.columns = ['sample', 'cgi', 'proportion']
+
+    if annot_col is not None:
+        if annot_col not in samples.sample_sheet.columns:
+            LOGGER.error(f'Column {annot_col} not found in the sample sheet - ignoring parameter')
+        else:
+            annot = samples.sample_sheet[[samples.sample_label_name, annot_col]].drop_duplicates()
+            meth_prop = meth_prop.merge(annot, on=samples.sample_label_name)
+
+    hue = annot_col if annot_col is not None else 'metric'
+
+    g = sns.catplot(data=meth_prop, x='proportion', y=annot_col, row='cgi', col='metric', hue=hue,
+                    kind='violin', fill=False, linewidth=1, inner='point',
+                    sharex=False, height=2, aspect=2, orient='h', margin_titles=True)
+
+    g.set_axis_labels('', '')
+    g.set_titles(row_template="{row_name}", col_template='Proportion of {col_name} methylated probes (%)')
+
+    if save_path is not None:
+        plt.savefig(os.path.expanduser(save_path))
