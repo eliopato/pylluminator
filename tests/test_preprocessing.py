@@ -200,3 +200,27 @@ def test_get_betas_empty_sheet(test_samples):
 def test_get_betas_drop_na(test_samples):
     df = test_samples.get_betas(drop_na=True)
     assert len(df) == 937544
+
+def test_batch_correction(test_samples, caplog):
+    # test column with na values
+    test_samples.batch_correction('sentrix_id', covariates='sample_type')
+    assert 'Batch column contains NaN values' in caplog.text
+    assert 'ERROR' in caplog.text
+    caplog.clear()
+
+    # test wrong number of batch values
+    test_samples.batch_correction([1, 2, 1], covariates='sample_type')
+    assert 'Batch column length does not match the number of samples' in caplog.text
+    assert 'ERROR' in caplog.text
+    caplog.clear()
+
+    # everything OK
+    test_samples.batch_correction('sample_number', covariates='sample_type')
+    assert 'ERROR' not in caplog.text
+
+    # test without calculated betas
+    caplog.clear()
+    test_samples.reset_betas()
+    test_samples.batch_correction('sentrix_id', covariates='sample_type')
+    assert 'No beta values found' in caplog.text
+    assert not test_samples.has_betas()

@@ -228,6 +228,9 @@ def betas_stats(samples: Samples, sample_label: str, apply_mask=False) -> None:
     samples.poobah(sample_label, apply_mask)
     samples.calculate_betas()
     betas = samples.get_betas(sample_label, apply_mask) # get betas as a pd.Series
+    if betas is None or len(betas) == 0:
+        print('No betas to analyze')
+        return
 
     _print_value('Mean', betas.mean(skipna=True))
     _print_value('Median', betas.median(skipna=True))

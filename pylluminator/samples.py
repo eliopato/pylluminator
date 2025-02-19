@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF as ecdf
+from inmoose.pycombat import pycombat_norm
 
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
@@ -522,10 +523,10 @@ class Samples:
 
         # deduce methylation state (M = methylated, U = unmethylated) depending on infinium type
         sample_df['methylation_state'] = '?'
-        sample_df.loc[(sample_df.type == 'II') & (sample_df.signal_channel == 'G'), 'methylation_state'] = 'M'
-        sample_df.loc[(sample_df.type == 'II') & (sample_df.signal_channel == 'R'), 'methylation_state'] = 'U'
-        sample_df.loc[(sample_df.type == 'I') & (sample_df.illumina_id == sample_df.address_b), 'methylation_state'] = 'M'
-        sample_df.loc[(sample_df.type == 'I') & (sample_df.illumina_id == sample_df.address_a), 'methylation_state'] = 'U'
+        sample_df.loc[(sample_df['type'] == 'II') & (sample_df.signal_channel == 'G'), 'methylation_state'] = 'M'
+        sample_df.loc[(sample_df['type'] == 'II') & (sample_df.signal_channel == 'R'), 'methylation_state'] = 'U'
+        sample_df.loc[(sample_df['type'] == 'I') & (sample_df.illumina_id == sample_df.address_b), 'methylation_state'] = 'M'
+        sample_df.loc[(sample_df['type'] == 'I') & (sample_df.illumina_id == sample_df.address_a), 'methylation_state'] = 'U'
         # remove probes in unknown state (missing information in manifest)
         # nb_unknown_states = sum(sample_df.methylation_state == '?')
         nb_unknown_states = sample_df.methylation_state.value_counts().get('?', 0)
@@ -1413,6 +1414,86 @@ class Samples:
             poobah_mask = Mask(f'poobah_{threshold}', sample_label, mask_indexes)
             self.masks.add_mask(poobah_mask)
 
+    def batch_correction(self, batch:list|str, apply_mask:bool=True, covariates:str|list[str]|None=None,
+                         par_prior=True, mean_only=False, ref_batch=None, precision=None, na_cov_action='raise') -> None:
+        """Applies ComBat algorithm for batch correction on beta values. You must provide on of `batch` or `batch_column
+
+        :param batch: If a string is provided, it's interpreted as the name of the column in the sample sheet that
+            contains the batch information. If a list is provided, it should contain the batch indices, with as many
+            values as samples.
+        :type batch: str | list
+
+        :param apply_mask: set to False if you don't want any apply_mask to be applied. Default: True
+        :type apply_mask: bool
+
+        :param covariates: a list of column names from the sample sheet to use as covariates in the model. It only
+            supports categorical or string variables. Default: None
+        :type covariates: str | list[str] | None
+
+        :param par_prior: False for non-parametric estimation of batch effects. Default: True
+        :type par_prior: bool
+
+        :param mean_only: True iff just adjusting the means and not individual batch effects Default: False
+        :type mean_only: bool
+
+        :param ref_batch: batch id of the batch to use as reference. Default: None
+
+        :param precision: level of precision for precision computing. Default: None
+        :type precision: float
+
+        :param na_cov_action: choose the way to handle missing covariates : `raise` raise an error if missing covariates
+            and stop the code, `remove` remove samples with missing covariates and raise a warning, `fill` handle missing
+             covariates, by creating a distinct covariate per batch. Default: `raise`
+
+        :return: None
+        """
+        LOGGER.info('>>> Start ComBat batch correction')
+
+        if not self.has_betas():
+            LOGGER.error('No beta values found. Please calculate beta values first')
+            return
+
+        sheet = self.sample_sheet.set_index(self.sample_label_name)
+        sheet = sheet.loc[self._betas.columns]  # sort like betas
+
+        # get batch from the batch column, if specified
+        if isinstance(batch, str):
+            if batch not in sheet.columns:
+                LOGGER.error(f'Batch column {batch} not found in sample sheet')
+                return
+            batch = sheet[batch].values
+
+        if np.isnan(batch).any():
+            LOGGER.error('Batch column contains NaN values')
+            return
+
+        if len(batch) != len(self._betas.columns):
+            LOGGER.error('Batch column length does not match the number of samples')
+            return
+
+        # if any covariates are specified, check that they exist in the sample sheet and have the right type
+        if covariates is not None:
+            if isinstance(covariates, str):
+                covariates = [covariates]
+            checked_covariates = []
+            for cov in covariates:
+                if cov not in sheet.columns:
+                    LOGGER.warning(f'Covariate {cov} not found in sample sheet. Ignoring it.')
+                elif sheet[cov].dtype not in ['object', 'category']:
+                    LOGGER.warning(f'Covariate {cov} must be a string or a category. Ignoring it.')
+                else:
+                    checked_covariates.append(cov)
+            if len(checked_covariates) == 0:
+                LOGGER.warning('No valid covariates found. Ignoring covariates.')
+                covariates = None
+            else:
+                covariates = sheet[checked_covariates]
+                LOGGER.info(f'Using covariates {checked_covariates}')
+
+        self._betas = pycombat_norm(self.get_betas(apply_mask=apply_mask).dropna(), batch,
+                                    covar_mod=covariates, par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch,
+                                    precision=precision, na_cov_action=na_cov_action)
+
 
 def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> dict:
     """
@@ -1620,12 +1701,12 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
         sample_df = sig_df.join(manifest, how='inner')
 
         # move Green type II probes values to MG column
-        sample_df.loc[sample_df.type == 'II', 'MG'] = sample_df.loc[sample_df.type == 'II', 'UG']
-        sample_df.loc[sample_df.type == 'II', 'UG'] = np.nan
+        sample_df.loc[sample_df['type'] == 'II', 'MG'] = sample_df.loc[sample_df['type'] == 'II', 'UG']
+        sample_df.loc[sample_df['type'] == 'II', 'UG'] = np.nan
 
         # set signal channel for type II probes
-        sample_df.loc[(sample_df.type == 'II') & (sample_df.MG.isna()), 'channel'] = 'R'
-        sample_df.loc[(sample_df.type == 'II') & (sample_df.UR.isna()), 'channel'] = 'G'
+        sample_df.loc[(sample_df['type'] == 'II') & (sample_df.MG.isna()), 'channel'] = 'R'
+        sample_df.loc[(sample_df['type'] == 'II') & (sample_df.UR.isna()), 'channel'] = 'G'
 
         # make multi-index for rows and columns
         sample_df = sample_df.reset_index().set_index(['type', 'channel', 'probe_type', 'probe_id'])

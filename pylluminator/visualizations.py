@@ -1259,7 +1259,7 @@ def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, w
 
     # add CGI annotations to betas
     betas = samples.get_betas()
-    if betas is None:
+    if betas is None or len(betas) == 0:
         return None
 
     if 'cgi' not in samples.annotation.probe_infos.columns:
@@ -1292,6 +1292,7 @@ def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, w
     if annot_col is not None:
         if annot_col not in samples.sample_sheet.columns:
             LOGGER.error(f'Column {annot_col} not found in the sample sheet - ignoring parameter')
+            return
         else:
             annot = samples.sample_sheet[[samples.sample_label_name, annot_col]].drop_duplicates()
             meth_prop = meth_prop.merge(annot, on=samples.sample_label_name)

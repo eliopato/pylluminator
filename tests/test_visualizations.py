@@ -164,13 +164,18 @@ def test_plot_pc_correlation(test_samples):
     plot_pc_correlation(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')
 
-def test_methylation_distribution(test_samples):
+def test_methylation_distribution(test_samples, caplog):
     plot_methylation_distribution(test_samples, save_path='methylation_distribution.png')
     assert os.path.exists('methylation_distribution.png')
+    assert 'ERROR' not in caplog.text
     os.remove('methylation_distribution.png')
 
+    caplog.clear()
     plot_methylation_distribution(test_samples, annot_col='wrong_col', save_path='methylation_distribution.png')
     assert not os.path.exists('methylation_distribution.png')
+    assert 'Column wrong_col not found in the sample sheet' in caplog.text
 
-    plot_methylation_distribution(test_samples, annot_col='fsh_status', save_path='methylation_distribution.png')
+    caplog.clear()
+    plot_methylation_distribution(test_samples, annot_col='sample_type', save_path='methylation_distribution.png')
+    assert 'ERROR' not in caplog.text
     assert os.path.exists('methylation_distribution.png')

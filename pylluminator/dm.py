@@ -163,7 +163,7 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
 
 
 def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dist_cutoff: float | None = None,
-            custom_sheet: pd.DataFrame | None = None, seg_per_locus: float = 0.5, probe_ids:None|list[str]=None) -> pd.DataFrame:
+            custom_sheet: pd.DataFrame | None = None, seg_per_locus: float = 0.5, probe_ids:None|list[str]=None) -> pd.DataFrame | None:
     """Find Differentially Methylated Regions (DMR) based on euclidian distance between beta values
 
     :param samples: samples to use
@@ -183,14 +183,17 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     :param probe_ids: list of probe IDs to use. Useful to work on a subset for testing purposes. Default: None
     :type probe_ids: list[str] | None
 
-    :return: dataframe with DMRs
-    :rtype: pandas.DataFrame
+    :return: dataframe with DMRs or None if an error was raised
+    :rtype: pandas.DataFrame | None
     """
 
     LOGGER.info('>>> Start get DMR')
 
     # data initialization
     betas = samples.get_betas(drop_na=False, custom_sheet=custom_sheet)
+    if betas is None:
+        return None
+
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     if probe_ids is not None:
@@ -210,7 +213,7 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
 
     if len(cpg_ids) == 0:
         LOGGER.error('No match found between genomic probe coordinates and beta values probe IDs')
-        return pd.DataFrame()
+        return None
 
     # sort ranges and identify last probe of each chromosome
     # cpg_ranges = pr.PyRanges(cpg_ids).sort_ranges(natsorting=True)  # to have the same sorting as sesame
