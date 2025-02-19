@@ -64,6 +64,7 @@ def test_merge_samples(test_samples):
     test_samples.merge_samples_by('sample_name')
     assert test_samples.sample_label_name == 'sample_name'  # it should not have changed
 
+    test_samples.calculate_betas()
     test_samples.merge_samples_by('sample_type')
     assert test_samples.sample_label_name == 'sample_type'
     assert test_samples.masks.number_probes_masked(sample_label='LNCAP') == 54

@@ -101,7 +101,7 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict | No
 
 
 def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, group_column: None | str | list[str] = None,
-               color_column: str | None = None,  linestyle_column=None,
+               color_column: str | None = None,  linestyle_column=None, figsize=(10, 7),
                custom_sheet: None | pd.DataFrame = None, apply_mask=True, save_path: None | str=None) -> None:
     """Plot beta values density for each sample
 
@@ -122,6 +122,9 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 
     :param linestyle_column: name of a Sample Sheet column to define which samples get the same line style. Default: None
     :type linestyle_column: str | None
+
+    :param figsize: size of the figure. Default: (10, 7)
+    :type figsize: tuple
 
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
     :type custom_sheet: pandas.DataFrame
@@ -167,10 +170,10 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 
     inds = [(n-2)*(1/n_ind) for n in range(1, n_ind+4)]
     if linestyles is None:
-        betas.plot.density(ind=inds, figsize=(15, 10), color=colors)
+        betas.plot.density(ind=inds, figsize=figsize, color=colors)
     else:
         for name, linestyle in linestyles.items():
-            betas[name].plot.density(ind=inds, figsize=(15, 10), color=colors[name], linestyle=linestyle)
+            betas[name].plot.density(ind=inds, figsize=figsize, color=colors[name], linestyle=linestyle)
 
     title = title if title is not None else f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes'
     plt.title(title)
@@ -379,7 +382,7 @@ def plot_pc_correlation(samples: Samples, params: list[str], nb_probes: int | No
         for i, n_comp in enumerate(range(n_components)):
             fitted_ols = OLS(fit[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
             result.loc[str(i), param] = fitted_ols.f_pvalue
-            result.loc[str(i), 'principal component'] = str(int(i))
+            result.loc[str(i), 'principal component'] = str(int(i+1))
 
     result = result.set_index('principal component')
     if orientation == 'v':
@@ -1234,13 +1237,36 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         plt.savefig(os.path.expanduser(save_path))
 
 
-def plot_hyper_methylation_distribution(samples: Samples, include_out_of_band: bool | None =None, annot_col: str| None=None,
-                                        what: list[str] | str = 'all',
+def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, what: list[str] | str = 'all',
                                         save_path: None | str=None) -> None:
+    """
+    Plot the distribution of hyper/hypo methylated probes in the samples.
+
+    :param samples: samples with beta values already calculated
+    :type samples: Samples
+
+    :param annot_col: column name in the sample sheet to categorize the data vertically. Default: None
+    :type annot_col: str | None
+
+    :param what: the metric to plot. Can be 'hypo', 'hyper', 'nas' or 'all' for the 3 of them. Default: 'all'
+    :type what: list[str] | str
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+
+    :return: None
+    """
 
     # add CGI annotations to betas
+    betas = samples.get_betas()
+    if betas is None:
+        return None
+
+    if 'cgi' not in samples.annotation.probe_infos.columns:
+        LOGGER.error('No CGI annotations found in the annotation data')
+        return
+
     cgis = samples.annotation.probe_infos.set_index('probe_id')['cgi'].dropna()
-    betas = samples.get_betas(include_out_of_band=include_out_of_band)
     cgi_betas = set_level_as_index(betas, 'probe_id', drop_others=True).join(cgis, how='inner')
     cgi_betas.cgi = cgi_betas.cgi.apply(lambda x: x.split(';'))
     cgi_betas = cgi_betas.explode('cgi')
@@ -1255,13 +1281,13 @@ def plot_hyper_methylation_distribution(samples: Samples, include_out_of_band: b
     def nas(x):
         return 100 * np.count_nonzero(np.isnan(x)) / len(x)
 
-    functions = {'all': [hypo, hyper, nas], 'hypo': hypo, 'hyper': hyper, 'nas': nas}
+    functions = {'hypo': hypo, 'hyper': hyper, 'nas': nas}
     if isinstance(what, str):
-        what = [what]
+        what = functions.keys() if what == 'all' else [what]
 
     meth_prop = cgi_betas.round().groupby('cgi').agg([functions[f] for f in what])
     meth_prop = pd.DataFrame(meth_prop.unstack()).reset_index()
-    meth_prop.columns = ['sample', 'cgi', 'proportion']
+    meth_prop.columns = [samples.sample_label_name, 'metric', 'cgi', 'proportion']
 
     if annot_col is not None:
         if annot_col not in samples.sample_sheet.columns:

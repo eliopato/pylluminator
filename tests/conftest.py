@@ -20,6 +20,7 @@ def test_samples_ini(data_path):
     samples = read_samples(data_path, annotation=None, min_beads=min_beads)
     samples.sample_sheet['sample_type'] = [n.split('_')[0] for n in samples.sample_sheet.sample_name]
     samples.sample_sheet['sample_number'] = [int(n[-1]) for n in samples.sample_sheet.sample_name]
+    samples.calculate_betas()
     return samples
 
 # we load samples once but always work on a fresh copy, so that the order of the tests does not matter

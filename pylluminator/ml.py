@@ -50,7 +50,7 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
     sk_model = models[model]
 
     # get betas with or without masked probes and samples
-    betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet)
+    betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet, drop_na=True)
 
     if betas is None or len(betas) == 0:
         LOGGER.error('No betas to plot')
@@ -60,14 +60,17 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
         LOGGER.error(f'Number of components {kwargs["n_components"]} is greater than the number of samples {len(betas.columns)}')
         return None, None, None, None
 
-    # get betas with the most variance across samples
-    betas_variance = np.var(betas.dropna() , axis=1)  # remove NA
-    nb_probes = len(betas_variance) if nb_probes is None else min(nb_probes, len(betas_variance))
-    indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
-    betas_most_variance = betas.loc[indexes_most_variance]
+    if nb_probes is None:
+        nb_probes = len(betas)
+    else:
+        # get betas with the most variance across samples
+        betas_variance = np.var(betas, axis=1)
+        nb_probes = min(nb_probes, len(betas_variance))
+        indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
+        betas = betas.loc[indexes_most_variance]
 
     # fit the model
     model_ini = sk_model(**kwargs)
-    fit = model_ini.fit_transform(betas_most_variance.T)
+    fit = model_ini.fit_transform(betas.T)
 
     return model_ini, fit, betas.columns, nb_probes

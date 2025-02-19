@@ -93,7 +93,9 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
         LOGGER.error(f'get_dmp() : the provided sample sheet must have a "{samples.sample_label_name}" column')
         return None
 
-    betas = samples.get_betas(include_out_of_band=False, drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
+    betas = samples.get_betas(drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
+    if betas is None:
+        return None
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     if probe_ids is not None:

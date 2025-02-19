@@ -3,7 +3,7 @@ import pandas as pd
 
 from pylluminator.visualizations import (betas_2D, plot_betas, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
                                          manhattan_plot_dmr, manhattan_plot_cnv, visualize_gene, betas_dendrogram,
-                                         plot_pc_correlation)
+                                         plot_pc_correlation, plot_methylation_distribution)
 
 from pylluminator.dm import get_dmp, get_dmr
 from pylluminator.cnv import copy_number_variation
@@ -11,17 +11,17 @@ from pylluminator.cnv import copy_number_variation
 def test_plot_betas_2D(test_samples):
     models = ['PCA', 'MDS', 'DL', 'FA', 'FICA', 'IPCA', 'KPCA', 'LDA', 'MBDL', 'MBNMF', 'MBSPCA', 'NMF', 'SPCA', 'TSVD']
     for m in models:
-        betas_2D(test_samples, model=m)
+        betas_2D(test_samples, model=m, nb_probes=1000)
 
-    betas_2D(test_samples, model='PCA', save_path='PCA_2D_plot.png', color_column='sample_type', label_column='sample_type')
+    betas_2D(test_samples, model='PCA', save_path='PCA_2D_plot.png', nb_probes=1000, color_column='sample_type', label_column='sample_type')
     assert os.path.exists('PCA_2D_plot.png')
     os.remove('PCA_2D_plot.png')
 
-    betas_2D(test_samples, model='PCA', save_path='PCA_2D_plot.png', color_column='egre', label_column='ger')
+    betas_2D(test_samples, model='PCA', save_path='PCA_2D_plot.png', nb_probes=1000, color_column='egre', label_column='ger')
     assert os.path.exists('PCA_2D_plot.png')
     os.remove('PCA_2D_plot.png')
 
-    betas_2D(test_samples, model='wrongmodel', save_path='PCA_2D_plot.png')
+    betas_2D(test_samples, model='wrongmodel', nb_probes=1000, save_path='PCA_2D_plot.png')
     assert not os.path.exists('PCA_2D_plot.png')
 
     custom_sheet = test_samples.sample_sheet[test_samples.sample_sheet[test_samples.sample_label_name] == 'LNCAP_500_3']
@@ -163,3 +163,14 @@ def test_plot_pc_correlation(test_samples):
     # more components than sample, fail
     plot_pc_correlation(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')
+
+def test_methylation_distribution(test_samples):
+    plot_methylation_distribution(test_samples, save_path='methylation_distribution.png')
+    assert os.path.exists('methylation_distribution.png')
+    os.remove('methylation_distribution.png')
+
+    plot_methylation_distribution(test_samples, annot_col='wrong_col', save_path='methylation_distribution.png')
+    assert not os.path.exists('methylation_distribution.png')
+
+    plot_methylation_distribution(test_samples, annot_col='fsh_status', save_path='methylation_distribution.png')
+    assert os.path.exists('methylation_distribution.png')

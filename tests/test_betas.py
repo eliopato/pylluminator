@@ -3,13 +3,14 @@ import pandas as pd
 
 # test beta values on object my_samples
 def test_calculate_betas(test_samples):
-
-    betas = test_samples.get_betas(include_out_of_band=False)['PREC_500_3']
+    test_samples.calculate_betas(include_out_of_band=False)
+    betas = test_samples.get_betas()['PREC_500_3']
     assert betas.xs('cg00002033_TC12', level="probe_id").values == 0.04825291  # Type I green
     assert betas.xs('rs6991394_BC11', level="probe_id").values == 0.50999004  # Type I red
     assert betas.xs('rs9363764_BC21', level="probe_id").values == 0.373386 # Type II
 
-    betas = test_samples.get_betas(include_out_of_band=True)['PREC_500_3']
+    test_samples.calculate_betas(include_out_of_band=True)
+    betas = test_samples.get_betas()['PREC_500_3']
     assert betas.xs('cg00002033_TC12', level="probe_id").values == 0.07827754  # Type I green
     assert betas.xs('rs6991394_BC11', level="probe_id").values ==  0.51002073  # Type I red
     assert betas.xs('rs9363764_BC21', level="probe_id").values == 0.373386 # Type II

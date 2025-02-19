@@ -436,6 +436,7 @@ class Samples:
         new_samples.idata = None if self.idata is None else self.idata.copy()
         new_samples.masks =  None if self.masks is None else self.masks.copy()
         new_samples._signal_df = None if self._signal_df is None else self._signal_df.copy()
+        new_samples._betas = None if self._betas is None else self._betas.copy()
         return new_samples
 
     def save(self, filepath: str) -> None:
@@ -584,7 +585,9 @@ class Samples:
             for sample_label in self.sample_labels:
                 sample_mask = self.masks.get_mask(sample_label=sample_label)
                 if sample_mask is not None and len(sample_mask) > 0:
-                    sigdf.loc[sample_mask, sample_label] = None
+                    sample_mask = sample_mask[sample_mask.isin(sigdf.index)]
+                    if len(sample_mask) > 0:
+                        sigdf.loc[sample_mask, sample_label] = None
 
         return sigdf
 
@@ -608,33 +611,50 @@ class Samples:
             LOGGER.info(f'samples are already merged by {by}, nothing to do')
             return
 
-        self.reset_columns()  # remove beta, p_values columns
+        self.reset_poobah()  # remove p_values columns
         column_names_ini = self._signal_df.columns.get_level_values(0)
         sheet = self.sample_sheet[self.sample_sheet[level_name_ini].isin(column_names_ini)]
 
         signal_df =  self.get_signal_df(apply_mask=apply_mask)
+        beta_df = self.get_betas(apply_mask=apply_mask)
 
-        df_list = {}
+        signal_df_list = {}
+        beta_df_list = {}
         for new_name, group in sheet.groupby(by):
+            # update masks
             old_names = group[level_name_ini].values.tolist()
             for mask_name in self.masks.get_mask_names(sample_label=old_names):
                 mask = self.masks.get_mask(mask_name=mask_name, sample_label=old_names)
                 self.masks.remove_masks(mask_name=mask_name, sample_label=old_names)
                 self.masks.add_mask(Mask(mask_name, new_name, mask))
+            # merge signal values and betas
             if len(old_names) == 1:
-                df_list[new_name] = signal_df[old_names[0]]
+                signal_df_list[new_name] = signal_df[old_names[0]]
+                if beta_df is not None:
+                    beta_df_list[new_name] = beta_df[old_names[0]]
             else:
-                df_list[new_name] = signal_df[old_names].T.groupby(['signal_channel', 'methylation_state']).mean().T
+                signal_df_list[new_name] = signal_df[old_names].T.groupby(['signal_channel', 'methylation_state']).mean().T
+                if beta_df is not None:
+                    beta_df_list[new_name] = beta_df[old_names].mean(axis=1)
 
-        new_df = pd.concat(df_list, axis=1)
-        new_df['mask_info'] = signal_df['mask_info']
-        new_df.columns = new_df.columns.rename(by, level=0)
-        self._signal_df = new_df
+        # concatenate the results and udpate the attributes
+        new_signal_df = pd.concat(signal_df_list, axis=1)
+        new_signal_df['mask_info'] = signal_df['mask_info']
+        new_signal_df.columns = new_signal_df.columns.rename(by, level=0)
+        self._signal_df = new_signal_df
+        # same with beta values
+        if beta_df is not None:
+            new_beta_df = pd.concat(beta_df_list, axis=1)
+            new_beta_df.columns = beta_df_list.keys()
+            self._betas = new_beta_df
+
+        # and merge the sample sheet
         self.sample_sheet = self.sample_sheet.groupby(by).agg(merge_series_values).reset_index()
 
     def remove_probes_suffix(self, apply_mask=True):
         """Merge probes that have the same ID but different suffixes (e.g. _BC11, _TC21..) by averaging their signal
-        values. TODO: to match ChAMP, take the values of the probe with the best poobah pvalue
+        values. Resets calculated pvalues and betas.
+        TODO: to match ChAMP, take the values of the probe with the best poobah pvalue
 
         :param apply_mask: skip masked probes values when merging samples if True. Default: True
         :type apply_mask: bool
@@ -642,7 +662,9 @@ class Samples:
         # todo: optimize this function
         LOGGER.info('Merge probes suffixes..')
         index_cols = ['type', 'channel', 'probe_type', 'probe_id']
-        self.reset_columns()
+        self.reset_poobah()
+        self.reset_betas()
+
         sigdf = self.get_signal_df(apply_mask=apply_mask).reset_index().sort_index(axis=1)
         sigdf.probe_id = sigdf.probe_id.map(remove_probe_suffix)
         dup_indexes = sigdf.probe_id.duplicated(keep=False)
@@ -985,12 +1007,11 @@ class Samples:
         self._betas.columns = self.sample_labels
         self._betas = self._betas.sort_index(axis=1)
 
-    def reset_columns(self) -> None:
-        """Remove all calculated columns (poobah p values, betas)
+    def reset_poobah(self) -> None:
+        """Remove poobah pvalues from the signal dataframe
 
         :return None"""
         self._signal_df = self._signal_df.drop(['p_value'], level='signal_channel', axis=1, errors='ignore')
-        self._betas = None
 
     def reset_betas(self) -> None:
         """Remove betas dataframe
@@ -1001,15 +1022,12 @@ class Samples:
     def has_betas(self) -> bool:
         return self._betas is not None
 
-    def get_betas(self, sample_label: str | None = None, include_out_of_band = None, drop_na: bool = False,
+    def get_betas(self, sample_label: str | None = None, drop_na: bool = False,
                   custom_sheet: pd.DataFrame | None = None, apply_mask: bool = False) -> pd.DataFrame | pd.Series | None:
         """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
 
         :param sample_label: the name of the sample to get beta values for. If None, return beta values for all samples.
         :type sample_label: str | None
-        :param include_out_of_band: if set to True, calculate beta values on in-band AND out-of-band signal values. If
-            set to False, calculate beta values on in-band values only. If not set, get the latest calculated betas if
-            they already exist. Default: None
         :param drop_na: if set to True, drop rows with NA values. Default: False
         :type drop_na: bool
         :param custom_sheet: a custom sample sheet to filter samples. Ignored if sample_label is provided. Default: None
@@ -1020,18 +1038,19 @@ class Samples:
         :return: beta values as a DataFrame, or Series if sample_label is provided. If no beta values are found, return None
         :rtype: pandas.DataFrame | pandas.Series | None"""
 
-        if include_out_of_band is not None:
-            self.calculate_betas(include_out_of_band=include_out_of_band)
-        elif not self.has_betas():
-            self.calculate_betas()
+        if not self.has_betas():
+            LOGGER.error('No beta values found. Please calculate beta values first')
+            return None
 
-        betas = self._betas
+        betas = self._betas.copy()
 
         if apply_mask:
             for label in self.sample_labels:
                 sample_mask = self.masks.get_mask(sample_label=label)
                 if sample_mask is not None and len(sample_mask) > 0:
-                    betas.loc[sample_mask, label] = None
+                    sample_mask = sample_mask[sample_mask.isin(betas.index)]
+                    if len(sample_mask) > 0:
+                        betas.loc[sample_mask, label] = None
 
         if custom_sheet is not None and sample_label is not None:
             LOGGER.warning('Both sample_label and custom_sheet are provided. Ignoring custom_sheet')
