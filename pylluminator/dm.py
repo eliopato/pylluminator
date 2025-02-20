@@ -58,7 +58,7 @@ def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_name
 
 
 def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, custom_sheet: None | pd.DataFrame=None,
-            drop_na=False, apply_mask=True, probe_ids:None|list[str]=None) -> (pd.DataFrame | None, list[str]):
+            drop_na=False, apply_mask=True, probe_ids:None|list[str]=None) -> (pd.DataFrame | None, list[str] | None):
     """Find Differentially Methylated Probes (DMP)
 
     More info on  design matrices and formulas:
@@ -91,11 +91,11 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     # check the sample sheet
     if samples.sample_label_name not in custom_sheet.columns:
         LOGGER.error(f'get_dmp() : the provided sample sheet must have a "{samples.sample_label_name}" column')
-        return None
+        return None, None
 
     betas = samples.get_betas(drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
     if betas is None:
-        return None
+        return None, None
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     if probe_ids is not None:
@@ -126,7 +126,7 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     # check that the design matrix is not empty (it happens for example if the variable used in the formula is constant)
     if len(design_matrix.columns) < 2:
         LOGGER.error('The design matrix is empty. Please make sure the formula you provided is correct.')
-        return None
+        return None, None
 
     factor_names = [f for f in design_matrix.columns]
 

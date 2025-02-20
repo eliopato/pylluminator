@@ -463,7 +463,7 @@ class Samples:
     # Data loading
     ####################################################################################################################
 
-    def add_annotation_info(self, annotation: Annotations, keep_idat=False, min_beads=1) -> None:
+    def add_annotation_info(self, annotation: Annotations, label_column: str, keep_idat=False, min_beads=1) -> None:
         """Merge manifest dataframe with probe signal values read from idat files to build the signal dataframe, adding
         channel information, methylation state and apply_mask names for each probe.
 
@@ -472,6 +472,8 @@ class Samples:
 
         :param annotation: annotation data corresponding to the sample
         :type annotation: Annotations
+        :param label_column: the name of the sample sheet column used for sample labels (eg sample_id, sample_name)
+        :type label_column: str
         :param min_beads: filter probes with less than min_beads beads. Default: 1
         :type min_beads: int
         :param keep_idat: if set to True, keep idat data after merging the annotations. Default: False
@@ -497,6 +499,13 @@ class Samples:
 
         probe_df = pd.concat(probe_df_list, axis=1)
 
+        # as this function is memory-intensive, free memory when we can
+        del probe_df_list
+        if not keep_idat:
+            del self.idata
+            self.idata = None
+        gc.collect()
+
         # auto detect annotation if not provided
         if annotation is None:
             probe_count = len(probe_df)  // 2 # nb of rows in the df = nb of rows in the idat file = nb of probes
@@ -515,6 +524,8 @@ class Samples:
         probe_df = probe_df.reset_index().rename(columns={'channel': 'signal_channel'}).drop_duplicates()
         nb_probes_before_merge = len(probe_df)
         sample_df = pd.merge(probe_df, probe_info, how='inner', on='illumina_id')
+        del probe_df # free memory
+        gc.collect()
 
         # check the number of probes lost in the merge
         lost_probes = nb_probes_before_merge - len(sample_df)
@@ -548,7 +559,7 @@ class Samples:
         sample_df['mask_info'] = sample_df.index.get_level_values('mask_info').fillna('').values
         sample_df = sample_df.reset_index(level='mask_info', drop=True)
         sample_df = sample_df.sort_index(axis=1)
-        sample_df.columns = sample_df.columns.rename('sample_name', level=0)
+        sample_df.columns = sample_df.columns.rename(label_column, level=0)
 
         self._signal_df = sample_df
 
@@ -556,10 +567,6 @@ class Samples:
             has_na = sample_df[[(sample_label, 'G', 'M'), (sample_label, 'R', 'U')]].isna().any(axis=1)
             self.masks.add_mask(Mask(f'min_beads_{min_beads}', sample_label, has_na.index[has_na]))
 
-        # if we don't want to keep idata, make sure we free the memory
-        if not keep_idat:
-            self.idata = None
-            gc.collect()
 
     ####################################################################################################################
     # Properties & getters
@@ -970,7 +977,7 @@ class Samples:
         type2 = self.type2(sigdf=sigdf)
 
         ib = pd.concat([ib_red, ib_green, type2])
-        return ib.T.groupby('sample_name').sum().T
+        return ib.T.groupby(self.sample_label_name).sum().T
 
     def calculate_betas(self, include_out_of_band=False) -> None:
         """Calculate beta values for all probes. Values are stored in a dataframe and can be accessed via the betas()
@@ -1495,7 +1502,7 @@ class Samples:
                                     precision=precision, na_cov_action=na_cov_action)
 
 
-def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> dict:
+def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> (dict, str):
     """
     Reads IDAT files for each sample in the provided sample sheet, organizes the data by sample name and channel,
     and returns a dictionary with the IDAT data.
@@ -1522,10 +1529,13 @@ def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> dict:
         idata = read_idata(sample_sheet_df, '/path/to/data')
     """
     idata = {}
+    label_column = 'sample_id'
+    if 'sample_name' in sample_sheet_df.columns and sum(sample_sheet_df['sample_name'].duplicated()) == 0:
+        label_column = 'sample_name'
 
     for _, line in sample_sheet_df.iterrows():
 
-        idata[line.sample_name] = dict()
+        idata[line[label_column]] = dict()
 
         # read each channel file
         for channel in Channel:
@@ -1544,9 +1554,9 @@ def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> dict:
 
             idat_filepath = paths[0]
             LOGGER.debug(f'reading file {idat_filepath}')
-            idata[line.sample_name][channel] = IdatDataset(idat_filepath).probes_df
+            idata[line[label_column]][channel] = IdatDataset(idat_filepath).probes_df
 
-    return idata
+    return idata, label_column
 
 
 def read_samples(datadir: str | os.PathLike | MultiplexedPath,
@@ -1618,14 +1628,13 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
         sample_sheet_df = sample_sheet_df.head(max_samples)
 
     samples = Samples(sample_sheet_df)
-    samples.idata = read_idata(sample_sheet_df, datadir)
-    samples._masked_indexes_per_sample = {sample_label: set() for sample_label in samples.idata.keys()}
+    samples.idata, label_column = read_idata(sample_sheet_df, datadir)
 
     if samples.idata is None or len(samples.idata) == 0:
         LOGGER.error('no idat files found')
         return None
 
-    samples.add_annotation_info(annotation, keep_idat, min_beads)
+    samples.add_annotation_info(annotation, label_column, keep_idat, min_beads)
 
     LOGGER.info('reading sample files done\n')
     return samples

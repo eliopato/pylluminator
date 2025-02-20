@@ -21,7 +21,7 @@ def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
     Recommended :
         - sentrix_id or sentrix_barcode or sentrix_barcode_a
         - sentrix_position or sentrix_position_a
-        - sample_name: For display purposes. If non-existent, the name is the value of sample_id
+        - sample_name: For display purposes.
         - and any other metadata you'd like to use
 
     Any other column will be left untouched in the sample sheet dataframe (with its name converted to snake case)
@@ -67,10 +67,6 @@ def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
     if 'sample_id' not in df.columns:
         LOGGER.error(f'Column sample_id not found in {df.columns}')
         return None
-
-    if 'sample_name' not in df.columns:
-        df['sample_name'] = df['sample_id']
-        LOGGER.info(f'Column sample_name not found in {df.columns}, taking name from column sample_id')
 
     return df
 

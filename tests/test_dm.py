@@ -26,10 +26,16 @@ def test_dmp(test_samples):
 
 def test_dmp_bad_sample_sheet(test_samples):
     test_samples.sample_sheet = test_samples.sample_sheet.drop(columns='sample_name')
-    assert get_dmp(test_samples, '~ sample_type') is None
+    res = get_dmp(test_samples, '~ sample_type')
+    assert len(res) == 2
+    assert res[0] is None
+    assert res[1] is None
 
-def test_dmp_bad_wrong_formula(test_samples):
-    assert get_dmp(test_samples, '~ nonexistent_factor') is None
+def test_dmp_wrong_formula(test_samples):
+    res = get_dmp(test_samples, '~ nonexistent_factor')
+    assert len(res) == 2
+    assert res[0] is None
+    assert res[1] is None
 
 def test_ols_na():
     nb_factors = 3
