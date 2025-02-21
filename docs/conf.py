@@ -13,7 +13,7 @@
 # -- Project information -----------------------------------------------------
 
 project = "pylluminator"
-copyright = "2024"
+copyright = "2025"
 author = "MMG"
 
 # -- General configuration ---------------------------------------------------
@@ -62,4 +62,4 @@ html_theme = "sphinx_rtd_theme"
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = []
 
-# html_logo = " https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png"
+html_logo = " https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png"

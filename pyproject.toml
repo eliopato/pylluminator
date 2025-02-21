@@ -11,7 +11,7 @@ version = "0.2"
 authors = [{name = "Elio", email = "eliof@posteo.net"}]
 maintainers = [{name = "Elio", email = "eliof@posteo.net"}]
 requires-python = ">= 3.12"
-dependencies = ['pandas', 'numpy', 'scikit-learn', 'statsmodels', 'scipy', 'pyranges1', 'linear_segment', 'patsy', 'ailist', 'notebook', 'matplotlib', 'seaborn']
+dependencies = ['pandas', 'numpy', 'scikit-learn', 'statsmodels', 'scipy', 'pyranges1', 'linear_segment', 'patsy', 'ailist', 'notebook', 'matplotlib', 'seaborn', 'inmoose']
 description = 'Tools to analyze DNA methylation data from Illumina micro-arrays'
 readme = 'README.rst'
 license = {text = "MIT"}
@@ -28,7 +28,7 @@ classifiers = [
 
 [project.urls]
 #Homepage = "https://example.com"
-#Documentation = "https://readthedocs.org"
+Documentation = "https://pylluminator.readthedocs.io/"
 Repository = "https://github.com/eliopato/pylluminator"
 Issues = "https://github.com/eliopato/pylluminator/issues"
 #Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
