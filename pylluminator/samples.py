@@ -601,7 +601,9 @@ class Samples:
 
     def merge_samples_by(self, by: str, apply_mask=True) -> None:
         """Merge the beads signal values of different samples by averaging them. Modifies the signal dataframe directly
-        and removes any calculated column (beta values, poobah p values...) since their values need to be updated.
+        and removes p values column since their values need to be updated. Beta values are averaged as not to lose
+        the batch correction result if needed. Masks are reset - but masked probes values are ignored if `apply_mask` is
+        True
 
         :param by: the column name in the sample sheet to group samples by
         :type by: str
@@ -629,12 +631,12 @@ class Samples:
         signal_df_list = {}
         beta_df_list = {}
         for new_name, group in sheet.groupby(by):
-            # update masks
+            # # update masks
             old_names = group[level_name_ini].values.tolist()
-            for mask_name in self.masks.get_mask_names(sample_label=old_names):
-                mask = self.masks.get_mask(mask_name=mask_name, sample_label=old_names)
-                self.masks.remove_masks(mask_name=mask_name, sample_label=old_names)
-                self.masks.add_mask(Mask(mask_name, new_name, mask))
+            # for mask_name in self.masks.get_mask_names(sample_label=old_names):
+            #     mask = self.masks.get_mask(mask_name=mask_name, sample_label=old_names)
+            #     self.masks.remove_masks(mask_name=mask_name, sample_label=old_names)
+            #     self.masks.add_mask(Mask(mask_name, new_name, mask))
             # merge signal values and betas
             if len(old_names) == 1:
                 signal_df_list[new_name] = signal_df[old_names[0]]
