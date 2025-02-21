@@ -259,7 +259,7 @@ def get_files_matching(root_path: str | os.PathLike | MultiplexedPath, pattern: 
 
 def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[str] | str:
     """Merges the alternative chromosomes with their respective reference chromosome, e.g. 22_KI270928V1_ALT-> 22. If
-    given an unconventional format (None, wrong type) or an unrecognized string, return '*'
+    given an unconventional format (None, wrong type) or an unrecognized string, return ``*``
 
     :param chromosome_id: chromosome ID(s) to merge
     :type chromosome_id: str |̀ int | list[str] | list[int] | pandas.Series

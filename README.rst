@@ -49,6 +49,7 @@ Main functionalities
   * normalization
   * dye bias correction
   * pOOBAH
+  * batch effect correction with ComBat
 
 * data analysis and visualisation
 

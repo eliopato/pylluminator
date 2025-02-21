@@ -26,12 +26,15 @@ from pylluminator.utils import merge_series_values
 
 LOGGER = get_logger()
 
-def _get_colors(sheet: pd.DataFrame, sample_label_name: str, color_column: str | None,
-                group_column: str | list[str] | None = None, cmap_name: str = 'Spectral') -> (list, dict | None):
+def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
+                color_column: str | None, group_column: str | list[str] | None = None, cmap_name: str = 'Spectral') -> (list, dict | None):
     """Define the colors to use for each sample, depending on the columns used to categorized them.
 
     :param sheet: sample sheet data frame
     :type sheet: pandas.DataFrame
+
+    :param sample_label_name: the name of the sample sheet column used as label
+    :type sample_label_name: str
 
     :param color_column: name of the column of the sample sheet to use for color. If None, the function will return empty objects.
     :type color_column: str | None
@@ -59,8 +62,8 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str, color_column: str |
         color_categories = {name: cmap(i / len(sheet)) for i, name in enumerate(sheet[sample_label_name])}
         legend_handles += [Line2D([0], [0], color=color, label=label) for label, color in color_categories.items()]
     else:
-        grouped_sheet = sheet.groupby(color_column)
-        nb_colors = len(grouped_sheet)
+        grouped_sheet = sheet.groupby(color_column, dropna=False)
+        nb_colors = grouped_sheet.ngroups
         legend_handles += [Line2D([0], [0], color='black', linestyle='', label=color_column)]
         for i, (group_name, group) in enumerate(grouped_sheet):
             color = cmap(i / max(1, nb_colors - 1))
@@ -268,6 +271,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     if label_column not in samples.sample_sheet.columns:
         LOGGER.warning(f'Label column {label_column} not found in the sample sheet, setting it to default')
         label_column = samples.sample_label_name
+
     if color_column is None:
         color_column = samples.sample_label_name
     if color_column not in samples.sample_sheet.columns:
@@ -643,23 +647,30 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
 
-    pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value'
-    sorted_probes = dmps.sort_values(pval_column).index
-
     label = samples.sample_label_name
     betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
+
+    pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value'
+    sorted_probes = dmps.sort_values(pval_column).index
 
     if betas is None or len(betas) == 0:
         LOGGER.error('No betas to plot')
         return
 
+    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
+    sheet = sheet.copy()[sheet[label].isin(betas.columns)]  #  get intersection of the two dfs
+    sheet = sheet.set_index(label)
+
     # add values next to sample labels if var is specified and use the new labels as betas column names
     if var is not None:
         if isinstance(var, str):
             var = [var]
-        sheet = samples.sample_sheet
-        colnames = [f'{c} ({",".join([str(sheet.loc[sheet[label] == c, v].iloc[0]) for v in var])})' for c in betas.columns]
-        betas.columns = colnames
+        # update beta column names and sheet labels by adding values of 'var' columns after the sample names
+        new_labels = [f'{c} ({",".join([str(sheet.loc[c, v]) for v in var])})' for c in betas.columns]
+        sheet = sheet.loc[betas.columns,]  # sort sheet like beta columns
+        sheet.index = new_labels  # update sheet index values
+        sheet.index.name = samples.sample_label_name
+        betas.columns = new_labels
 
     # sort betas per p-value and take the n_probes first probes
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
@@ -680,7 +691,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
                 row_legends = row_factors
             elif isinstance(row_legends, str):
                 row_legends = [row_legends]
-            subset = samples.sample_sheet.set_index(label)[row_factors]
+            subset = sheet[row_factors]
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         # plot the heatmap
         plot = sns.clustermap(sorted_betas, row_colors=row_factors, figsize=figsize, **heatmap_params)
@@ -986,7 +997,8 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
-    :return: None"""
+    :return: None
+    """
 
     _manhattan_plot(data_to_plot=data_to_plot, segments_to_plot=segments_to_plot, x_col=x_col,
                     chromosome_col=chromosome_col, y_col=y_col, title=title, figsize=figsize,
@@ -1027,7 +1039,8 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         specified in row_factors. Default: '' (generate all legends)
     :type row_legends: str | list[str] | None
 
-    :return: None"""
+    :return: None
+    """
 
     color_map = {'gneg': 'lightgrey', 'gpos25': 'lightblue', 'gpos50': 'blue', 'gpos75': 'darkblue', 'gpos100': 'purple',
                  'gvar': 'lightgreen', 'acen': 'yellow', 'stalk': 'pink'}
@@ -1091,13 +1104,21 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         LOGGER.error('no beta data to plot')
         return
 
+    label = samples.sample_label_name
+    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
+    sheet = sheet.copy()[sheet[label].isin(heatmap_data.index)]  #  get intersection of the two dfs
+    sheet = sheet.set_index(label)
+
     # add variable values to the column names
     if var is not None:
         if isinstance(var, str):
             var = [var]
-        sheet = samples.sample_sheet
-        colnames = [c + ' (' + ', '.join([str(sheet.loc[sheet[samples.sample_label_name] == c, v].iloc[0]) for v in var]) + ')' for c in heatmap_data.index]
-        heatmap_data.index = colnames
+        # update heatmap indexes names and sheet labels by adding values of 'var' columns after the sample names
+        new_labels = [f'{c} ({",".join([str(sheet.loc[c, v]) for v in var])})' for c in heatmap_data.index]
+        sheet = sheet.loc[heatmap_data.index,]  # sort sheet like headmap data
+        sheet.index = new_labels  # update sheet index values
+        sheet.index.name = label
+        heatmap_data.index = new_labels
 
     heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
 
@@ -1116,7 +1137,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
                 row_legends = row_factors
             elif isinstance(row_legends, str):
                 row_legends = [row_legends]
-            subset = samples.sample_sheet.set_index(samples.sample_label_name)[row_factors]
+            subset = sheet[row_factors]
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         dendrogram_ratio = 0.05
         g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False, row_colors=row_factors,

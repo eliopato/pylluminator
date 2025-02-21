@@ -67,7 +67,7 @@ def test_dmp_heatmap(test_samples):
     plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', contrast=contrasts[0])
     assert os.path.exists('dmp_heatmap.png')
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', nb_probes=500, figsize=(3, 19), var='sample_type')
+    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', nb_probes=500, figsize=(3, 19), var='sample_type', row_factors=['sample_type'])
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 

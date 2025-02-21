@@ -68,7 +68,6 @@ def detection_stats(samples: Samples, sample_label: str, apply_mask=False) -> No
     samples = samples.copy()  # we don't want changes (mask) from poobah to change the samples object
 
     samples.poobah(sample_label, apply_mask, True, threshold=poobah_threshold)
-    # p_values_df = samples.get_signal_df(apply_mask).xs('p_value', level='signal_channel', axis=1)
     p_values_df = samples.get_signal_df(apply_mask)[(sample_label, 'p_value')]
 
     sample_probe_ids = p_values_df.index.get_level_values('probe_id')

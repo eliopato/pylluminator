@@ -853,12 +853,12 @@ class Samples:
     ####################################################################################################################
 
 
-    def infer_type1_channel(self, sample_label: str | None = None, switch_failed=False, mask_failed=False, summary_only=False) -> pd.DataFrame:
+    def infer_type1_channel(self, sample_labels: str | list[str] | None = None, switch_failed=False, mask_failed=False, summary_only=False) -> pd.DataFrame:
         """For Infinium type I probes, infer the channel from the signal values, setting it to the channel with the max
         signal. If max values are equals, the channel is set to R (as opposed to G in sesame).
 
-        :param sample_label: the name of the sample to infer the channel for. If None, infer with all samples.
-        :type sample_label: str | None
+        :param sample_labels: the name(s) of the sample(s) to infer the channel for. If None, infer with all samples. Default: None
+        :type sample_labels: str | list[str] | None
         :param switch_failed: if set to True, probes with NA values or whose max values are under a threshold (the 95th
             percentile of the background signals) will be switched back to their original value. Default: False.
         :type switch_failed: bool
@@ -874,7 +874,11 @@ class Samples:
         LOGGER.info('Infer type I channel..')
         # reset betas as we are modifying the signal dataframe
         self.reset_betas()
-        sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
+
+        if sample_labels is None:
+            sample_labels = self.sample_labels
+        elif isinstance(sample_labels, str):
+            sample_labels = [sample_labels]
 
         # subset to use
         type1_df = self._signal_df.loc['I', sample_labels].droplevel('methylation_state', axis=1)
@@ -1396,6 +1400,8 @@ class Samples:
 
         sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
 
+        pvalues = []
+        new_colnames = []
         for sample_label in sample_labels:
             bg_green = get_column_as_flat_array(background_df[sample_label], 'G', remove_na=True)
             bg_red = get_column_as_flat_array(background_df[sample_label], 'R', remove_na=True)
@@ -1412,10 +1418,14 @@ class Samples:
             pval_red = 1 - ecdf(bg_red)(self._signal_df[(sample_label, 'R')].max(axis=1))
 
             # set new columns with pOOBAH values
-            p_value = np.min([pval_green, pval_red], axis=0)
-            self._signal_df[(sample_label, 'p_value', '')] = p_value
-            self._signal_df = self._signal_df.sort_index(axis=1)  # sort the columns after adding a new one
+            pvalues.append(pd.Series(np.min([pval_green, pval_red], axis=0)))
+            new_colnames.append((sample_label, 'p_value', ''))
+        pval_df = pd.concat(pvalues, axis=1)
+        pval_df.columns = pd.MultiIndex.from_tuples(new_colnames, names=self._signal_df.columns.names)
+        pval_df.index = self._signal_df.index
+        self._signal_df = pd.concat([self._signal_df, pval_df], axis=1).sort_index(axis=1)
 
+        for sample_label in sample_labels:
             # add a mask for the sample, depending on the threshold
             mask_indexes = self._signal_df.index[self._signal_df[(sample_label, 'p_value', '')] >= threshold]
             poobah_mask = Mask(f'poobah_{threshold}', sample_label, mask_indexes)
@@ -1423,7 +1433,7 @@ class Samples:
 
     def batch_correction(self, batch:list|str, apply_mask:bool=True, covariates:str|list[str]|None=None,
                          par_prior=True, mean_only=False, ref_batch=None, precision=None, na_cov_action='raise') -> None:
-        """Applies ComBat algorithm for batch correction on beta values. You must provide on of `batch` or `batch_column
+        """Applies ComBat algorithm for batch correction on beta values.
 
         :param batch: If a string is provided, it's interpreted as the name of the column in the sample sheet that
             contains the batch information. If a list is provided, it should contain the batch indices, with as many
@@ -1450,7 +1460,7 @@ class Samples:
 
         :param na_cov_action: choose the way to handle missing covariates : `raise` raise an error if missing covariates
             and stop the code, `remove` remove samples with missing covariates and raise a warning, `fill` handle missing
-             covariates, by creating a distinct covariate per batch. Default: `raise`
+            covariates, by creating a distinct covariate per batch. Default: `raise`
 
         :return: None
         """
@@ -1470,8 +1480,8 @@ class Samples:
                 return
             batch = sheet[batch].values
 
-        if np.isnan(batch).any():
-            LOGGER.error('Batch column contains NaN values')
+        if np.any(batch == '') or np.any(pd.isnull(batch)):
+            LOGGER.error('Batch column contains NaN or empty values')
             return
 
         if len(batch) != len(self._betas.columns):
@@ -1532,6 +1542,10 @@ def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> (dict, str
     label_column = 'sample_id'
     if 'sample_name' in sample_sheet_df.columns and sum(sample_sheet_df['sample_name'].duplicated()) == 0:
         label_column = 'sample_name'
+    elif sum(sample_sheet_df['sample_id'].duplicated()) > 0:
+        LOGGER.warning('Your sample sheet contains duplicated sample_ids. Please check your data as it may lead to errors')
+
+    LOGGER.info(f'Use colum {label_column} to label samples')
 
     for _, line in sample_sheet_df.iterrows():
 
@@ -1623,6 +1637,8 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
     if sample_sheet_df is None:
         return None
 
+    sample_sheet_df = sample_sheet_df.drop_duplicates()  # make sure there is no duplicated rows
+
     # only load the N first samples
     if max_samples is not None:
         sample_sheet_df = sample_sheet_df.head(max_samples)
@@ -1636,7 +1652,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
 
     samples.add_annotation_info(annotation, label_column, keep_idat, min_beads)
 
-    LOGGER.info('reading sample files done\n')
+    LOGGER.info(f'reading sample files done, {samples.nb_samples} samples found\n')
     return samples
 
 def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annotations, no_suffix=False) -> Samples | None:
