@@ -1359,15 +1359,16 @@ class Samples:
                     idx = [(sample_label, channel, methylation_state)]
                     self._signal_df.loc[:, idx] = np.clip(self._signal_df[idx] - median_bg[channel], a_min=1, a_max=None)
 
-    def poobah(self, sample_label: str | None = None, apply_mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
+    def poobah(self, sample_labels: str | list[str] | None = None, apply_mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
         """Detection P-value based on empirical cumulative distribution function (ECDF) of out-of-band signal
         aka pOOBAH (p-vals by Out-Of-Band Array Hybridization).
 
         Adds two columns in the signal dataframe, 'p_value' and 'poobah_mask'. Add probes that are (strictly) above the
         defined threshold to the mask.
 
-        :param sample_label: the name of the sample to use for the pOOBAH calculation. If None, use all samples.
-        :type sample_label: str | None
+        :param sample_labels: the name(s) of the sample(s) to use for the pOOBAH calculation. If None, use all samples.
+            Default: None
+        :type sample_labels: str | list[str] | None
 
         :param apply_mask: True removes masked probes from background, False keeps them. Default: True
         :type apply_mask: bool
@@ -1375,12 +1376,13 @@ class Samples:
         :param use_negative_controls: add negative controls as part of the background. Default True
         :type use_negative_controls: bool
 
-        :param threshold: used to output a apply_mask based on the p_values.
+        :param threshold: used to output a mask based on the p_values.
         :type threshold: float
 
         :return: None"""
 
-        LOGGER.info('pOOBAH')
+        LOGGER.info('start pOOBAH')
+        self.reset_poobah()
 
         # apply_mask non-unique probes - but first save previous apply_mask to reset it afterward
         initial_masks = self.masks.copy()
@@ -1400,7 +1402,10 @@ class Samples:
         # reset apply_mask
         self.masks = initial_masks
 
-        sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
+        if isinstance(sample_labels, str):
+            sample_labels = [sample_labels]
+        elif sample_labels is None:
+            sample_labels = self.sample_labels
 
         pvalues = []
         new_colnames = []
@@ -1422,6 +1427,7 @@ class Samples:
             # set new columns with pOOBAH values
             pvalues.append(pd.Series(np.min([pval_green, pval_red], axis=0)))
             new_colnames.append((sample_label, 'p_value', ''))
+
         pval_df = pd.concat(pvalues, axis=1)
         pval_df.columns = pd.MultiIndex.from_tuples(new_colnames, names=self._signal_df.columns.names)
         pval_df.index = self._signal_df.index

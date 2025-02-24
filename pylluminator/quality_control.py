@@ -169,7 +169,7 @@ def type1_color_channels_stats(samples: Samples, sample_label : str) -> None:
 
     _print_header(f'{sample_label} Type I color channel', False)
 
-    summary_inferred_channels = samples.infer_type1_channel(sample_label=sample_label, summary_only=True)
+    summary_inferred_channels = samples.infer_type1_channel(sample_labels=sample_label, summary_only=True)
     _print_value('Green to Green : ', summary_inferred_channels['G']['G'])
     _print_value('Green to Red : ', summary_inferred_channels['G']['R'])
     _print_value('Red to Red : ', summary_inferred_channels['R']['R'])
@@ -190,7 +190,7 @@ def dye_bias_stats(samples: Samples, sample_label: str, apply_mask=False) -> Non
 
     _print_header('Dye bias', apply_mask)
 
-    total_intensity_type1 = samples.get_total_ib_intensity(sample_label, apply_mask).loc['I']
+    total_intensity_type1 = samples.get_total_ib_intensity(sample_label, apply_mask).loc['I'].sort_index()
 
     median_red = total_intensity_type1.loc['R'].median(skipna=True)[sample_label]
     median_green = total_intensity_type1.loc['G'].median(skipna=True)[sample_label]
