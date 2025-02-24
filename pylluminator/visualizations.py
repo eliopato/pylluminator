@@ -1012,19 +1012,20 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
                    row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
-    :param samples : samples with beta values already calculated
+    :param samples: samples with beta values already calculated
     :type samples: Samples
-    :param gene_name : name of the gene to visualize
+    :param gene_name: name of the gene to visualize
     :type gene_name: str
     :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
     :type apply_mask: bool
     :param padding: length in kb pairs to add at the end and beginning of the transcription zone. Default: 1500
     :type: int
-    :param keep_na : set to True to only output probes with no NA value for any sample. Default: False
+    :param keep_na: set to True to only output probes with no NA value for any sample. Default: False
     :type keep_na: bool
     :param protein_coding_only: limit displayed transcripts to protein coding ones. Default: True
     :type protein_coding_only: bool
-    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display
     :type custom_sheet: pandas.DataFrame
     :param var: a column name or list of column names from the samplesheet to add to the heatmap labels. Default: None
     :type var: None | str | list[str]

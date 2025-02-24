@@ -262,10 +262,11 @@ def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[s
     given an unconventional format (None, wrong type) or an unrecognized string, return ``*``
 
     :param chromosome_id: chromosome ID(s) to merge
-    :type chromosome_id: str |̀ int | list[str] | list[int] | pandas.Series
+    :type chromosome_id: str | int | list[str] | list[int] | pandas.Series
 
     :return: merged ID(s)
-    :rtype: list[str] | str"""
+    :rtype: list[str] | str
+    """
 
     # for list and series, call the function on each member
     if isinstance(chromosome_id, list) or isinstance(chromosome_id, pd.Series):

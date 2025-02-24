@@ -30,8 +30,7 @@ def test_download_from_geo(data_path):
         assert os.path.exists(file_path), f'File {file_path} does not exist'
 
 def wrapper_array_version(path, gsm_id, expected_array_type, expected_genome_type):
-    if os.path.exists(path):
-        shutil.rmtree(path)
+    shutil.rmtree(path, ignore_errors=True)
     download_from_geo(gsm_id, path)
     samples = read_samples(path, annotation=None)
     assert samples.annotation.array_type == expected_array_type
