@@ -983,7 +983,9 @@ class Samples:
         type2 = self.type2(sigdf=sigdf)
 
         ib = pd.concat([ib_red, ib_green, type2])
-        return ib.T.groupby(self.sample_label_name).sum().T
+        tot_ib_intensity = ib.T.groupby(self.sample_label_name).sum().T
+        tot_ib_intensity[tot_ib_intensity == 0] = None
+        return tot_ib_intensity
 
     def calculate_betas(self, include_out_of_band=False) -> None:
         """Calculate beta values for all probes. Values are stored in a dataframe and can be accessed via the betas()
