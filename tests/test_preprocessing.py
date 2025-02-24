@@ -31,6 +31,8 @@ def test_infer_infinium_I_channel(test_samples):
     # dfs_after = df_r.join(df_py.droplevel('methylation_state', axis=1))
     # dfs_after[dfs_after.col != dfs_after.channel]
 
+    test_samples.infer_type1_channel()
+
 def test_infer_infinium_I_channel_switch(test_samples):
     summary = test_samples.infer_type1_channel('PREC_500_3', switch_failed=True, mask_failed=True)
     assert summary.values.tolist() == [44803, 882, 67, 82543]
@@ -153,6 +155,11 @@ def test_noob_all(test_samples):
     expected_values = [2273.55712890625, 3623.52587890625]
     assert test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == pytest.approx(expected_values)
 
+def test_noob_no_mask(test_samples, caplog):
+    caplog.clear()
+    test_samples.noob_background_correction(apply_mask=False)
+    assert 'ERROR' not in caplog.text
+
 def test_scrub(test_samples):
     test_samples.scrub_background_correction('PREC_500_3')
     # Type I green
@@ -201,6 +208,12 @@ def test_get_betas_drop_na(test_samples):
     df = test_samples.get_betas(drop_na=True)
     assert len(df) == 937544
 
+def test_get_betas_no_betas(test_samples, caplog):
+    test_samples.reset_betas()
+    caplog.clear()
+    assert test_samples.get_betas() is None
+    assert 'No beta values found' in caplog.text
+
 def test_batch_correction(test_samples, caplog):
     # test column with na values
     test_samples.batch_correction('sentrix_id', covariates='sample_type')
@@ -217,6 +230,16 @@ def test_batch_correction(test_samples, caplog):
     # everything OK
     test_samples.batch_correction('sample_number', covariates='sample_type')
     assert 'ERROR' not in caplog.text
+
+    # wrong batch column
+    test_samples.batch_correction('wrongcolumn')
+    assert 'Batch column wrongcolumn not found' in caplog.text
+
+    # wrong covariates column
+    test_samples.batch_correction('sample_number', covariates=['wrongcolumn', 'sample_number'])
+    assert 'Covariate wrongcolumn not found' in caplog.text
+    assert 'Covariate sample_number must be a string' in caplog.text
+    assert 'No valid covariates' in caplog.text
 
     # test without calculated betas
     caplog.clear()

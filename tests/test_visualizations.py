@@ -179,3 +179,4 @@ def test_methylation_distribution(test_samples, caplog):
     plot_methylation_distribution(test_samples, annot_col='sample_type', save_path='methylation_distribution.png')
     assert 'ERROR' not in caplog.text
     assert os.path.exists('methylation_distribution.png')
+    os.remove('methylation_distribution.png')

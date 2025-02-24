@@ -711,10 +711,6 @@ class Samples:
 
         :return: None"""
 
-        if names_to_mask is None or len(names_to_mask) == 0:
-            LOGGER.warning('No names to mask')
-            return
-
         if isinstance(names_to_mask, list):
             for name in names_to_mask:
                 self.apply_mask_by_names(name, sample_label)
@@ -722,6 +718,10 @@ class Samples:
 
         if not isinstance(names_to_mask, str):
             LOGGER.error(f'names_to_mask should be a string or a list of strings, not {type(names_to_mask)}')
+            return
+
+        if names_to_mask is None or len(names_to_mask) == 0:
+            LOGGER.warning('No names to mask')
             return
 
         new_mask = Mask(names_to_mask, sample_label, self._signal_df.index[self._signal_df.mask_info.str.contains(names_to_mask)])

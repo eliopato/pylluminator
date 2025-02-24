@@ -15,7 +15,7 @@ def test_reset_masks_2(test_samples):
     test_samples.masks.remove_masks()
     assert len(test_samples.masks.masks) == 0
 
-def test_no_mask(test_samples):
+def test_no_mask(test_samples, caplog):
     test_samples.apply_mask_by_names('')
     assert test_samples.masks.number_probes_masked() == 0
 
@@ -30,6 +30,10 @@ def test_no_mask(test_samples):
 
     test_samples.apply_mask_by_names(['uniq'])
     assert test_samples.masks.number_probes_masked() == 23664
+
+    caplog.clear()
+    test_samples.apply_mask_by_names(543)
+    assert 'names_to_mask should be a string or a list of strings' in caplog.text
 
 
 def test_remove_sample_mask(test_samples):
