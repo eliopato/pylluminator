@@ -606,6 +606,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
                      nb_probes: int = 100, figsize: tuple[float, float]=(15, 15),
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
+                     sort_by = 'pvalue', pval_threshold: float | None = None, delta_beta_threshold: float | None = None,
                      row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
@@ -631,6 +632,12 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
     :type drop_na: bool
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
+    :param sort_by: column to order dmps by. Can be pvalue, delta_beta, or any dmp column name. Default: pvalue
+    :type sort_by: str
+    :param pval_threshold: maximum DMP p-value. If None, no filter is applied on pvalues. Default: None
+    :type pval_threshold: float | None
+    :param delta_beta_threshold: minimum average delta beta value between 2 groups. If None, no filter is applied on delta beta. Default: None
+    :type delta_beta_threshold: float | None
     :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
         columns of the sample sheet. Default: None
     :type row_factors: str | list[str] | None
@@ -647,11 +654,36 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
 
+    if sort_by not in ['pvalue', 'delta_beta'] + dmps.columns.tolist():
+        LOGGER.error(f'parameter {sort_by} not found. Must be pvalue, delta_beta or a column of dmps dataframe')
+        return
+
     label = samples.sample_label_name
     betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
+    if betas is None or len(betas) == 0:
+        LOGGER.error('No beta values found')
+        return None
 
+    betas = set_level_as_index(betas, 'probe_id', drop_others=True)
+
+    dmps = dmps.copy()
+    dmps['delta_beta'] = dmps[[c for c in dmps.columns if c.startswith('avg_beta_delta')]].max(axis=1)
     pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value'
-    sorted_probes = dmps.sort_values(pval_column).index
+    if pval_threshold is not None:
+        dmps = dmps[dmps[pval_column] <= pval_threshold]
+    if delta_beta_threshold is not None:
+        dmps = dmps[dmps.delta_beta >= delta_beta_threshold]
+    if sort_by == 'pvalue':
+        sort_by = pval_column
+
+    sorted_probe_idxs = dmps.sort_values(sort_by).index.intersection(betas.index)
+    nb_probes = min(nb_probes, len(sorted_probe_idxs))
+
+    if nb_probes == 0:
+        LOGGER.error(f'No significant probes found, consider increasing the p-value threshold (current threshold: {pval_threshold})')
+        return
+
+    sorted_probe_idxs = sorted_probe_idxs[:nb_probes]
 
     if betas is None or len(betas) == 0:
         LOGGER.error('No betas to plot')
@@ -672,12 +704,8 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         sheet.index.name = samples.sample_label_name
         betas.columns = new_labels
 
-    # sort betas per p-value and take the n_probes first probes
-    betas = set_level_as_index(betas, 'probe_id', drop_others=True)
-    sorted_probes = sorted_probes[sorted_probes.isin(betas.index)]
-    nb_probes = min(nb_probes, len(sorted_probes))
-    sorted_betas = betas.loc[sorted_probes][:nb_probes].T
-
+    betas = betas.loc[sorted_probe_idxs].T
+    
     # common parameters to clustermap and heatmap
     heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
@@ -694,7 +722,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
             subset = sheet[row_factors]
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         # plot the heatmap
-        plot = sns.clustermap(sorted_betas, row_colors=row_factors, figsize=figsize, **heatmap_params)
+        plot = sns.clustermap(betas, row_colors=row_factors, figsize=figsize, **heatmap_params)
         # add the legends if they exist
         if len(handles) > 0 and len(labels) > 0:
             plt.legend(handles=handles, labels=labels, **legend_params)
@@ -705,7 +733,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         if row_factors is not None:
             LOGGER.warning(f'Parameter {row_factors} is ignored when drop_na is False')
 
-        plot = sns.heatmap(sorted_betas, **heatmap_params)
+        plot = sns.heatmap(betas, **heatmap_params)
 
         if save_path is not None:
             plot.get_figure().savefig(os.path.expanduser(save_path))

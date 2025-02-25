@@ -79,6 +79,10 @@ def test_dmp_heatmap(test_samples):
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
+    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', pval_threshold=0.05, delta_beta_threshold=0.1)
+    assert os.path.exists('dmp_heatmap.png')
+    os.remove('dmp_heatmap.png')
+
 
 def test_dmr_plot(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
