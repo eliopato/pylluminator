@@ -2,6 +2,8 @@
 
 import re
 import os.path
+
+import numpy as np
 import pandas as pd
 from importlib.resources.readers import MultiplexedPath
 
@@ -120,8 +122,8 @@ def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
         else:
             matched = re.match(r'(GSM\d+).(.*).?(Grn|Red)\.idat', filename)
             if matched is not None:
-                samples_dict['sentrix_id'].append('')
-                samples_dict['sentrix_position'].append('')
+                samples_dict['sentrix_id'].append(np.nan)
+                samples_dict['sentrix_position'].append(np.nan)
                 samples_dict['sample_id'].append(matched[1])
                 samples_dict['sample_name'].append(matched[2] if len(matched[2]) <= 1 else matched[2][:-1])
             else:

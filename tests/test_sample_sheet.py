@@ -22,3 +22,10 @@ def test_header_only_file():
     test_df.to_csv('empty.csv')
     assert read_from_file('empty.csv') is None
     os.remove('empty.csv')
+
+# check that reading a sample sheet from file creates the same output as creating it from idats
+def test_read_sample_sheet(data_path, test_samples):
+    sheet_path = data_path + '/samplesheet.csv'
+    read_sheet = read_from_file(sheet_path)
+    os.remove(sheet_path)
+    assert read_sheet.equals(test_samples.sample_sheet.drop(columns=['sample_type', 'sample_number']))
