@@ -654,6 +654,11 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
 
+    # no F-statistic p_value for DMPs calculated with MixedModelLM, so we need a constrast specified
+    if pd.isna(dmps['f_pvalue']).all() and contrast is None:
+        LOGGER.error('You need to specify a contrast for DMPs calculated with a mixed model')
+        return None
+
     if sort_by not in ['pvalue', 'delta_beta'] + dmps.columns.tolist():
         LOGGER.error(f'parameter {sort_by} not found. Must be pvalue, delta_beta or a column of dmps dataframe')
         return

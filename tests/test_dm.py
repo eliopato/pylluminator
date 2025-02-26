@@ -5,7 +5,7 @@ import pytest
 from pylluminator.dm import get_dmp, get_dmr, _get_model_parameters
 
 
-def test_dmp(test_samples):
+def test_dmp_ols(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     dmps, contrasts = get_dmp(test_samples, '~ sample_type', probe_ids=probe_ids)
     assert dmps.loc['cg00000029_TC21', 'Intercept_estimate'] == pytest.approx(0.7574986020723979)  # Est_X.Intercept.
@@ -23,6 +23,30 @@ def test_dmp(test_samples):
     assert dmps.loc['cg00000029_TC21', 'sample_number_p_value'] == pytest.approx(0.30724222260281375) # Pval_sample_typeP
     assert dmps.loc['cg00000029_TC21', 'effect_size'] == pytest.approx(0.7096783705055711)  # Eff_sample_type
 
+def test_dmp_mixedmodel(test_samples, caplog):
+    probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
+
+    # column with Nas
+    caplog.clear()
+    dmps, contrasts = get_dmp(test_samples, '~ sample_type', group_column='sentrix_id', probe_ids=probe_ids)
+    assert 'The group column sentrix_id has NA values' in caplog.text
+    assert dmps is None
+    assert contrasts is None
+
+    # non existing column
+    caplog.clear()
+    dmps, contrasts = get_dmp(test_samples, '~ sample_type', group_column='notfound', probe_ids=probe_ids)
+    assert 'The group column notfound was not found' in caplog.text
+    assert dmps is None
+    assert contrasts is None
+
+    # OK
+    caplog.clear()
+    test_samples.sample_sheet['sentrix_position'] = [name[-1:] for name in test_samples.sample_sheet['sample_name']]
+    dmps, contrasts = get_dmp(test_samples, '~ sentrix_position', group_column='sentrix_position', probe_ids=probe_ids)
+    assert 'ERROR' not in caplog.text
+    assert dmps is not None
+    assert contrasts is not None
 
 def test_dmp_bad_sample_sheet(test_samples):
     test_samples.sample_sheet = test_samples.sample_sheet.drop(columns='sample_name')

@@ -50,7 +50,7 @@ def test_plot_betas(test_samples):
     plot_betas(test_samples, save_path='betas_plot.png', custom_sheet=pd.DataFrame())
     assert not os.path.exists('betas_plot.png')
 
-def test_dmp_heatmap(test_samples):
+def test_dmp_heatmap_ols(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     dmps, contrasts = get_dmp(test_samples, '~ sample_type', probe_ids=probe_ids)
 
@@ -81,6 +81,27 @@ def test_dmp_heatmap(test_samples):
 
     plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', pval_threshold=0.05, delta_beta_threshold=0.1)
     assert os.path.exists('dmp_heatmap.png')
+    os.remove('dmp_heatmap.png')
+
+def test_dmp_heatmap_mixed_model(test_samples, caplog):
+    probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
+    test_samples.sample_sheet['sentrix_position'] = [name[-1:] for name in test_samples.sample_sheet['sample_name']]
+    dmps, contrasts = get_dmp(test_samples, '~ sentrix_position', group_column='sentrix_position', probe_ids=probe_ids)
+
+    caplog.clear()
+    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png')
+    assert not os.path.exists('dmp_heatmap.png')
+    assert 'You need to specify a contrast for DMPs calculated with a mixed model' in caplog.text
+
+    caplog.clear()
+    plot_dmp_heatmap(dmps, test_samples, contrast=contrasts[0], save_path='dmp_heatmap.png', sort_by='unknown')
+    assert not os.path.exists('dmp_heatmap.png')
+    assert 'parameter unknown not found. Must be pvalue, delta_beta' in caplog.text
+
+    caplog.clear()
+    plot_dmp_heatmap(dmps, test_samples, contrast=contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'])
+    assert os.path.exists('dmp_heatmap.png')
+    assert 'ERROR' not in caplog.text
     os.remove('dmp_heatmap.png')
 
 

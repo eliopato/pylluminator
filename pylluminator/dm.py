@@ -2,6 +2,8 @@
 Functions used to compute DMR (Differentially Methylated Regions) and DMP (Differentially Methylated Probes).
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pyranges as pr
@@ -9,6 +11,7 @@ import pyranges as pr
 from patsy import dmatrix
 from scipy.stats import combine_pvalues
 from statsmodels.api import OLS
+from statsmodels.regression.mixed_linear_model import MixedLM
 from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
@@ -30,36 +33,57 @@ def _combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
     return combine_pvalues(p_values, method='stouffer')[1]
 
 
-def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str]) -> list[float]:
+def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str], groups: pd.Series | None = None) -> list[float]:
     """Create an Ordinary Least Square model for the beta values, using the design matrix provided, fit it and
     extract the required results for DMP detection (p-value, t-value, estimate, standard error).
 
     :param betas_values: beta values to fit
-    :type betas_values: array-like
+    :type betas_values: 1D numpy.array_like
     :param design_matrix: design matrix for the model
     :type design_matrix: pandas.DataFrame
     :param factor_names: factors used in the model
     :type factor_names: list[str]
+    :param groups: series holding the replicates information. Default: None
+    :type groups: pandas.Series | None
 
     :return: f statistics p-value, effect size, and for each factor: p-value, t-value, estimate, standard error
     :rtype: list[float]"""
     if np.isnan(betas_values).all():
         return [np.nan] * (2 + 4 * len(factor_names))
 
-    fitted_ols = OLS(betas_values, design_matrix, missing='drop').fit()  # drop NA values
-    # fitted ols is a statsmodels.regression.linear_model.RegressionResultsWrapper object
-    estimates = fitted_ols.params[1:].tolist()  + [0]# remove the intercept
+    fitted_model = None
+    if groups is None:
+        fitted_model = OLS(betas_values, design_matrix, missing='drop').fit()  # drop NA values
+    else:
+        with warnings.catch_warnings(action='ignore'):
+            try:
+                # manually drop NA values as the model doesn't seem to handle them properly
+                betas_values = np.array(betas_values)
+                missing_betas = pd.isna(betas_values)
+                fitted_model = MixedLM(betas_values[~missing_betas], design_matrix[~missing_betas],  groups[~missing_betas]).fit()
+            except np.linalg.LinAlgError:
+                return [np.nan] * (2 + 4 * len(factor_names))
+
+    if fitted_model is None:
+        return [np.nan] * (2 + 4 * len(factor_names))
+
+    # fitted ols is a statsmodels.regression.linear_model.RegressionResultsWrapper (if OLS) or statsmodels.regression.mixed_linear_model.MixedLMResults object
+    estimates = fitted_model.params[1:].tolist()  + [0]  # remove the intercept
     effect_size = max(estimates) - min(estimates)
-    results = [fitted_ols.f_pvalue, effect_size]  # p-value of the F-statistic.
+    if groups is None:
+        results = [fitted_model.f_pvalue , effect_size]  # p-value of the F-statistic.
+    else:
+        results = [None, effect_size]  # p-value of the F-statistic.
     # get p-value, t-value, estimate, standard error for each factor
     for factor in factor_names:
-        results.extend([fitted_ols.pvalues[factor], fitted_ols.tvalues[factor], fitted_ols.params[factor], fitted_ols.bse[factor]] )
+        results.extend([fitted_model.pvalues[factor], fitted_model.tvalues[factor], fitted_model.params[factor], fitted_model.bse[factor]] )
     return results
 
 
 def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, custom_sheet: None | pd.DataFrame=None,
-            drop_na=False, apply_mask=True, probe_ids:None|list[str]=None) -> (pd.DataFrame | None, list[str] | None):
-    """Find Differentially Methylated Probes (DMP)
+            drop_na=False, apply_mask=True, probe_ids:None|list[str]=None, group_column:str|None=None) -> (pd.DataFrame | None, list[str] | None):
+    """Find Differentially Methylated Probes (DMP) by fitting an Ordinary Least Square model (OLS) for each probe,
+    following the given formula. If a group column name is given, use a Mixed Model to account for random effects.
 
     More info on  design matrices and formulas:
         - https://www.statsmodels.org/devel/gettingstarted.html
@@ -79,6 +103,10 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     :type apply_mask: bool
     :param probe_ids: list of probe IDs to use. Useful to work on a subset for testing purposes. Default: None
     :type probe_ids: list[str] | None
+    :param group_column: name of the column of the sample sheet that holds replicates information. If provided,
+        a Mixed Model will be used to account for replicates instead of an Ordinary Least Square. Default: None
+    :type group_column: str | None
+
     :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
     :rtype: pandas.DataFrame, list[str]
     """
@@ -110,6 +138,16 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     sample_info = sample_info.loc[sample_names_order]
     betas = betas[sample_names_order]
 
+    if group_column is not None:
+        if group_column not in sample_info.columns:
+            LOGGER.error(f'The group column {group_column} was not found in the sample sheet columns')
+            return None, None
+        if pd.isna(sample_info[group_column]).any():
+            LOGGER.error(f'The group column {group_column} has NA values')
+            return None, None
+
+    groups_info = sample_info[group_column] if group_column is not None else None
+
     # the reference level for each factor is the first level of the sorted factor values. If a specific reference value
     # is provided, we sort the levels accordingly
     if reference_value is not None:
@@ -135,11 +173,11 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
 
     # if it's a small dataset, don't parallelize
     if len(betas) <= 10000:
-        result_array = [_get_model_parameters(row[1:], design_matrix, factor_names) for row in betas.itertuples()]
+        result_array = [_get_model_parameters(row[1:], design_matrix, factor_names, groups_info) for row in betas.itertuples()]
     # otherwise parallelize
     else:
         def wrapper_get_model_parameters(row):
-            return _get_model_parameters(row, design_matrix, factor_names)
+            return _get_model_parameters(row, design_matrix, factor_names, groups_info)
         result_array = Parallel(n_jobs=-1)(delayed(wrapper_get_model_parameters)(row[1:]) for row in betas.itertuples())
 
     dmps = pd.DataFrame(result_array, index=betas.index, columns=column_names, dtype='float64')

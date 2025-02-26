@@ -54,7 +54,7 @@ Main functionalities
 * data analysis and visualisation
 
   * beta values (density, PCA, MDS, dendrogram...)
-  * DMP and DMR
+  * DMP and DMR, accounting for replicates / random effects
   * CNV
 
 * quality control
