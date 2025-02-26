@@ -62,4 +62,4 @@ html_theme = "sphinx_rtd_theme"
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = []
 
-# html_logo = " https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png" #white background doesnt go with read the docs
+html_logo = " https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png" 
