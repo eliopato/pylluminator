@@ -431,7 +431,8 @@ class Samples:
 
         :return: a copy of the object
         :rtype: Samples"""
-        new_samples = Samples(self.sample_sheet)
+        new_samples = Samples()
+        new_samples.sample_sheet = self.sample_sheet.copy()
         new_samples.annotation = self.annotation.copy()
         new_samples.min_beads = self.min_beads
         new_samples.idata = None if self.idata is None else self.idata.copy()
