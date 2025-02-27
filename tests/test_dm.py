@@ -48,14 +48,33 @@ def test_dmp_mixedmodel(test_samples, caplog):
     assert dmps is not None
     assert contrasts is not None
 
-def test_dmp_bad_sample_sheet(test_samples):
+def test_dmp_bad_sample_sheet(test_samples, caplog):
     test_samples.sample_sheet = test_samples.sample_sheet.drop(columns='sample_name')
     res = get_dmp(test_samples, '~ sample_type')
     assert len(res) == 2
     assert res[0] is None
     assert res[1] is None
 
+    # test missing value in factor column
+    probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
+    test_samples.sample_sheet.loc[3, 'sample_type'] = np.NAN
+    caplog.clear()
+    dmps, contrasts = get_dmp(test_samples, '~ sample_type', probe_ids=probe_ids)
+    assert 'NA values where found in the sample_type column of the sample sheet' in caplog.text
+    assert dmps is not None
+    assert contrasts is not None
+
+    # test missing value in group column
+    probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
+    test_samples.sample_sheet.loc[2, 'sample_number'] = np.NAN
+    caplog.clear()
+    dmps, contrasts = get_dmp(test_samples, '~ sample_type', group_column='sample_number', probe_ids=probe_ids)
+    assert 'The group column sample_number has NA values' in caplog.text
+    assert dmps is not None
+    assert contrasts is not None
+
 def test_dmp_wrong_formula(test_samples):
+    # non existent factor column
     res = get_dmp(test_samples, '~ nonexistent_factor')
     assert len(res) == 2
     assert res[0] is None
@@ -66,7 +85,6 @@ def test_ols_na():
     params = _get_model_parameters([np.nan] * 5, pd.DataFrame(), ['factor'] * nb_factors)
     assert len(params) == 2 + nb_factors * 4
     assert np.isnan(params).all()
-
 
 def test_dmr(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()

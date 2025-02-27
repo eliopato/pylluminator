@@ -114,12 +114,31 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     LOGGER.info('>>> Start get DMP')
 
     if custom_sheet is None:
-        custom_sheet = samples.sample_sheet
+        custom_sheet = samples.sample_sheet.copy()
 
     # check the sample sheet
     if samples.sample_label_name not in custom_sheet.columns:
         LOGGER.error(f'get_dmp() : the provided sample sheet must have a "{samples.sample_label_name}" column')
         return None, None
+
+    # if a group column is specified, check the input
+    if group_column is not None:
+        if group_column not in custom_sheet.columns:
+            LOGGER.error(f'The group column {group_column} was not found in the sample sheet columns')
+            return None, None
+        if pd.isna(custom_sheet[group_column]).any():
+            LOGGER.warning(f'The group column {group_column} has NA values, dropping the corresponding samples.')
+            custom_sheet = custom_sheet[~pd.isna(custom_sheet[group_column])].copy()
+
+    # check factors
+    factor_columns = get_factors_from_formula(formula)
+    for c in factor_columns:
+        if c not in custom_sheet.columns:
+            LOGGER.error(f'The factor {c} was not found in the sample sheet columns')
+            return None, None
+        if pd.isna(custom_sheet[c]).any():
+            LOGGER.warning(f'NA values where found in the {c} column of the sample sheet. The corresponding samples will be dropped')
+            custom_sheet = custom_sheet[~pd.isna(custom_sheet[c])].copy()
 
     betas = samples.get_betas(drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
     if betas is None:
@@ -137,14 +156,6 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     sample_names_order = [c for c in betas.columns if c in sample_info.index]
     sample_info = sample_info.loc[sample_names_order]
     betas = betas[sample_names_order]
-
-    if group_column is not None:
-        if group_column not in sample_info.columns:
-            LOGGER.error(f'The group column {group_column} was not found in the sample sheet columns')
-            return None, None
-        if pd.isna(sample_info[group_column]).any():
-            LOGGER.error(f'The group column {group_column} has NA values')
-            return None, None
 
     groups_info = sample_info[group_column] if group_column is not None else None
 
@@ -167,7 +178,6 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
         return None, None
 
     factor_names = [f for f in design_matrix.columns]
-
     column_names = ['f_pvalue', 'effect_size']
     column_names += [f'{factor}_{c}' for factor in factor_names for c in ['p_value', 't_value', 'estimate', 'std_err']]
 
@@ -185,7 +195,7 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     LOGGER.info('add average beta delta between groups')
 
     # get column names used in the formula that are categories or string
-    cat_column_names = [c for c in get_factors_from_formula(formula) if sample_info.dtypes[c] in ['category', 'object']]
+    cat_column_names = [c for c in factor_columns if sample_info.dtypes[c] in ['category', 'object']]
     for col in cat_column_names:
         first_factor = None
         for name, group in sample_info.groupby(col):
