@@ -225,7 +225,7 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 
 
 def betas_2D(samples: Samples, label_column: str | None=None, color_column: str | None=None,
-              nb_probes: int | None=None, title: None | str = None, apply_mask=True,
+              nb_probes: int | None=None, title: None | str = None, apply_mask=True, figsize=(10, 7),
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None, model='PCA', **kwargs) -> None:
     """Plot samples in 2D space according to their beta distances.
 
@@ -247,6 +247,9 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
 
     :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
     :type apply_mask: bool
+
+    :param figsize: size of the plot. Default: (10, 7)
+    :type figsize: tuple
 
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
         samples to display. Default: None
@@ -294,7 +297,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         labels = [sheet[sheet[samples.sample_label_name] == label][label_column].values[0] for label in labels]
 
     plt.style.use('ggplot')
-    plt.figure(figsize=(15, 10))
+    plt.figure(figsize=figsize)
     plt.scatter(x=fit[:, 0], y=fit[:, 1], label=labels, c=[colors_dict[label] for label in labels])
 
     if model in ['PCA', 'ICPA', 'TSVD']:
@@ -400,6 +403,7 @@ def plot_pc_correlation(samples: Samples, params: list[str], nb_probes: int | No
 
 
 def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None,
+                     figsize:tuple[float, float]=(10, 7),
                      custom_sheet: pd.DataFrame | None = None, apply_mask: bool = True, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
@@ -411,6 +415,9 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
 
     :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: None
     :type color_column: str
+
+    :param figsize: size of the plot. Default: (10, 7)
+    :type figsize: tuple
 
     :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
     :type apply_mask: bool
@@ -424,7 +431,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
 
     :return: None"""
     plt.style.use('ggplot')
-    plt.figure(figsize=(15, 10))
+    plt.figure(figsize=figsize)
 
     betas = samples.get_betas(drop_na=True, apply_mask=apply_mask, custom_sheet=custom_sheet)
     if betas is None or len(betas) == 0:
@@ -500,7 +507,7 @@ def get_nb_probes_per_chr_and_type(samples: Samples) -> (pd.DataFrame, pd.DataFr
     return chromosome_df, type_df
 
 
-def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, save_path: None | str=None) -> None:
+def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, figsize:tuple[float, float]=(10, 7), save_path: None | str=None) -> None:
     """Plot the number of probes covered by the sample per chromosome and design type
 
     :param sample: Samples to be plotted
@@ -512,14 +519,17 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
+    :param figsize: size of the plot. Default: (10, 7)
+    :type figsize: tuple
+
     :return: None"""
 
     chromosome_df, type_df = get_nb_probes_per_chr_and_type(sample)
 
     fig, axes = plt.subplots(2)
 
-    chromosome_df.plot.bar(stacked=True, figsize=(15, 10), ax=axes[0])
-    type_df.plot.bar(stacked=True, figsize=(15, 10), ax=axes[1])
+    chromosome_df.plot.bar(stacked=True, figsize=figsize, ax=axes[0])
+    type_df.plot.bar(stacked=True, figsize=figsize, ax=axes[1])
 
     for container in axes[0].containers:
         axes[0].bar_label(container, label_type='center', rotation=90, fmt='{:,.0f}')
@@ -549,7 +559,7 @@ class _LegendTitle(object):
         return title
 
 
-def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str] | None):
+def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str] | None) -> tuple:
     """Treat each column of the dataframe as a distinct category, and convert its values to colors. If the values are
     string, treat them as categories, if they are numbers, use a continuous colormap. Generate the associated legend
     handles for the specified names.
@@ -603,7 +613,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
     return color_df, handles, labels
 
 def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None = None,
-                     nb_probes: int = 100, figsize: tuple[float, float]=(15, 15),
+                     nb_probes: int = 100, figsize: tuple[float, float]=(10, 10),
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
                      sort_by = 'pvalue', pval_threshold: float | None = None, delta_beta_threshold: float | None = None,
@@ -620,7 +630,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
     :type contrast: str | None
     :param nb_probes: number of probes to plot. Default: 100
     :type nb_probes: int
-    :param figsize: size of the plot. Default: (15, 15)
+    :param figsize: size of the plot. Default: (10, 10)
     :type figsize: tuple
     :param var: name of the variable to use for the columns of the heatmap. If None, will use the sample names. Default: None
     :type var: str | list[str] | None
@@ -745,7 +755,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
 
 
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
-                    x_col='start', y_col='p_value', log10=False, figsize=(20,14),
+                    x_col='start', y_col='p_value', log10=False, figsize:tuple[float, float]=(10,8),
                     annotation: Annotations | None = None, annotation_col: str = 'genes',
                     medium_threshold: float | None = None, high_threshold: float | None = None,
                     title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
@@ -948,7 +958,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
                        chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation: Annotations | None = None, annotation_col='genes', log10=True,
-                       draw_significance=True, figsize=(20, 14),
+                       draw_significance=True, figsize:tuple[float, float]=(10, 8),
                        medium_threshold: float | None = None, high_threshold: float | None = None,
                        title: None | str = None, save_path: None | str=None):
     """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
@@ -989,6 +999,9 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
     :param draw_significance: draw p-value significance lines (at 1e-05 and 5e-08). Default: False
     :type draw_significance: bool
 
+    :param figsize: size of the figure. Default: (10, 8)
+    :type figsize: tuple
+
     :param title: custom title for the plot. Default: None
     :type title: str | None
 
@@ -1004,7 +1017,7 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
 
 def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
                        x_col='start_bin', chromosome_col='chromosome', y_col='cnv',
-                       figsize=(20, 14), title: None | str = None, save_path: None | str=None) -> None:
+                       figsize=(10, 8), title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
 
@@ -1024,6 +1037,9 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
     :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: cnv
     :type y_col: str
 
+    :param figsize: size of the figure. Default: (10, 8)
+    :type figsize: tuple
+
     :param title: custom title for the plot. Default: None
     :type title: str | None
 
@@ -1041,7 +1057,7 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
 
 def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
                    protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
-                   figsize=(20, 20), save_path: None | str=None,
+                   figsize:tuple[float, float]=(15, 15), save_path: None | str=None,
                    row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
@@ -1062,8 +1078,8 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     :type custom_sheet: pandas.DataFrame
     :param var: a column name or list of column names from the samplesheet to add to the heatmap labels. Default: None
     :type var: None | str | list[str]
-    :param figsize: size of the whole plot. Default: (20, 20)
-    :type figsize: tuple[int, int]
+    :param figsize: size of the whole plot. Default: (15, 15)
+    :type figsize: tuple[float, float]
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
     :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
@@ -1293,7 +1309,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
 
 def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, what: list[str] | str = 'all',
-                                        save_path: None | str=None) -> None:
+                                  save_path: None | str=None) -> None:
     """
     Plot the distribution of hyper/hypo methylated probes in the samples.
 
