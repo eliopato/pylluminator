@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-from pylluminator.visualizations import (betas_2D, plot_betas, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
+from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
                                          manhattan_plot_dmr, manhattan_plot_cnv, visualize_gene, betas_dendrogram,
                                          plot_pc_correlation, plot_methylation_distribution)
 
@@ -32,22 +32,22 @@ def test_plot_betas_2D(test_samples):
     betas_2D(test_samples, custom_sheet=pd.DataFrame())
     assert not os.path.exists('PCA_2D_plot.png')
 
-def test_plot_betas(test_samples):
-    plot_betas(test_samples, save_path='betas_plot.png')
+def test_plot_betas_density(test_samples):
+    betas_density(test_samples, save_path='betas_plot.png')
     assert os.path.exists('betas_plot.png')
     os.remove('betas_plot.png')
 
-    plot_betas(test_samples, n_ind=5, save_path='betas_plot.png', title='titre', group_column='sample_type',
+    betas_density(test_samples, n_ind=5, save_path='betas_plot.png', title='titre', group_column='sample_type',
                linestyle_column='sample_type')
     assert os.path.exists('betas_plot.png')
     os.remove('betas_plot.png')
 
     custom_sheet = test_samples.sample_sheet[test_samples.sample_sheet[test_samples.sample_label_name] == 'LNCAP_500_3']
-    plot_betas(test_samples, save_path='betas_plot.png', custom_sheet=custom_sheet, apply_mask=False, color_column='sample_type')
+    betas_density(test_samples, save_path='betas_plot.png', custom_sheet=custom_sheet, apply_mask=False, color_column='sample_type')
     assert os.path.exists('betas_plot.png')
     os.remove('betas_plot.png')
 
-    plot_betas(test_samples, save_path='betas_plot.png', custom_sheet=pd.DataFrame())
+    betas_density(test_samples, save_path='betas_plot.png', custom_sheet=pd.DataFrame())
     assert not os.path.exists('betas_plot.png')
 
 def test_dmp_heatmap_ols(test_samples):

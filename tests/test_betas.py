@@ -45,12 +45,3 @@ def test_betas_options(test_samples):
     # test no samples name matching beta columns
     custom_sheet.loc[:, test_samples.sample_label_name] = custom_sheet['sample_type']
     assert test_samples.get_betas(custom_sheet=custom_sheet) is None
-
-
-
-# def test_plot_betas(test_samples):
-#     plot_betas(test_samples, color_column='sample_group', apply_mask=True)
-#     plot_betas(test_samples, color_column='sample_group', apply_mask=False)
-#     plot_betas(test_samples, group_column='sample_group', apply_mask=True)
-#     plot_betas(test_samples, group_column=['sample_group', 'sample_name_group'], apply_mask=True)
-#     plot_betas(test_samples, color_column='sample_group', group_column=['sample_group', 'sample_name_group'])

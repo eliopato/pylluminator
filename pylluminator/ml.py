@@ -69,9 +69,18 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
         LOGGER.error(f'Number of components {kwargs["n_components"]} is too high for beta values data of shape {betas.shape}')
         return None, None, None, None
 
+    # transpose
+    betas = betas.T
+
+    # center beta values
+    if model not in ['LDA', 'MBNMF', 'NMF']:
+        def center_function(x):
+            return x - x.mean()
+        betas = center_function(betas)
+
     # fit the model
     fitted_model = sk_model(**kwargs)
-    # betas.T : shape (N samples, M features/probes)
+    # betas : shape (N samples, M features/probes)
     # reduced_data : shape (N samples, nb components)
-    reduced_data = fitted_model.fit_transform(betas.T)
-    return fitted_model, reduced_data, betas.columns, nb_probes
+    reduced_data = fitted_model.fit_transform(betas)
+    return fitted_model, reduced_data, betas.index.to_list(), nb_probes

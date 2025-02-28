@@ -49,12 +49,6 @@ def test_dmp_mixedmodel(test_samples, caplog):
     assert contrasts is not None
 
 def test_dmp_bad_sample_sheet(test_samples, caplog):
-    test_samples.sample_sheet = test_samples.sample_sheet.drop(columns='sample_name')
-    res = get_dmp(test_samples, '~ sample_type')
-    assert len(res) == 2
-    assert res[0] is None
-    assert res[1] is None
-
     # test missing value in factor column
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     test_samples.sample_sheet.loc[3, 'sample_type'] = np.NAN
@@ -72,6 +66,15 @@ def test_dmp_bad_sample_sheet(test_samples, caplog):
     assert 'The group column sample_number has NA values' in caplog.text
     assert dmps is not None
     assert contrasts is not None
+
+    # test missing sample_name column
+    test_samples.sample_sheet = test_samples.sample_sheet.drop(columns='sample_name')
+    caplog.clear()
+    dmps, contrasts = get_dmp(test_samples, '~ sample_type')
+    assert 'the provided sample sheet must have a "sample_name" column' in caplog.text
+    assert dmps is None
+    assert contrasts is None
+
 
 def test_dmp_wrong_formula(test_samples):
     # non existent factor column

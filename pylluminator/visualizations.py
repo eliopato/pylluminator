@@ -103,7 +103,7 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict | No
     return legend_handles, linestyle_categories
 
 
-def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, group_column: None | str | list[str] = None,
+def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, group_column: None | str | list[str] = None,
                color_column: str | None = None,  linestyle_column=None, figsize=(10, 7),
                custom_sheet: None | pd.DataFrame = None, apply_mask=True, save_path: None | str=None) -> None:
     """Plot beta values density for each sample
@@ -308,7 +308,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     for index, name in enumerate(labels):
         plt.annotate(name, (reduced_data[index, 0], reduced_data[index, 1]), fontsize=9)
 
-    title = title if title is not None else f'{model} of the {nb_probes} most variable probes'
+    title = title if title is not None else f'{model} of the {nb_probes:,} most variable probes'
     plt.title(title)
 
     if len(legend_handles) > 0:
@@ -374,11 +374,11 @@ def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_pr
     sample_info = sample_info.dropna(axis=1, how='all')
     result = pd.DataFrame(dtype=float)
 
-    n_components = fitted_model.n_components
+    n_components = min(20, fitted_model.n_components_)
 
     # no specific parameter defined, show them all (expect the samples identifiers)
     if params is None:
-        params = sheet.columns
+        params = sheet.columns.to_list()
         params.remove(samples.sample_label_name)
 
     for param in params:
@@ -387,21 +387,24 @@ def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_pr
             LOGGER.warning(f'Parameter {param} not found in the sample sheet, skipping')
             continue
 
+        # the design matrix removes the NaN values
         design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
         if design_matrix.empty:
             LOGGER.warning(f'Parameter {param} has no effect, skipping')
             continue
 
-        for i, n_comp in enumerate(range(n_components)):
+        for i in range(n_components):
             fitted_ols = OLS(reduced_data[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
             result.loc[str(i), param] = fitted_ols.f_pvalue
-            result.loc[str(i), 'principal component'] = str(int(i+1))
+            result.loc[str(i), 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
 
-    result = result.set_index('principal component')
+    # drop columns with only NA values (eg Sample Ids that are unique per sample)
+    result = result.set_index('principal component').dropna(axis=1, how='all')
+
     if orientation == 'v':
         result = result.T
 
-    plt.subplots(figsize=(len(result.columns), len(result)))
+    plt.subplots(figsize=(len(result.columns), len(result)/2))
     plot = sns.heatmap(result, annot=True, fmt=".0e", vmax=vmax, vmin=0)
 
     if save_path is not None:
