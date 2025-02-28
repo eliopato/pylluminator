@@ -56,10 +56,6 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
         LOGGER.error('No betas to plot')
         return None, None, None, None
 
-    if model in ['PCA'] and 'n_components' in kwargs and kwargs['n_components'] > len(betas.columns):
-        LOGGER.error(f'Number of components {kwargs["n_components"]} is greater than the number of samples {len(betas.columns)}')
-        return None, None, None, None
-
     if nb_probes is None:
         nb_probes = len(betas)
     else:
@@ -69,8 +65,13 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
         indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
         betas = betas.loc[indexes_most_variance]
 
-    # fit the model
-    model_ini = sk_model(**kwargs)
-    fit = model_ini.fit_transform(betas.T)
+    if model in ['PCA'] and 'n_components' in kwargs and kwargs['n_components'] > min(betas.shape):
+        LOGGER.error(f'Number of components {kwargs["n_components"]} is too high for beta values data of shape {betas.shape}')
+        return None, None, None, None
 
-    return model_ini, fit, betas.columns, nb_probes
+    # fit the model
+    fitted_model = sk_model(**kwargs)
+    # betas.T : shape (N samples, M features/probes)
+    # reduced_data : shape (N samples, nb components)
+    reduced_data = fitted_model.fit_transform(betas.T)
+    return fitted_model, reduced_data, betas.columns, nb_probes

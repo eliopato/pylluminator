@@ -225,7 +225,7 @@ def plot_betas(samples: Samples, n_ind: int = 100, title: None | str = None, gro
 
 
 def betas_2D(samples: Samples, label_column: str | None=None, color_column: str | None=None,
-              nb_probes: int | None=None, title: None | str = None, apply_mask=True, figsize=(10, 7),
+              nb_probes: int | None=None, title: None | str = None, apply_mask=True, figsize: tuple[float, float]|None=(10, 7),
               custom_sheet: None | pd.DataFrame = None, save_path: None | str=None, model='PCA', **kwargs) -> None:
     """Plot samples in 2D space according to their beta distances.
 
@@ -286,9 +286,9 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     if 'random_state' not in kwargs and model not in ['IPCA']:
         kwargs['random_state'] = 42
 
-    sk_model, fit, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
+    fitted_model, reduced_data, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
                                                      custom_sheet=custom_sheet, apply_mask=apply_mask, **kwargs)
-    if sk_model is None:
+    if fitted_model is None:
         return
 
     sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
@@ -298,15 +298,15 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
 
     plt.style.use('ggplot')
     plt.figure(figsize=figsize)
-    plt.scatter(x=fit[:, 0], y=fit[:, 1], label=labels, c=[colors_dict[label] for label in labels])
+    plt.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], label=labels, c=[colors_dict[label] for label in labels])
 
     if model in ['PCA', 'ICPA', 'TSVD']:
     # if hasattr(model_ini, 'explained_variance_ratio_'):
-        plt.xlabel('1st component :{0:.2f}%'.format(sk_model.explained_variance_ratio_[0]*100))
-        plt.ylabel('2nd component :{0:.2f}%'.format(sk_model.explained_variance_ratio_[1]*100))
+        plt.xlabel('1st component :{0:.2f}%'.format(fitted_model.explained_variance_ratio_[0]*100))
+        plt.ylabel('2nd component :{0:.2f}%'.format(fitted_model.explained_variance_ratio_[1]*100))
 
     for index, name in enumerate(labels):
-        plt.annotate(name, (fit[index, 0], fit[index, 1]), fontsize=9)
+        plt.annotate(name, (reduced_data[index, 0], reduced_data[index, 1]), fontsize=9)
 
     title = title if title is not None else f'{model} of the {nb_probes} most variable probes'
     plt.title(title)
@@ -320,16 +320,17 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         plt.savefig(os.path.expanduser(save_path))
 
 
-def plot_pc_correlation(samples: Samples, params: list[str], nb_probes: int | None = None, apply_mask=True, vmax=0.05,
-                        custom_sheet: None | pd.DataFrame = None, save_path: None | str = None, model='PCA',
+def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_probes: int | None = None, apply_mask=True,
+                        vmax=0.05, custom_sheet: None | pd.DataFrame = None, save_path: None | str = None, model='PCA',
                         orientation='v', **kwargs):
     """ Plot the correlation between the principal components and the parameters in the sample sheet.
 
     :param samples: samples to plot
     :type samples: Samples
 
-    :param params: list of parameters to correlate with the principal components. Must be columns of the sample sheet
-    :type params: list[str]
+    :param params: list of parameters to correlate with the principal components. Must be columns of the sample sheet.
+        If None, show all parameters. Default: None
+    :type params: list[str] | None
 
     :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance.
         If None, use all the probes. Default: None
@@ -362,9 +363,9 @@ def plot_pc_correlation(samples: Samples, params: list[str], nb_probes: int | No
     """
 
     # fit the model
-    sk_model, fit, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
+    fitted_model, reduced_data, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
                                                      custom_sheet=custom_sheet, apply_mask=apply_mask, **kwargs)
-    if sk_model is None:
+    if fitted_model is None:
         return
 
     sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
@@ -373,7 +374,12 @@ def plot_pc_correlation(samples: Samples, params: list[str], nb_probes: int | No
     sample_info = sample_info.dropna(axis=1, how='all')
     result = pd.DataFrame(dtype=float)
 
-    n_components = fit.shape[1]
+    n_components = fitted_model.n_components
+
+    # no specific parameter defined, show them all (expect the samples identifiers)
+    if params is None:
+        params = sheet.columns
+        params.remove(samples.sample_label_name)
 
     for param in params:
 
@@ -387,7 +393,7 @@ def plot_pc_correlation(samples: Samples, params: list[str], nb_probes: int | No
             continue
 
         for i, n_comp in enumerate(range(n_components)):
-            fitted_ols = OLS(fit[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
+            fitted_ols = OLS(reduced_data[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
             result.loc[str(i), param] = fitted_ols.f_pvalue
             result.loc[str(i), 'principal component'] = str(int(i+1))
 
