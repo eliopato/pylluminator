@@ -1510,7 +1510,7 @@ class Samples:
                 return
             batch = sheet[batch].values
 
-        if np.any(batch == '') or np.any(pd.isnull(batch)):
+        if np.any(pd.isnull(batch)) or np.any(batch == ''):
             LOGGER.error('Batch column contains NaN or empty values')
             return
 

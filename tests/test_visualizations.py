@@ -3,7 +3,7 @@ import pandas as pd
 
 from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
                                          manhattan_plot_dmr, manhattan_plot_cnv, visualize_gene, betas_dendrogram,
-                                         plot_pc_correlation, plot_methylation_distribution)
+                                         plot_pc_correlation, plot_methylation_distribution, plot_betas_heatmap)
 
 from pylluminator.dm import get_dmp, get_dmr
 from pylluminator.cnv import copy_number_variation
@@ -49,6 +49,11 @@ def test_plot_betas_density(test_samples):
 
     betas_density(test_samples, save_path='betas_plot.png', custom_sheet=pd.DataFrame())
     assert not os.path.exists('betas_plot.png')
+
+def test_plot_betas_heatmap(test_samples):
+    plot_betas_heatmap(test_samples, save_path='betas_heatmap.png')
+    assert os.path.exists('betas_heatmap.png')
+    os.remove('betas_heatmap.png')
 
 def test_dmp_heatmap_ols(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()

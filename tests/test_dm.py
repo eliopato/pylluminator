@@ -25,6 +25,7 @@ def test_dmp_ols(test_samples):
 
 def test_dmp_mixedmodel(test_samples, caplog):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
+    test_samples.sample_sheet['sentrix_id'] = pd.NA
 
     # column with Nas
     caplog.clear()

@@ -216,6 +216,8 @@ def test_get_betas_no_betas(test_samples, caplog):
 
 def test_batch_correction(test_samples, caplog):
     # test column with na values
+    test_samples.sample_sheet['sentrix_id'] = pd.NA
+
     test_samples.batch_correction('sentrix_id', covariates='sample_type')
     assert 'Batch column contains NaN or empty values' in caplog.text
     assert 'ERROR' in caplog.text
