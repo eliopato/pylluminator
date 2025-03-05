@@ -198,7 +198,7 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     cat_column_names = [c for c in factor_columns if sample_info.dtypes[c] in ['category', 'object']]
     for col in cat_column_names:
         first_factor = None
-        for name, group in sample_info.groupby(col):
+        for name, group in sample_info.groupby(col, observed=False):
             dmps[f'avg_beta_{col}_{name}'] = betas.loc[:, group.index].mean(axis=1)
             if first_factor is None:
                 first_factor = name

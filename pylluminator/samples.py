@@ -1040,7 +1040,7 @@ class Samples:
         return self._betas is not None
 
     def get_betas(self, sample_label: str | None = None, drop_na: bool = False,
-                  custom_sheet: pd.DataFrame | None = None, apply_mask: bool = False) -> pd.DataFrame | pd.Series | None:
+                  custom_sheet: pd.DataFrame | None = None, apply_mask: bool=True) -> pd.DataFrame | pd.Series | None:
         """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
 
         :param sample_label: the name of the sample to get beta values for. If None, return beta values for all samples.
@@ -1062,10 +1062,11 @@ class Samples:
         betas = self._betas.copy()
 
         if apply_mask:
+            beta_idx = betas.index
             for label in self.sample_labels:
                 sample_mask = self.masks.get_mask(sample_label=label)
                 if sample_mask is not None and len(sample_mask) > 0:
-                    sample_mask = sample_mask[sample_mask.isin(betas.index)]
+                    sample_mask = sample_mask[sample_mask.isin(beta_idx)]
                     if len(sample_mask) > 0:
                         betas.loc[sample_mask, label] = None
 

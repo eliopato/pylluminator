@@ -13,8 +13,8 @@ class Mask:
     :vartype mask_name: str
     :var sample_label: the name of the sample the mask is applied to
     :vartype sample_label: str
-    :var series: a pandas Series of booleans, where True indicates that the probe is masked
-    :vartype series: pandas.Series
+    :var indexes: a MultiIndex of masked probes
+    :vartype indexes: pandas.MultiIndex
     """
     def __init__(self, mask_name: str, sample_label: str | None, indexes: pd.MultiIndex):
         """Create a new Mask object.
@@ -23,8 +23,8 @@ class Mask:
         :type mask_name: str
         :param sample_label: the name of the sample the mask is applied to. Default: None
         :type sample_label: str | None
-        :param series: a pandas Series of booleans, where True indicates that the probe is masked
-        :type series: pandas.Series"""
+        :param indexes: a pandas MultiIndex of probes to mask
+        :type indexes: pandas.MultiIndex"""
         self.mask_name = mask_name
         self.sample_label = sample_label
         if not isinstance(indexes, pd.MultiIndex):

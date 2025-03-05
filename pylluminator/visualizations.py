@@ -53,7 +53,7 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
     cmap = colormaps[cmap_name]
 
     if group_column is not None:
-        grouped_sheet = sheet.groupby(group_column)
+        grouped_sheet = sheet.groupby(group_column, observed=False)
         nb_colors = len(grouped_sheet)
         for i, (group_name, group) in enumerate(grouped_sheet):
             color_categories[str(group_name).replace("'", "")] = cmap(i / max(1, nb_colors - 1))
@@ -62,7 +62,7 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
         color_categories = {name: cmap(i / len(sheet)) for i, name in enumerate(sheet[sample_label_name])}
         legend_handles += [Line2D([0], [0], color=color, label=label) for label, color in color_categories.items()]
     else:
-        grouped_sheet = sheet.groupby(color_column, dropna=False)
+        grouped_sheet = sheet.groupby(color_column, dropna=False, observed=False)
         nb_colors = grouped_sheet.ngroups
         legend_handles += [Line2D([0], [0], color='black', linestyle='', label=color_column)]
         for i, (group_name, group) in enumerate(grouped_sheet):
@@ -143,7 +143,7 @@ def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, 
     # initialize values
     plt.style.use('ggplot')
     # get betas with or without masked probes and samples
-    betas = samples.get_betas(apply_mask = apply_mask, custom_sheet=custom_sheet)
+    betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet, drop_na=True)
     if betas is None or len(betas) == 0:
         LOGGER.error('No betas to plot')
         return
@@ -152,7 +152,7 @@ def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, 
 
     if group_column is not None:
 
-        grouped_sheet = sheet.groupby(group_column)
+        grouped_sheet = sheet.groupby(group_column, observed=False)
         avg_betas_list = []
         group_names = []
         for name, line in grouped_sheet[samples.sample_label_name].apply(list).items():
@@ -178,7 +178,14 @@ def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, 
         for name, linestyle in linestyles.items():
             betas[name].plot.density(ind=inds, figsize=figsize, color=colors[name], linestyle=linestyle)
 
-    title = title if title is not None else f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes'
+    if title is None:
+        if group_column is None:
+            title = f'Beta values of {len(betas.columns)} samples on {len(betas):,} probes'
+        else:
+            title = f'Beta values of {len(betas.columns)} groups of samples on {len(betas):,} probes'
+        if apply_mask:
+            title += ' (masks applied)'
+
     plt.title(title)
 
     if len(legend_handles) > 0:
@@ -308,7 +315,14 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     for index, name in enumerate(labels):
         plt.annotate(name, (reduced_data[index, 0], reduced_data[index, 1]), fontsize=9)
 
-    title = title if title is not None else f'{model} of the {nb_probes:,} most variable probes'
+    if title is None:
+        if nb_probes is None:
+            title = f'{model} of the {nb_probes:,} most variable probes'
+        else:
+            title = f'{model} of all the probes ({nb_probes:,})'
+        if apply_mask:
+            title += ' (masks applied)'
+
     plt.title(title)
 
     if len(legend_handles) > 0:
@@ -471,7 +485,10 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     # colnames(M) < - paste("Component", c(1: k))
     # hc < - hclust(dist(M))
 
-    title = title if title is not None else f'Samples\' beta values distances on {len(betas.dropna()):,} probes'
+    if title is None:
+        title = f'Samples\' beta values distances on {len(betas):,} probes'
+        if apply_mask:
+            title += ' (masks applied)'
     plt.title(title)
 
     if save_path is not None:
@@ -603,7 +620,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
 
     for col in input_df.columns:
         # get colors
-        if input_df[col].dtype == 'object':
+        if input_df[col].dtype in ['object', 'category']:
             # convert string category codes to easily get a color index for each string
             color_df[col] = pd.Categorical(input_df[col]).codes
             color_df[col] = color_df[col].apply(get_string_color, args=(len(set(input_df[col])),))
@@ -620,6 +637,107 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
             labels += [''] + legend_df.name.values.tolist()
 
     return color_df, handles, labels
+
+
+def plot_betas_heatmap(samples: Samples, apply_mask:bool=True,
+                     nb_probes: int = 100, figsize: tuple[float, float] = (10, 10),
+                     var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
+                     drop_na=True, save_path: None | str = None,
+                     row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
+    """Plot a heatmap of the probes with the most variable beta values, showing hierarchical clustering of the probes
+    with dendrograms on the sides.
+
+    :param samples: samples to use for plotting
+    :type samples: Samples
+    :param nb_probes: number of probes to plot. Default: 100
+    :type nb_probes: int
+    :param figsize: size of the plot. Default: (10, 10)
+    :type figsize: tuple
+    :param var: name of the variable to use for the columns of the heatmap. If None, will use the sample names. Default: None
+    :type var: str | list[str] | None
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display. Default: None
+    :type custom_sheet: pandas.DataFrame | None
+    :param drop_na: set to True to drop probes with any NA beta values. Note that if set to False, the rendered plot
+        won't show the hierarchical clusters. Default: True
+    :type drop_na: bool
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+    :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
+        columns of the sample sheet. Default: None
+    :type row_factors: str | list[str] | None
+    :param row_legends: list of columns to generate a legend for. Set to None for no legends. Only work for columns also
+        specified in row_factors. Default: '' (generate all legends)
+    :type row_legends: str | list[str] | None
+
+    :return: None"""
+
+
+    label = samples.sample_label_name
+    betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na, apply_mask=apply_mask)
+
+    if betas is None or len(betas) == 0:
+        LOGGER.error('No beta values found')
+        return None
+
+    betas = set_level_as_index(betas, 'probe_id', drop_others=True)
+
+    # get betas with the most variance across samples
+    betas_variance = np.var(betas, axis=1)
+    nb_probes = min(nb_probes, len(betas_variance))
+    indexes_most_variance = betas_variance.sort_values(ascending=False)[:nb_probes].index
+    betas = betas.loc[indexes_most_variance]
+
+    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
+    sheet = sheet.copy()[sheet[label].isin(betas.columns)]  # get intersection of the two dfs
+    sheet = sheet.set_index(label)
+
+    # add values next to sample labels if var is specified and use the new labels as betas column names
+    if var is not None:
+        if isinstance(var, str):
+            var = [var]
+        # update beta column names and sheet labels by adding values of 'var' columns after the sample names
+        new_labels = [f'{c} ({",".join([str(sheet.loc[c, v]) for v in var])})' for c in betas.columns]
+        sheet = sheet.loc[betas.columns,]  # sort sheet like beta columns
+        sheet.index = new_labels  # update sheet index values
+        sheet.index.name = samples.sample_label_name
+        betas.columns = new_labels
+
+    # common parameters to clustermap and heatmap
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
+    legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right',
+                     'bbox_to_anchor': (0, 1)}
+    betas = betas.T
+
+    if drop_na:
+        handles, labels = [], []
+        # convert categories to colors and get legends if specified
+        if row_factors is not None:
+            row_factors = [row_factors] if isinstance(row_factors, str) else row_factors
+            if row_legends == '':
+                row_legends = row_factors
+            elif isinstance(row_legends, str):
+                row_legends = [row_legends]
+            subset = sheet[row_factors]
+            row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
+        # plot the heatmap
+        plot = sns.clustermap(betas, row_colors=row_factors, figsize=figsize, **heatmap_params)
+        # add the legends if they exist
+        if len(handles) > 0 and len(labels) > 0:
+            plt.legend(handles=handles, labels=labels, **legend_params)
+        # save plot
+        if save_path is not None:
+            plot.savefig(os.path.expanduser(save_path))
+    else:
+        if row_factors is not None:
+            LOGGER.warning(f'Parameter {row_factors} is ignored when drop_na is False')
+
+        plot = sns.heatmap(betas, **heatmap_params)
+
+        if save_path is not None:
+            plot.get_figure().savefig(os.path.expanduser(save_path))
+
+
 
 def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None = None,
                      nb_probes: int = 100, figsize: tuple[float, float]=(10, 10),
@@ -957,7 +1075,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
     if title is None:
         what = 'probes' if 'probe_id' in data_to_plot.columns else 'bins'
-        title = f'Manhattan plot of {len(data_to_plot):,} {what}'
+        title = f'Plotting {len(data_to_plot):,} {what}'
     plt.title(title)
 
     if save_path is not None:
@@ -1026,7 +1144,7 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
 
 def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
                        x_col='start_bin', chromosome_col='chromosome', y_col='cnv',
-                       figsize=(10, 8), title: None | str = None, save_path: None | str=None) -> None:
+                       figsize:tuple[float, float]|None=(10, 8), title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
     copy_number_variation()
 
@@ -1147,7 +1265,6 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     gene_betas = set_level_as_index(gene_betas, 'probe_id', drop_others=True)
     betas_location = gene_betas.join(gene_probes, how='inner').sort_values('start')
 
-    print(f'chromosome {chromosome}, pos {gene_transcript_start} - {gene_transcript_end}')
 
     ################## PLOT LINKS BETWEEN TRANSCRIPTS AND BETAS
 
@@ -1212,6 +1329,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     ################## plot chromosome and chromosome-transcript links
 
     chr_ax = axes[0]
+    chr_ax.set_title(f'gene {gene_name} - chromosome {chromosome}, pos {gene_transcript_start:,} - {gene_transcript_end:,}')
 
     # make rectangles of different colors depending on the chromosome region
     for _, row in chr_df.iterrows():
@@ -1312,13 +1430,12 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     #     ax.axis('off')
 
     plt.subplots_adjust(wspace=0, hspace=0)
-
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
 
 
 def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, what: list[str] | str = 'all',
-                                  save_path: None | str=None) -> None:
+                                  orientation: str|None='h', save_path: None | str=None) -> None:
     """
     Plot the distribution of hyper/hypo methylated probes in the samples.
 
@@ -1330,6 +1447,9 @@ def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, w
 
     :param what: the metric to plot. Can be 'hypo', 'hyper', 'nas' or 'all' for the 3 of them. Default: 'all'
     :type what: list[str] | str
+
+    :param orientation: 'h' or 'v', orientation of the plot. Default: 'h'
+    :type orientation: str | None
 
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
@@ -1379,12 +1499,20 @@ def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, w
 
     hue = annot_col if annot_col is not None else 'metric'
 
-    g = sns.catplot(data=meth_prop, x='proportion', y=annot_col, row='cgi', col='metric', hue=hue,
-                    kind='violin', fill=False, linewidth=1, inner='point',
-                    sharex=False, height=2, aspect=2, orient='h', margin_titles=True)
+    if orientation == 'v':
+        g = sns.catplot(data=meth_prop, x='proportion', y=annot_col, row='cgi', col='metric', hue=hue,
+                        kind='violin', fill=False, linewidth=1, inner='point',
+                        sharex=False, height=2, aspect=2, orient='h', margin_titles=True)
 
-    g.set_axis_labels('', '')
-    g.set_titles(row_template="{row_name}", col_template='Proportion of {col_name} methylated probes (%)')
+        g.set_axis_labels('', '')
+        g.set_titles(row_template="{row_name}", col_template='Proportion of {col_name} methylated probes (%)')
+    else:
+        g = sns.catplot(data=meth_prop, y='proportion', x=annot_col, col='cgi', row='metric', hue=hue,
+                        kind='violin', fill=False, linewidth=1, inner='point',
+                        sharey=False, height=4, aspect=1, orient='v', margin_titles=True)
+
+        g.set_axis_labels('', '')
+        g.set_titles(col_template="{col_name}", row_template='Proportion of {row_name} methylated probes (%)')
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
