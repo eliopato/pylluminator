@@ -201,12 +201,12 @@ def test_methylation_distribution(test_samples, caplog):
     os.remove('methylation_distribution.png')
 
     caplog.clear()
-    plot_methylation_distribution(test_samples, annot_col='wrong_col', save_path='methylation_distribution.png')
+    plot_methylation_distribution(test_samples, group_column='wrong_col', save_path='methylation_distribution.png')
     assert not os.path.exists('methylation_distribution.png')
     assert 'Column wrong_col not found in the sample sheet' in caplog.text
 
     caplog.clear()
-    plot_methylation_distribution(test_samples, annot_col='sample_type', save_path='methylation_distribution.png')
+    plot_methylation_distribution(test_samples, group_column='sample_type', save_path='methylation_distribution.png')
     assert 'ERROR' not in caplog.text
     assert os.path.exists('methylation_distribution.png')
     os.remove('methylation_distribution.png')

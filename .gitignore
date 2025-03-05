@@ -13,6 +13,7 @@ notebooks/
 .coverage
 coverage.xml
 htmlcov
+tests/*.png
 
 # tutorial files that are not ipynb (saved models)
 docs/tutorials/*

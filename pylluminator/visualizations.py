@@ -1436,19 +1436,22 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         plt.savefig(os.path.expanduser(save_path))
 
 
-def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, what: list[str] | str = 'all',
-                                  orientation: str|None='h', save_path: None | str=None) -> None:
+def plot_methylation_distribution(samples: Samples, group_column: str| None=None, what: list[str] | str = 'hyper',
+                                  annotation_column:str='cgi', orientation: str|None='h', save_path: None | str=None) -> None:
     """
     Plot the distribution of hyper/hypo methylated probes in the samples.
 
     :param samples: samples with beta values already calculated
     :type samples: Samples
 
-    :param annot_col: column name in the sample sheet to categorize the data vertically. Default: None
-    :type annot_col: str | None
+    :param group_column: column name in the sample sheet to categorize the data vertically. Default: None
+    :type group_column: str | None
 
-    :param what: the metric to plot. Can be 'hypo', 'hyper', 'nas' or 'all' for the 3 of them. Default: 'all'
+    :param what: the metric to plot. Can be 'hypo', 'hyper', 'nas' or 'all' for the 3 of them. Default: 'hyper'
     :type what: list[str] | str
+
+    :param annotation_column: column name of the probe_infos dataframe to use to annotation probes (cgi, promoter_or_body..). Default: 'cgi'
+    :type annotation_column: str
 
     :param orientation: 'h' or 'v', orientation of the plot. Default: 'h'
     :type orientation: str | None
@@ -1464,14 +1467,14 @@ def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, w
     if betas is None or len(betas) == 0:
         return None
 
-    if 'cgi' not in samples.annotation.probe_infos.columns:
+    if annotation_column not in samples.annotation.probe_infos.columns:
         LOGGER.error('No CGI annotations found in the annotation data')
         return
 
-    cgis = samples.annotation.probe_infos.set_index('probe_id')['cgi'].dropna()
+    cgis = samples.annotation.probe_infos.set_index('probe_id')[annotation_column].dropna()
     cgi_betas = set_level_as_index(betas, 'probe_id', drop_others=True).join(cgis, how='inner')
-    cgi_betas.cgi = cgi_betas.cgi.apply(lambda x: x.split(';'))
-    cgi_betas = cgi_betas.explode('cgi')
+    cgi_betas[annotation_column] = cgi_betas[annotation_column].apply(lambda x: x.split(';'))
+    cgi_betas = cgi_betas.explode(annotation_column)
 
     # define aggregation functions
     def hypo(x):
@@ -1487,29 +1490,29 @@ def plot_methylation_distribution(samples: Samples, annot_col: str| None=None, w
     if isinstance(what, str):
         what = functions.keys() if what == 'all' else [what]
 
-    meth_prop = cgi_betas.round().groupby('cgi').agg([functions[f] for f in what])
+    meth_prop = cgi_betas.round().groupby(annotation_column).agg([functions[f] for f in what])
     meth_prop = pd.DataFrame(meth_prop.unstack()).reset_index()
-    meth_prop.columns = [samples.sample_label_name, 'metric', 'cgi', 'proportion']
+    meth_prop.columns = [samples.sample_label_name, 'metric', annotation_column, 'proportion']
 
-    if annot_col is not None:
-        if annot_col not in samples.sample_sheet.columns:
-            LOGGER.error(f'Column {annot_col} not found in the sample sheet - ignoring parameter')
+    if group_column is not None:
+        if group_column not in samples.sample_sheet.columns:
+            LOGGER.error(f'Column {group_column} not found in the sample sheet - ignoring parameter')
             return
         else:
-            annot = samples.sample_sheet[[samples.sample_label_name, annot_col]].drop_duplicates()
+            annot = samples.sample_sheet[[samples.sample_label_name, group_column]].drop_duplicates()
             meth_prop = meth_prop.merge(annot, on=samples.sample_label_name)
 
-    hue = annot_col if annot_col is not None else 'metric'
+    hue = group_column if group_column is not None else 'metric'
 
     if orientation == 'v':
-        g = sns.catplot(data=meth_prop, x='proportion', y=annot_col, row='cgi', col='metric', hue=hue,
+        g = sns.catplot(data=meth_prop, x='proportion', y=group_column, row=annotation_column, col='metric', hue=hue,
                         kind='violin', fill=False, linewidth=1, inner='point',
                         sharex=False, height=2, aspect=2, orient='h', margin_titles=True)
 
         g.set_axis_labels('', '')
         g.set_titles(row_template="{row_name}", col_template='Proportion of {col_name} methylated probes (%)')
     else:
-        g = sns.catplot(data=meth_prop, y='proportion', x=annot_col, col='cgi', row='metric', hue=hue,
+        g = sns.catplot(data=meth_prop, y='proportion', x=group_column, col=annotation_column, row='metric', hue=hue,
                         kind='violin', fill=False, linewidth=1, inner='point',
                         sharey=False, height=4, aspect=1, orient='v', margin_titles=True)
 
