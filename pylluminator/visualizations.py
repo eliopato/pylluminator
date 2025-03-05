@@ -53,7 +53,7 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
     cmap = colormaps[cmap_name]
 
     if group_column is not None:
-        grouped_sheet = sheet.groupby(group_column, observed=False)
+        grouped_sheet = sheet.groupby(group_column, observed=True)
         nb_colors = len(grouped_sheet)
         for i, (group_name, group) in enumerate(grouped_sheet):
             color_categories[str(group_name).replace("'", "")] = cmap(i / max(1, nb_colors - 1))
@@ -62,7 +62,7 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
         color_categories = {name: cmap(i / len(sheet)) for i, name in enumerate(sheet[sample_label_name])}
         legend_handles += [Line2D([0], [0], color=color, label=label) for label, color in color_categories.items()]
     else:
-        grouped_sheet = sheet.groupby(color_column, dropna=False, observed=False)
+        grouped_sheet = sheet.groupby(color_column, dropna=False, observed=True)
         nb_colors = grouped_sheet.ngroups
         legend_handles += [Line2D([0], [0], color='black', linestyle='', label=color_column)]
         for i, (group_name, group) in enumerate(grouped_sheet):
@@ -152,7 +152,7 @@ def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, 
 
     if group_column is not None:
 
-        grouped_sheet = sheet.groupby(group_column, observed=False)
+        grouped_sheet = sheet.groupby(group_column, observed=True)
         avg_betas_list = []
         group_names = []
         for name, line in grouped_sheet[samples.sample_label_name].apply(list).items():
@@ -1184,7 +1184,7 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
 
 def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
                    protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
-                   figsize:tuple[float, float]=(15, 15), save_path: None | str=None,
+                   figsize:tuple[float, float]=(15, 10), save_path: None | str=None,
                    row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
     """Show the beta values of a gene for all probes and samples in its transcription zone.
 
@@ -1269,7 +1269,8 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     ################## PLOT LINKS BETWEEN TRANSCRIPTS AND BETAS
 
     # chromosome, chr-transcript links, transcripts, transcript-betas lings, betas heatmap
-    height_ratios = [0.05, 0.05, 0.45, 0.05, 0.4]
+    nb_transcripts = len(set(gene_data.index))
+    height_ratios = [0.02, 0.05, 0.02*nb_transcripts, 0.05, 0.02*len(gene_betas.columns)]
     nb_plots = len(height_ratios)
 
     betas_data = betas_location if keep_na else betas_location.dropna()
@@ -1317,13 +1318,14 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         dendrogram_ratio = 0.05
         g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False, row_colors=row_factors,
-                           dendrogram_ratio=dendrogram_ratio, **heatmap_params)
+                           dendrogram_ratio=(dendrogram_ratio, 0), **heatmap_params)
         if len(handles) > 0 and len(labels) > 0:
             plt.legend(handles=handles, labels=labels, handler_map={str: _LegendTitle({'fontweight': 'bold'})},
                        loc='upper left', bbox_to_anchor=(-0.1 * len(row_factors.columns), 1))
-        shift_ratio = np.sum(height_ratios[:-1])
+        shift_ratio = 1-(np.sum(height_ratios[:-1]) / np.sum(height_ratios))
         g.gs.update(top=shift_ratio)  # shift the heatmap to the bottom of the figure
-        gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio, height_ratios=height_ratios[:-1])
+        gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio,
+                                height_ratios=height_ratios[:-1])
         axes = [g.fig.add_subplot(gs) for gs in gs2]
 
     ################## plot chromosome and chromosome-transcript links
