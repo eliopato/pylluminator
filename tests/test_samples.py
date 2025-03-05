@@ -77,3 +77,12 @@ def test_remove_probes_suffix(test_samples):
     test_samples.calculate_betas()
     gr_df = test_samples.annotation.genomic_ranges
     assert len(gr_df.loc[sigdf.index.get_level_values('probe_id')[:100]]) == 100
+
+def test_drop_samples(test_samples):
+    test_samples.drop_samples('PREC_500_3')
+    assert 'PREC_500_3' not in test_samples._signal_df.columns
+    assert 'PREC_500_3' not in test_samples._betas.columns
+    assert len(test_samples.masks.get_mask_names('PREC_500_3')) == 0
+    assert 'PREC_500_3' not in test_samples.sample_sheet[test_samples.sample_label_name]
+    assert 'PREC_500_3' not in test_samples.sample_labels
+    test_samples.drop_samples(['PREC_500_3', 'unexistent'])

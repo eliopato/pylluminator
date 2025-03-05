@@ -697,6 +697,24 @@ class Samples:
         self.annotation.genomic_ranges.index = self.annotation.genomic_ranges.index.map(remove_probe_suffix)
         self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
+    def drop_samples(self, sample_labels: str | list[str]) -> None:
+        """Remove some samples. Delete the signal information, beta values, sample sheet rows and masks. Ignores
+        non-existent sample names
+
+        :param sample_labels: list of the labels of the samples to drop
+        :type sample_labels: str | list[str]
+
+        :return: None
+        """
+        if isinstance(sample_labels, str):
+            sample_labels = [sample_labels]
+
+        self._signal_df = self._signal_df.drop(columns=sample_labels, errors='ignore')
+        if self._betas is not None:
+            self._betas = self._betas.drop(columns=sample_labels, errors='ignore')
+        self.masks.remove_masks(sample_label=sample_labels)
+        self.sample_sheet = self.sample_sheet[~self.sample_sheet[self.sample_label_name].isin(sample_labels)]
+
     ####################################################################################################################
     # Mask functions
     ####################################################################################################################
