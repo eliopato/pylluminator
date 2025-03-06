@@ -898,7 +898,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
     :type chromosome_col: str
 
-    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: start
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: segment_start
     :type x_col: str
 
     :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
@@ -937,12 +937,18 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         return
 
     # reset index as we might need to use the index as a column (e.g. to annotate probe ids)
-    data_to_plot = data_to_plot.reset_index()
+    # data_to_plot = data_to_plot.reset_index()
 
     if x_col not in data_to_plot.columns or y_col not in data_to_plot.columns or chromosome_col not in data_to_plot.columns:
         LOGGER.error(f'Columns {x_col}, {y_col} and {chromosome_col} must be in the dataframe')
         return
 
+    cols_to_keep = [x_col, y_col, chromosome_col]
+    for col in ['probe_id', 'segment_id']:
+        if col in data_to_plot.columns:
+            cols_to_keep.append(col)
+
+    data_to_plot = data_to_plot[cols_to_keep]
     data_to_plot = data_to_plot.dropna(subset=y_col)
 
     data_to_plot['merged_chr'] = merge_alt_chromosomes(data_to_plot[chromosome_col])
@@ -992,14 +998,21 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         v_min = 0
 
     # check annotation parameter, and select and clean up annotation if defined
-    gene_info = None
-    if annotation is not None and annotation_col not in annotation.probe_infos.columns:
-        LOGGER.error(f'{annotation_col} was not found in the annotation dataframe. '
-                     f'Available columns : {annotation.probe_infos.columns}.')
-        annotation = None
-    elif annotation is not None:
-        gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates().set_index('probe_id')
-        gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
+    if annotation is not None:
+        if annotation_col not in annotation.probe_infos.columns:
+            LOGGER.error(f'{annotation_col} was not found in the annotation dataframe. '
+                         f'Available columns : {annotation.probe_infos.columns}.')
+        else:
+            gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates().set_index('probe_id')
+            gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
+            if 'segment_id' in data_to_plot.columns:
+                genes_per_seg = data_to_plot[['segment_id']].join(gene_info).groupby('segment_id', observed=True).agg(merge_series_values)
+                data_to_plot = data_to_plot.drop_duplicates().set_index('segment_id').join(genes_per_seg)
+                data_to_plot[annotation_col] = data_to_plot[annotation_col].apply(lambda x: ':'.join(set(x.split(';'))))
+            else:
+                data_to_plot = data_to_plot.join(gene_info)
+
+    data_to_plot = data_to_plot.reset_index(drop=True).drop_duplicates()
 
     # make indices for plotting
     data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
@@ -1029,16 +1042,16 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                              alpha=1)
 
         # draw annotations for probes that are over the threshold, if annotation_col is set
-        if annotation is not None:
+        if annotation_col in group.columns:
             if log10:
                 indexes_to_annotate = group[y_col] > medium_threshold
             else:
                 indexes_to_annotate = group[y_col] < medium_threshold
+            annot_col_idx = group.columns.get_loc(annotation_col)
             x_col_idx = group.columns.get_loc(x_col)
             y_col_idx = group.columns.get_loc(y_col)
             for row in group[indexes_to_annotate].itertuples(index=False):
-                gene_name = gene_info.loc[row.probe_id, annotation_col]
-                plt.annotate(gene_name, (row[x_col_idx] + 0.03, row[y_col_idx] + 0.03), c=cmap(row[y_col_idx] / v_max))
+                plt.annotate(row[annot_col_idx], (row[x_col_idx]+ 0.03, row[y_col_idx] + 0.03), c=cmap(row[y_col_idx] / v_max), annotation_clip=True)
 
         chrom_start = chrom_end
 
@@ -1074,7 +1087,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     ax.set_ylabel(f'log10({y_col})' if log10 else y_col)
 
     if title is None:
-        what = 'probes' if 'probe_id' in data_to_plot.columns else 'bins'
+        what = 'regions' if 'segment_id' in data_to_plot.columns else 'bins'
         title = f'Plotting {len(data_to_plot):,} {what}'
     plt.title(title)
 
@@ -1083,7 +1096,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
 
 def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
-                       chromosome_col='chromosome', x_col='start', y_col='p_value',
+                       chromosome_col='chromosome', x_col='segment_start', y_col='p_value',
                        annotation: Annotations | None = None, annotation_col='genes', log10=True,
                        draw_significance=True, figsize:tuple[float, float]=(10, 8),
                        medium_threshold: float | None = None, high_threshold: float | None = None,
@@ -1136,7 +1149,7 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
     :type save_path: str | None
     :return: nothing"""
 
-    _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}', x_col=x_col,
+    _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=f'segment_{contrast}_{y_col}_adjusted', x_col=x_col,
                     draw_significance=draw_significance, annotation=annotation, annotation_col=annotation_col,
                     medium_threshold=medium_threshold, high_threshold=high_threshold, figsize=figsize,
                     log10=log10, title=title, save_path=save_path)
@@ -1521,3 +1534,4 @@ def plot_methylation_distribution(samples: Samples, group_column: str| None=None
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
+

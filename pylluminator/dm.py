@@ -15,9 +15,11 @@ from statsmodels.regression.mixed_linear_model import MixedLM
 from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
-from pylluminator.utils import remove_probe_suffix, set_level_as_index, get_logger
+from pylluminator.annotations import Annotations
+from pylluminator.utils import remove_probe_suffix, set_level_as_index, get_logger, merge_alt_chromosomes
 from pylluminator.samples import Samples
 from pylluminator.stats import get_factors_from_formula
+from pylluminator.utils import merge_series_values
 
 LOGGER = get_logger()
 
@@ -343,3 +345,41 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
 
     # dmr = dmr.drop(columns = dmps.columns, errors='ignore')
     return dmr
+
+
+def get_top_dmrs(dmrs: pd.DataFrame, annotation: Annotations, contrast:str, chromosome_col='chromosome',
+                 annotation_col: str = 'genes', n_dmrs=10, columns_to_keep:list[str]=None):
+
+    if dmrs is None or len(dmrs) == 0:
+        LOGGER.error('Empty input dataframe')
+        return None
+
+    columns_to_keep = [] if columns_to_keep is None else columns_to_keep
+
+    sort_column = f'segment_{contrast}_p_value'
+    if sort_column not in dmrs.columns or chromosome_col not in dmrs.columns:
+        LOGGER.error(f'Columns {sort_column} and {chromosome_col} must be in the dataframe')
+        return None
+
+    dmrs = dmrs[[sort_column, chromosome_col, 'segment_id'] + columns_to_keep]
+    dmrs = dmrs.dropna(subset=sort_column)
+
+    dmrs[chromosome_col] = merge_alt_chromosomes(dmrs[chromosome_col])
+
+    # check annotation parameter, and select and clean up annotation if defined
+    if annotation is not None:
+        if annotation_col not in annotation.probe_infos.columns:
+            LOGGER.error(f'{annotation_col} was not found in the annotation dataframe. '
+                         f'Available columns : {annotation.probe_infos.columns}.')
+        else:
+            gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates().set_index('probe_id')
+            gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
+            dmrs = dmrs.join(gene_info)
+
+            group_columns = dmrs.columns.tolist()
+            group_columns.remove(annotation_col)
+            dmrs = dmrs.reset_index(drop=True).drop_duplicates().groupby(group_columns).agg(merge_series_values)
+            dmrs[annotation_col] = dmrs[annotation_col].apply(lambda x: ':'.join(set(x.split(';'))))
+    else:
+        dmrs = dmrs.reset_index(drop=True).drop_duplicates()
+    return dmrs.sort_values(sort_column)[:n_dmrs]

@@ -520,7 +520,7 @@ def merge_series_values(items: pd.Series, how:str='any'):
     :type how: str
     """
     if items.dtypes == 'object' or items.dtypes == 'category':
-        return ', '.join(set(items.astype('str')))
+        return ';'.join(set(items.astype('str')))
     if np.issubdtype(items.dtypes, np.number):
         return items.mean()
     if items.dtypes == 'bool':
