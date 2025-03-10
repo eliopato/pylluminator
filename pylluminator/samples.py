@@ -1201,14 +1201,14 @@ class Samples:
             factor = reference[sample_label] / norm_values_dict[channel]
             self._signal_df[(sample_label, channel)] *= factor
 
-    def dye_bias_correction_nl(self, sample_label: str | None = None, apply_mask: bool = True) -> None:
-        """Dye bias correction by matching green and red to mid-point.
+    def dye_bias_correction_nl(self, sample_labels: str | list[str] | None = None, apply_mask: bool = True) -> None:
+        """Dye bias correction by matching green and red to mid-point. Each sample is handled separately.
 
         This function compares the Type-I Red probes and Type-I Grn probes and generates and mapping to correct signal
         of the two channels to the middle.
 
-        :param sample_label: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
-        :type sample_label: str | None
+        :param sample_labels: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
+        :type sample_labels: str | list[str] | None
 
         :param apply_mask: if True include masked probes in Infinium-I probes. No big difference is noted in practice. More
             probes are generally better. Default: True
@@ -1218,7 +1218,12 @@ class Samples:
         """
         LOGGER.info('Non linear dye bias correction..')
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
-        sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
+
+        if sample_labels is None:
+            sample_labels = self.sample_labels
+        elif isinstance(sample_labels, str):
+            sample_labels = [sample_labels]
+
         type_1_green = self.type1_green(apply_mask)
         type_1_red = self.type1_red(apply_mask)
 
@@ -1285,14 +1290,14 @@ class Samples:
                 self._signal_df.loc[:, [(sample_label, channel, 'M')]] = fit_function(self._signal_df[[(sample_label, channel, 'M')]].values)
                 self._signal_df.loc[:, [(sample_label, channel, 'U')]] = fit_function(self._signal_df[[(sample_label, channel, 'U')]].values)
 
-    def noob_background_correction(self, sample_label: str | None = None, apply_mask: bool = True, use_negative_controls=True, offset=15) -> None:
+    def noob_background_correction(self, sample_labels: str | list[str] | None = None, apply_mask: bool = True, use_negative_controls=True, offset=15) -> None:
         """Subtract the background for a sample.
 
         Background was modelled in a normal distribution and true signal in an exponential distribution. The Norm-Exp
         deconvolution is parameterized using Out-Of-Band (oob) probes. Multi-mapping probes are excluded.
 
-        :param sample_label: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
-        :type sample_label: str | None
+        :param sample_labels: the name(s) of the sample(s) to correct dye bias for. If None, correct dye bias for all samples.
+        :type sample_labels: str | list[str] | None
 
         :param apply_mask: True removes masked probes, False keeps them. Default: True
         :type apply_mask: bool
@@ -1309,7 +1314,11 @@ class Samples:
         LOGGER.info('NOOB background correction..')
 
         self.reset_betas()  # reset betas as we are modifying the signal dataframe
-        sample_labels = [sample_label] if isinstance(sample_label, str) else self.sample_labels
+
+        if sample_labels is None:
+            sample_labels = self.sample_labels
+        elif isinstance(sample_labels, str):
+            sample_labels = [sample_labels]
 
         # apply_mask non unique probes - saves previous apply_mask to reset it afterwards
         initial_masks = self.masks.copy()
@@ -1383,7 +1392,7 @@ class Samples:
 
     def poobah(self, sample_labels: str | list[str] | None = None, apply_mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
         """Detection P-value based on empirical cumulative distribution function (ECDF) of out-of-band signal
-        aka pOOBAH (p-vals by Out-Of-Band Array Hybridization).
+        aka pOOBAH (p-vals by Out-Of-Band Array Hybridization). Each sample is handled separately.
 
         Adds two columns in the signal dataframe, 'p_value' and 'poobah_mask'. Add probes that are (strictly) above the
         defined threshold to the mask.

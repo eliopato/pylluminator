@@ -11,7 +11,7 @@ from pylluminator.utils import get_logger
 
 LOGGER = get_logger()
 
-def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | None=1000, apply_mask=True, custom_sheet=None, **kwargs):
+def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | None=None, apply_mask=True, custom_sheet=None, **kwargs):
     """Plot samples in 2D space according to their beta distances.
 
     :param samples : samples to plot
