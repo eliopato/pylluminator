@@ -130,7 +130,7 @@ def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, 
     :type figsize: tuple
 
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
-    :type custom_sheet: pandas.DataFrame
+    :type custom_sheet: pandas.DataFrame | None
 
     :param apply_mask: true removes masked probes from betas, False keeps them. Default: True
     :type apply_mask: bool
@@ -1014,9 +1014,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                 data_to_plot[annotation_col] = data_to_plot[annotation_col].apply(lambda x: ':'.join(set(x.split(';'))))
             else:
                 data_to_plot = data_to_plot.join(gene_info)
-
     data_to_plot = data_to_plot.reset_index(drop=True).drop_duplicates()
-
     # make indices for plotting
     data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
 
@@ -1444,16 +1442,14 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     lin_ax.set_ylim(0, 2)
     lin_ax.axis('off')
 
-    # for ax in axes[:nb_plots-1]:
-    #     ax.axis('off')
-
     plt.subplots_adjust(wspace=0, hspace=0)
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
 
 
 def plot_methylation_distribution(samples: Samples, group_column: str| None=None, what: list[str] | str = 'hyper',
-                                  annotation_column:str='cgi', orientation: str|None='h', save_path: None | str=None) -> None:
+                                  annotation_column:str='cgi', orientation: str|None='h', custom_sheet:pd.DataFrame|None=None,
+                                  save_path: None | str=None) -> None:
     """
     Plot the distribution of hyper/hypo methylated probes in the samples.
 
@@ -1472,11 +1468,15 @@ def plot_methylation_distribution(samples: Samples, group_column: str| None=None
     :param orientation: 'h' or 'v', orientation of the plot. Default: 'h'
     :type orientation: str | None
 
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
+    :type custom_sheet: pandas.DataFrame | None
+
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
     :return: None
     """
+    plt.style.use('ggplot')
 
     # add CGI annotations to betas
     betas = samples.get_betas()
@@ -1538,3 +1538,63 @@ def plot_methylation_distribution(samples: Samples, group_column: str| None=None
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
 
+
+def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names: list[str] = None,  return_df=False,
+                       save_path: str =None) -> pd.DataFrame | None:
+    """ Analyze the beta values standard deviation of the technical replicates to check for batch effect or quality
+    issues.
+
+    :param samples: samples with beta values already calculated
+    :type samples: Samples
+
+
+    :param sample_id_column: the name of the column in the sample sheet that contains the sample ids, used to identify the replicates
+    :type sample_id_column: str
+
+    :param replicate_names: list of the replicate names to analyze. If None, analyze all samples. Default: None
+    :type replicate_names: list[str] | None
+
+    :param return_df: if True, return the dataframe used to plot the graph. Default: False
+    :type return_df: bool
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+
+    :return: the dataframe with beta values standard deviation per replicate, or None if return_df is False
+    :rtype: pandas.DataFrame | None
+    """
+    plt.style.use('ggplot')
+
+    if replicate_names is None:
+        replicate_names = samples.sample_labels
+
+    # select the specified samples
+    samples = samples.copy()
+    samples.reset_poobah()  # remove p_values columns
+    samples.subset(replicate_names)
+    sheet = samples.sample_sheet
+
+    # get the beta values standard deviation for each probe
+    beta_df = samples.get_betas()
+    beta_std_df_list = {}
+    for name, group in sheet.groupby(sample_id_column):
+        replicate_names = group[samples.sample_label_name].values.tolist()
+        beta_std_df_list[name] = beta_df[replicate_names].std(axis=1)
+    beta_std_df = pd.concat(beta_std_df_list, axis=1)
+
+    # df should be in long format
+    replicate_ids = beta_std_df.columns
+    beta_std_df = beta_std_df.reset_index().drop(columns=['probe_id', 'probe_type'])
+    long_df = pd.melt(beta_std_df, id_vars=['type', 'channel'], value_vars=replicate_ids, var_name='Replicate',  value_name='Value')
+    long_df['channel'] = long_df['channel'].astype(str).fillna('')
+    long_df['channel'] = 'type ' + long_df['type'].astype(str) + ' ' + long_df['channel']
+
+    # plot
+    g = sns.catplot(long_df, kind='violin', hue='Replicate', y='channel', x='Value', aspect=4)
+    g.set_axis_labels('beta values standard deviation', 'probe channel')
+
+    if save_path is not None:
+        plt.savefig(os.path.expanduser(save_path))
+
+    if return_df:
+        return long_df

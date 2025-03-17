@@ -379,7 +379,7 @@ def get_top_dmrs(dmrs: pd.DataFrame, annotation: Annotations, contrast:str, chro
             group_columns = dmrs.columns.tolist()
             group_columns.remove(annotation_col)
             dmrs = dmrs.reset_index(drop=True).drop_duplicates().groupby(group_columns).agg(merge_series_values)
-            dmrs[annotation_col] = dmrs[annotation_col].apply(lambda x: ':'.join(set(x.split(';'))))
+            dmrs[annotation_col] = dmrs[annotation_col].apply(lambda x: ';'.join(set(x.split(';'))))
     else:
         dmrs = dmrs.reset_index(drop=True).drop_duplicates()
     return dmrs.sort_values(sort_column)[:n_dmrs]

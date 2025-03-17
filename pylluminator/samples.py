@@ -715,6 +715,21 @@ class Samples:
         self.masks.remove_masks(sample_label=sample_labels)
         self.sample_sheet = self.sample_sheet[~self.sample_sheet[self.sample_label_name].isin(sample_labels)]
 
+    def subset(self, sample_labels: str | list[str]) -> None:
+        """Keep only the specified samples. Delete the signal information, beta values, sample sheet rows and masks of
+        all the samples that are not in the list. Ignores non-existent sample names
+
+        :param sample_labels: list of the labels of the samples to keep
+        :type sample_labels: str | list[str]
+
+        :return: None
+        """
+        if isinstance(sample_labels, str):
+            sample_labels = [sample_labels]
+
+        to_drop = [sl for sl in self.sample_labels if sl not in sample_labels]
+        self.drop_samples(to_drop)
+
     ####################################################################################################################
     # Mask functions
     ####################################################################################################################

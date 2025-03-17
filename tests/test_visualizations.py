@@ -3,7 +3,8 @@ import pandas as pd
 
 from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
                                          manhattan_plot_dmr, manhattan_plot_cnv, visualize_gene, betas_dendrogram,
-                                         plot_pc_correlation, plot_methylation_distribution, plot_betas_heatmap)
+                                         plot_pc_correlation, plot_methylation_distribution, plot_betas_heatmap,
+                                         analyze_replicates)
 
 from pylluminator.dm import get_dmp, get_dmr
 from pylluminator.cnv import copy_number_variation
@@ -210,3 +211,11 @@ def test_methylation_distribution(test_samples, caplog):
     assert 'ERROR' not in caplog.text
     assert os.path.exists('methylation_distribution.png')
     os.remove('methylation_distribution.png')
+
+def test_analyze_replicates(test_samples, caplog):
+    test_samples.sample_sheet['replicate'] = ['1', '2', '3', '1', '2', '3']
+    caplog.clear()
+    analyze_replicates(test_samples, 'replicate', save_path='replicates.png')
+    assert 'ERROR' not in caplog.text
+    assert os.path.exists('replicates.png')
+    os.remove('replicates.png')
