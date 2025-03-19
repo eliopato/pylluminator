@@ -38,8 +38,8 @@ def wrapper_array_version(path, gsm_id, expected_array_type, expected_genome_typ
 
     # test some specificities (eg no control probes)
     samples.controls()
-    samples.apply_xy_mask()
-    samples.apply_quality_mask()
+    samples.mask_xy_probes()
+    samples.mask_quality_probes()
     if expected_array_type == ArrayType.HUMAN_27K:
         samples.get_normalization_controls()
         samples.dye_bias_correction()

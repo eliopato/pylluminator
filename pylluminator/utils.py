@@ -506,6 +506,8 @@ def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFra
     else:
         df['channel'] = df[column]  # copy values in a new column
 
+    df['channel'] = df['channel'].astype('category')
+
     return df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order).sort_index()
 
 

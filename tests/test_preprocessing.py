@@ -14,7 +14,7 @@ def test_poobah(test_samples):
     assert test_samples.masks.number_probes_masked('poobah_0.05', 'PREC_500_3') == 46212
 
 def test_quality_mask(test_samples):
-    test_samples.apply_quality_mask()
+    test_samples.mask_quality_probes()
     assert test_samples.masks.number_probes_masked(sample_label='PREC_500_3') == 32948
 
 def test_infer_infinium_I_channel(test_samples):
@@ -184,12 +184,12 @@ def test_scrub_all(test_samples):
     expected_values =[2284.0, 3722.0]
     assert test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].values[0, [0, 3]] == pytest.approx(expected_values)
 
-def test_apply_xy(test_samples):
-    test_samples.apply_xy_mask()
+def test_mask_xy(test_samples):
+    test_samples.mask_xy_probes()
     assert test_samples.masks.number_probes_masked() == 24953
 
-def test_apply_non_unique_mask(test_samples):
-    test_samples.apply_non_unique_mask()
+def test_mask_non_unique(test_samples):
+    test_samples.mask_non_unique_probes()
     assert test_samples.masks.number_probes_masked() == 23664
     assert test_samples.masks.number_probes_masked(sample_label='PREC_500_3') == 23716
     assert test_samples.masks.number_probes_masked(mask_name='min_beads_1', sample_label='PREC_500_3') == 52

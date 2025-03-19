@@ -363,7 +363,7 @@ class Samples:
 
     def get_probes_with_probe_type(self, probe_type: str, apply_mask: bool = True, sigdf:pd.DataFrame| None=None) -> pd.DataFrame:
         """Select probes by probe type, meaning e.g. CG, Control, SNP... (not infinium type I/II type), and apply the
-        apply_mask if `apply_mask` is True
+        mask if `apply_mask` is True
 
         :param probe_type: the type of probe to select (e.g. 'cg', 'snp'...)
         :type probe_type: str
@@ -466,7 +466,7 @@ class Samples:
 
     def add_annotation_info(self, annotation: Annotations, label_column: str, keep_idat=False, min_beads=1) -> None:
         """Merge manifest dataframe with probe signal values read from idat files to build the signal dataframe, adding
-        channel information, methylation state and apply_mask names for each probe.
+        channel information, methylation state and mask names for each probe.
 
         For manifest file, merging is done on `Illumina IDs`, contained in columns `address_a` and `address_b` of the
         manifest file.
@@ -734,20 +734,21 @@ class Samples:
     # Mask functions
     ####################################################################################################################
 
-    def apply_mask_by_names(self, names_to_mask: str | list[str], sample_label: str | None = None) -> None:
-        """Match the names provided in `names_to_mask` with the probes apply_mask info and apply_mask these probes, adding them to
-        the current apply_mask if there is any.
+    def mask_probes_by_names(self, names_to_mask: str | list[str], sample_label: str | None = None, mask_name: str | None = None) -> None:
+        """Match the names provided in `names_to_mask` with the probes mask info and mask these probes, adding them to
+        the current mask if there is any.
 
         :param names_to_mask: can be a regex
         :type names_to_mask: str | list[str]
         :param sample_label: The name of the sample to get masked indexes for. If None, returns masked indexes for all samples.
         :type sample_label: str | None
-
+        :param mask_name: the name of the mask to create. If None, the name of the mask will be the same as the names to mask
+        :type mask_name: str | None
         :return: None"""
 
         if isinstance(names_to_mask, list):
             for name in names_to_mask:
-                self.apply_mask_by_names(name, sample_label)
+                self.mask_probes_by_names(name, sample_label)
             return
 
         if not isinstance(names_to_mask, str):
@@ -758,35 +759,74 @@ class Samples:
             LOGGER.warning('No names to mask')
             return
 
-        new_mask = Mask(names_to_mask, sample_label, self._signal_df.index[self._signal_df.mask_info.str.contains(names_to_mask)])
+        if mask_name is None:
+            mask_name = names_to_mask
+        new_mask = Mask(mask_name, sample_label, self._signal_df.index[self._signal_df.mask_info.str.contains(names_to_mask)])
 
         self.masks.add_mask(new_mask)
 
-    def apply_quality_mask(self, sample_label: str | None = None) -> None:
-        """Shortcut to apply quality apply_mask on this sample
+    def mask_quality_probes(self, sample_label: str | None = None) -> None:
+        """Shortcut to mask quality probes
 
-        :param sample_label: The name of the sample to apply_mask. If None, apply_mask indexes for all samples.
+        :param sample_label: The name of the sample to mask. If None, mask indexes for all samples.
+        :type sample_label: str | None
+
+        :return: None"""
+        self.mask_probes_by_names(self.annotation.quality_mask_names, sample_label, 'quality')
+
+    def mask_non_unique_probes(self, sample_label: str | None = None) -> None:
+        """Shortcut to mask non-unique probes on this sample
+
+        :param sample_label: The name of the sample to mask. If None, mask indexes for all samples.
         :type sample_label: str | None
         :return: None"""
-        self.apply_mask_by_names(self.annotation.quality_mask_names, sample_label)
+        self.mask_probes_by_names(self.annotation.non_unique_mask_names, sample_label, 'non-unique')
 
-    def apply_non_unique_mask(self, sample_label: str | None = None) -> None:
-        """Shortcut to apply non-unique probes apply_mask on this sample
+    def mask_xy_probes(self, sample_label: str | None = None) -> None:
+        """Shortcut to mask probes from XY chromosome
 
-        :param sample_label: The name of the sample to apply_mask. If None, apply_mask indexes for all samples.
+        :param sample_label: The name of the sample to mask. If None, mask indexes for all samples.
         :type sample_label: str | None
-        :return: None"""
-        self.apply_mask_by_names(self.annotation.non_unique_mask_names, sample_label)
 
-    def apply_xy_mask(self, sample_label: str | None = None) -> None:
-        """Shortcut to apply_mask probes from XY chromosome
-
-        :param sample_label: The name of the sample to apply_mask. If None, apply_mask indexes for all samples.
-        :type sample_label: str | None
         :return: None"""
         xy_probes_ids = self.annotation.probe_infos.probe_id[self.annotation.probe_infos.chromosome.isin(['X', 'Y'])]
         xy_mask = self._signal_df.index[self._signal_df.index.get_level_values('probe_id').isin(xy_probes_ids)]
         self.masks.add_mask(Mask('XY', sample_label, xy_mask))
+
+    def mask_control_probes(self, sample_label: str | None = None) -> None:
+        """Shortcut to mask control probes
+
+        :param sample_label: The name of the sample to mask. If None, mask indexes for all samples.
+        :type sample_label: str | None
+
+        :return: None"""
+        control_probe_ids = self.annotation.probe_infos.probe_id[self.annotation.probe_infos.probe_type == 'ctl']
+        control_mask = self._signal_df.index[self._signal_df.index.get_level_values('probe_id').isin(control_probe_ids)]
+        self.masks.add_mask(Mask('Control', sample_label, control_mask))
+
+    def mask_snp_probes(self, sample_label: str | None = None) -> None:
+        """Shortcut to mask snp probes
+
+        :param sample_label: The name of the sample to mask. If None, mask indexes for all samples.
+        :type sample_label: str | None
+
+        :return: None"""
+        snp_probe_ids = self.annotation.probe_infos.probe_id[self.annotation.probe_infos.probe_type == 'snp']
+        snp_mask = self._signal_df.index[self._signal_df.index.get_level_values('probe_id').isin(snp_probe_ids)]
+        self.masks.add_mask(Mask('SNP', sample_label, snp_mask))
+
+    def mask_non_cg_probes(self, sample_label: str | None = None) -> None:
+        """Shortcut to mask non-CpG probes
+
+        :param sample_label: The name of the sample to mask. If None, mask indexes for all samples.
+        :type sample_label: str | None
+
+        :return: None"""
+        # mask control probes separately as we need to be able to access them sometimes, e.g. for normalization
+        self.mask_control_probes(sample_label)
+        noncg_probe_ids = self.annotation.probe_infos.probe_id[~self.annotation.probe_infos.probe_type.isin(['cg', 'ctl'])]
+        noncg_mask = self._signal_df.index[self._signal_df.index.get_level_values('probe_id').isin(noncg_probe_ids)]
+        self.masks.add_mask(Mask('NonCG', sample_label, noncg_mask))
 
     ####################################################################################################################
     # Control functions
@@ -807,7 +847,13 @@ class Samples:
         :return: methylation signal dataframe of the control probes, or None if None was found
         :rtype: pandas.DataFrame | None
         """
-        control_df = self.get_probes_with_probe_type('ctl', apply_mask, sigdf=sigdf)
+        if apply_mask:
+            initial_mask = self.masks.copy()
+            self.masks.remove_masks(mask_name='Control')
+            control_df = self.get_probes_with_probe_type('ctl', True, sigdf=sigdf)
+            self.masks = initial_mask
+        else:
+            control_df = self.get_probes_with_probe_type('ctl', False, sigdf=sigdf)
 
         if control_df is None or len(control_df) == 0:
             LOGGER.info('No control probes found')
@@ -898,7 +944,7 @@ class Samples:
         :param switch_failed: if set to True, probes with NA values or whose max values are under a threshold (the 95th
             percentile of the background signals) will be switched back to their original value. Default: False.
         :type switch_failed: bool
-        :param mask_failed: apply_mask failed probes (same probes as switch_failed). Default: False.
+        :param mask_failed: mask failed probes (same probes as switch_failed). Default: False.
         :type mask_failed: bool
         :param summary_only: does not replace the sample dataframe, only return the summary (useful for QC). Default:
             False
@@ -971,7 +1017,7 @@ class Samples:
         :param sample_label: the name of the sample to get mean in-band intensity values for. If None, return mean
             in-band intensity values for every sample.
         :type sample_label: str | None
-        :param apply_mask: set to False if you don't want any apply_mask to be applied. Default: True
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: True
         :type apply_mask: bool
 
         :return: mean in-band intensity value
@@ -999,7 +1045,7 @@ class Samples:
             in-band intensity values for every sample.
         :type sample_label: str | None
 
-        :param apply_mask: set to False if you don't want any apply_mask to be applied. Default: True
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: True
         :type apply_mask: bool
 
         :return: the total in-band intensity values
@@ -1082,7 +1128,7 @@ class Samples:
         :type drop_na: bool
         :param custom_sheet: a custom sample sheet to filter samples. Ignored if sample_label is provided. Default: None
         :type custom_sheet: pandas.DataFrame | None
-        :param apply_mask: set to False if you don't want any apply_mask to be applied. Default: False
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: False
         :type apply_mask: bool
 
         :return: beta values as a DataFrame, or Series if sample_label is provided. If no beta values are found, return None
@@ -1141,7 +1187,7 @@ class Samples:
         :param sample_label: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
         :type sample_label: str | None
 
-        :param apply_mask: set to False if you don't want any apply_mask to be applied. Default: True
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: True
         :type apply_mask: bool
 
         :param reference: values to use as reference to scale red and green signal for each sample (=dict keys). Default: None
@@ -1183,7 +1229,7 @@ class Samples:
         :param sample_label: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
         :type sample_label: str | None
 
-        :param apply_mask: set to False if you don't want any apply_mask to be applied. Default: True
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: True
         :type apply_mask: bool
 
         :param reference: values to use as reference to scale red and green signal for each sample (=dict keys). Default: None
@@ -1335,11 +1381,11 @@ class Samples:
         elif isinstance(sample_labels, str):
             sample_labels = [sample_labels]
 
-        # apply_mask non unique probes - saves previous apply_mask to reset it afterwards
+        # mask non-unique probes - saves previous mask to reset it afterwards
         initial_masks = self.masks.copy()
         if not apply_mask:
             self.masks.reset_masks()
-        self.apply_mask_by_names(self.annotation.non_unique_mask_names)
+        self.mask_probes_by_names(self.annotation.non_unique_mask_names)
 
         # Background = out-of-band type 1 probes + (optionally) negative controls
         background_df = self.oob(True)
@@ -1430,13 +1476,13 @@ class Samples:
         LOGGER.info('start pOOBAH')
         self.reset_poobah()
 
-        # apply_mask non-unique probes - but first save previous apply_mask to reset it afterward
+        # mask non-unique probes - but first save previous mask to reset it afterward
         initial_masks = self.masks.copy()
 
         if not apply_mask:
             self.masks.reset_masks()
 
-        self.apply_mask_by_names(self.annotation.non_unique_mask_names)
+        self.mask_non_unique_probes()
 
         # Background = out-of-band type 1 probes + (optionally) negative controls
         masked_sigdf = self.get_signal_df(True)
@@ -1494,7 +1540,7 @@ class Samples:
             values as samples.
         :type batch: str | list
 
-        :param apply_mask: set to False if you don't want any apply_mask to be applied. Default: True
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: True
         :type apply_mask: bool
 
         :param covariates: a list of column names from the sample sheet to use as covariates in the model. It only
@@ -1792,7 +1838,7 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
         sample_df = sample_df.loc[:, ['UR', 'MR', 'MG', 'UG', 'mask', 'mask_info']]  # order columns
         sample_df.columns = pd.MultiIndex.from_tuples([('R', 'U'), ('R', 'M'), ('G', 'M'), ('G', 'U'), ('mask', ''), ('mask_info', '')])
 
-        # set apply_mask as specified in the input file, then drop the mask column
+        # set mask as specified in the input file, then drop the mask column
         samples.masks.add_mask(Mask('sesame', name, sample_df.index[sample_df['mask']]))
         sample_df = sample_df.sort_index(axis=1).drop(columns='mask')
         dfs.append(sample_df)

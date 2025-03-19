@@ -271,6 +271,9 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         'SPCA': SparsePCA, 'TSVD': TruncatedSVD. Default: 'PCA'
     :type model: str
 
+    :param show_labels: if True, show the sample names on the plot. Default: True
+    :type show_labels: bool
+
     :param kwargs: parameters passed to the model
 
     :return: None"""
@@ -320,9 +323,9 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
 
     if title is None:
         if nb_probes is None:
-            title = f'{model} of the {nb_probes_used:,} most variable probes'
-        else:
             title = f'{model} of all the probes ({nb_probes_used:,})'
+        else:
+            title = f'{model} of the {nb_probes_used:,} most variable probes'
         if apply_mask:
             title += ' (masks applied)'
 
@@ -1011,7 +1014,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             if 'segment_id' in data_to_plot.columns:
                 genes_per_seg = data_to_plot[['segment_id']].join(gene_info).groupby('segment_id', observed=True).agg(merge_series_values)
                 data_to_plot = data_to_plot.drop_duplicates().set_index('segment_id').join(genes_per_seg)
-                data_to_plot[annotation_col] = data_to_plot[annotation_col].apply(lambda x: ':'.join(set(x.split(';'))))
+                data_to_plot[annotation_col] = data_to_plot[annotation_col].apply(lambda x: ';'.join(set(x.split(';'))))
             else:
                 data_to_plot = data_to_plot.join(gene_info)
     data_to_plot = data_to_plot.reset_index(drop=True).drop_duplicates()
@@ -1195,6 +1198,15 @@ def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
                     log10=False, annotation=None, draw_significance=False, save_path=save_path)
 
 ########################################################################################################################
+
+def visualize_chr_region(samples: Samples, chr_id:str | int, start_pos: int, end_pos: int,
+                         apply_mask: bool=True, padding=1500, keep_na: bool=False, protein_coding_only=True,
+                         custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
+                         figsize:tuple[float, float]=(15, 10), save_path: None | str=None,
+                         row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
+
+    """Show the beta values of a gene for all probes and samples in its transcription zone."""
+
 
 def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
                    protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
@@ -1540,7 +1552,7 @@ def plot_methylation_distribution(samples: Samples, group_column: str| None=None
 
 
 def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names: list[str] = None,  return_df=False,
-                       save_path: str =None) -> pd.DataFrame | None:
+                       xlim: None|tuple[float, float]=None, save_path: str =None, **kwargs) -> pd.DataFrame | None:
     """ Analyze the beta values standard deviation of the technical replicates to check for batch effect or quality
     issues.
 
@@ -1556,6 +1568,9 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
 
     :param return_df: if True, return the dataframe used to plot the graph. Default: False
     :type return_df: bool
+
+    :param xlim: set the x-axis limits. Default: None
+    :type xlim: tuple[float, float] | None
 
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
@@ -1586,15 +1601,18 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
     replicate_ids = beta_std_df.columns
     beta_std_df = beta_std_df.reset_index().drop(columns=['probe_id', 'probe_type'])
     long_df = pd.melt(beta_std_df, id_vars=['type', 'channel'], value_vars=replicate_ids, var_name='Replicate',  value_name='Value')
-    long_df['channel'] = long_df['channel'].astype(str).fillna('')
+    long_df['channel'] = long_df['channel'].cat.add_categories('').fillna('').astype(str)
     long_df['channel'] = 'type ' + long_df['type'].astype(str) + ' ' + long_df['channel']
 
     # plot
-    g = sns.catplot(long_df, kind='violin', hue='Replicate', y='channel', x='Value', aspect=4)
-    g.set_axis_labels('beta values standard deviation', 'probe channel')
+    g = sns.catplot(long_df, kind='violin', hue='Replicate', y='channel', x='Value', aspect=3, **kwargs)
+    g.set_axis_labels('beta values standard deviation', 'probes channel')
+
+    if xlim is not None:
+        g.set(xlim=xlim)
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
 
     if return_df:
-        return long_df
+        return long_df.groupby(['Replicate', 'channel']).describe()
