@@ -396,7 +396,7 @@ def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_pr
 
     n_components = min(20, reduced_data.shape[1])
 
-    # no specific parameter defined, show them all (expect the samples identifiers)
+    # no specific parameter defined, show them all (except the samples identifiers)
     if params is None:
         params = sheet.columns.to_list()
         params.remove(samples.sample_label_name)

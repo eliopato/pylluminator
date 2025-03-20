@@ -7,18 +7,17 @@ packages = ["pylluminator"]
 
 [project]
 name = "pylluminator"
-version = "0.2"
+version = "0.1"
 authors = [{name = "Elio", email = "eliof@posteo.net"}]
 maintainers = [{name = "Elio", email = "eliof@posteo.net"}]
 requires-python = ">= 3.12"
 dependencies = ['pandas', 'numpy', 'scikit-learn', 'statsmodels', 'scipy', 'pyranges1', 'linear_segment', 'patsy', 'ailist', 'notebook', 'matplotlib', 'seaborn', 'inmoose']
-description = 'Tools to analyze DNA methylation data from Illumina micro-arrays'
+description = 'Tool to preprocess, analyze and visualize DNA methylation data from Illumina micro-arrays'
 readme = 'README.rst'
-license = {text = "MIT"}
-keywords = ["dna-methylation", "epigenetics", "illumina", "methylation", "DMR", "sesame"]
+license = "MIT"
+keywords = ["dna-methylation", "epigenetics", "illumina", "bioinformatics", "microarray", "methylation", "DMR"]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3.12",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
@@ -27,8 +26,7 @@ classifiers = [
 ]
 
 [project.urls]
-#Homepage = "https://example.com"
+Homepage = "https://pylluminator.readthedocs.io/"
 Documentation = "https://pylluminator.readthedocs.io/"
 Repository = "https://github.com/eliopato/pylluminator"
 Issues = "https://github.com/eliopato/pylluminator/issues"
-#Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
