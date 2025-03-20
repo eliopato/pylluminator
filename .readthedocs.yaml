@@ -18,5 +18,6 @@ sphinx:
 python:
    install:
       - requirements: docs/requirements.txt  # to install sphinx, nbsphinx..
+      - requirements: requirements.txt  # package requirements (needed to build the python notebooks)
       - method: pip
         path: . # install the package locally
