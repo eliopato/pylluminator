@@ -90,8 +90,11 @@ Installation
 With pip
 ~~~~~~~~
 
-TODO
+You can install Pylluminator directly with:
 
+.. code-block:: shell
+
+    pip install pylluminator
 
 From source
 ~~~~~~~~~~~
