@@ -8,8 +8,8 @@ packages = ["pylluminator"]
 [project]
 name = "pylluminator"
 version = "0.1"
-authors = [{name = "Elio", email = "eliof@posteo.net"}]
-maintainers = [{name = "Elio", email = "eliof@posteo.net"}]
+authors = [{name = "Elio", email = "elio.fanchon@univ-amu.fr"}]
+maintainers = [{name = "Elio", email = "elio.fanchon@univ-amu.fr"}]
 requires-python = ">= 3.12"
 dependencies = ['pandas', 'numpy', 'scikit-learn', 'statsmodels', 'scipy', 'pyranges1', 'linear_segment', 'patsy', 'ailist', 'notebook', 'matplotlib', 'seaborn', 'inmoose']
 description = 'Tool to preprocess, analyze and visualize DNA methylation data from Illumina micro-arrays'
