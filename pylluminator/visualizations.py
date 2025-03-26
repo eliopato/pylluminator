@@ -340,10 +340,10 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         plt.savefig(os.path.expanduser(save_path))
 
 
-def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_probes: int | None = None, apply_mask=True,
-                        vmax=0.05, custom_sheet: None | pd.DataFrame = None, save_path: None | str = None, model='PCA',
-                        orientation='v', **kwargs):
-    """ Plot the correlation between the principal components and the parameters in the sample sheet.
+def pc_association_heatmap(samples: Samples, params: list[str] | None = None, nb_probes: int | None = None,
+                           apply_mask=True, vmax=0.05, custom_sheet: None | pd.DataFrame = None,
+                           save_path: None | str = None, model='PCA',  orientation='v', **kwargs):
+    """ Heatmap of the p-values for the association of principal components and the parameters in the sample sheet.
 
     :param samples: samples to plot
     :type samples: Samples
@@ -362,7 +362,8 @@ def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_pr
     :param vmax: maximum value for the color scale. Default: 0.05
     :type vmax: float
 
-    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display. Default: None
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display. Default: None
     :type custom_sheet: pandas.DataFrame | None
 
     :param save_path: if set, save the graph to save_path. Default: None
@@ -413,7 +414,15 @@ def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_pr
             LOGGER.warning(f'Parameter {param} has no effect, skipping')
             continue
 
+        # if param is a category param with a different value for each sample, calculating the association is pointless
+        if len(design_matrix.columns) == len(sample_info):
+            LOGGER.warning(f'Parameter {param} has no effect, skipping')
+            continue
+
         for i in range(n_components):
+            # stop when components explain less than 1% of the variance
+            if fitted_model.explained_variance_ratio_[i] < 0.01:
+                break
             fitted_ols = OLS(reduced_data[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
             result.loc[str(i), param] = fitted_ols.f_pvalue
             result.loc[str(i), 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
@@ -426,6 +435,111 @@ def plot_pc_correlation(samples: Samples, params: list[str] | None = None, nb_pr
 
     plt.subplots(figsize=(len(result.columns), len(result)/2))
     plot = sns.heatmap(result, annot=True, fmt=".0e", vmax=vmax, vmin=0)
+
+    if save_path is not None:
+        plot.get_figure().savefig(os.path.expanduser(save_path))
+
+
+
+def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb_probes: int | None = None,
+                           apply_mask=True, custom_sheet: None | pd.DataFrame = None, abs_corr=True,
+                           save_path: None | str = None, model='PCA',  orientation='v', **kwargs):
+    """ Heatmap of the correlation between principal components and the metadata of the sample sheet.
+
+    :param samples: samples to plot
+    :type samples: Samples
+
+    :param params: list of parameters to correlate with the principal components. Must be columns of the sample sheet.
+        If None, show all parameters. Default: None
+    :type params: list[str] | None
+
+    :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance.
+        If None, use all the probes. Default: None
+    :type nb_probes: int | None
+
+    :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
+    :type apply_mask: bool
+
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display. Default: None
+    :type custom_sheet: pandas.DataFrame | None
+
+    :param abs_corr: if True, show the absolute value of the correlation. Default: True
+    :type abs_corr: bool
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+
+    :param model: identifier of the model to use. Available models are 'PCA': PCA, 'MDS': MDS, 'DL': DictionaryLearning,
+        'FA': FactorAnalysis, 'FICA': FastICA, 'IPCA': IncrementalPCA, 'KPCA': KernelPCA, 'LDA': LatentDirichletAllocation,
+        'MBDL': MiniBatchDictionaryLearning, 'MBNMF': MiniBatchNMF, 'MBSPCA': MiniBatchSparsePCA, 'NMF': NMF,
+        'SPCA': SparsePCA, 'TSVD': TruncatedSVD. Default: 'PCA'
+    :type model: str
+
+    :param orientation: orientation of the heatmap. Possible values: 'v', 'h'. Default: 'v'
+    :type orientation: str
+
+    :param kwargs: parameters passed to the model
+
+    :return: None
+    """
+
+    # fit the model
+    fitted_model, reduced_data, labels, nb_probes = dimensionality_reduction(samples, model=model, nb_probes=nb_probes,
+                                                     custom_sheet=custom_sheet, apply_mask=apply_mask, **kwargs)
+    if fitted_model is None:
+        return
+
+    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
+    sample_info = sheet[sheet[samples.sample_label_name].isin(labels)]
+    # drop columns with only NaN values that cant be used in the model
+    sample_info = sample_info.dropna(axis=1, how='all')
+    result = pd.DataFrame(dtype=float)
+
+    n_components = min(20, reduced_data.shape[1])
+
+    # no specific parameter defined, show them all (except the samples identifiers)
+    if params is None:
+        params = sheet.columns.to_list()
+        params.remove(samples.sample_label_name)
+
+    for param in params:
+
+        if param not in sample_info.columns:
+            LOGGER.warning(f'Parameter {param} not found in the sample sheet, skipping')
+            continue
+
+        # the design matrix removes the NaN values
+        design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
+        if design_matrix.empty:
+            LOGGER.warning(f'Parameter {param} has no effect, skipping')
+            continue
+
+        # if param is a category param with a different value for each sample, calculating the association is pointless
+        if len(design_matrix.columns) == len(sample_info):
+            LOGGER.warning(f'Parameter {param} has no effect, skipping')
+            continue
+
+        for i in range(n_components):
+            # stop when components explain less than 1% of the variance
+            if fitted_model.explained_variance_ratio_[i] < 0.01:
+                break
+            fitted_ols = OLS(reduced_data[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
+            result.loc[str(i), param] = np.sqrt(fitted_ols.rsquared)
+            if not abs_corr and fitted_ols.params.iloc[1] < 0:
+                result.loc[str(i), param] = - result.loc[str(i), param]
+            result.loc[str(i), 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
+
+    # drop columns with only NA values (eg Sample Ids that are unique per sample)
+    result = result.set_index('principal component').dropna(axis=1, how='all')
+
+    if orientation == 'v':
+        result = result.T
+
+    plt.subplots(figsize=(len(result.columns), len(result)/2))
+    cmap = sns.cm.rocket_r if abs_corr else 'vlag'
+    vmin = 0 if abs_corr else -1
+    plot = sns.heatmap(result, annot=True, fmt=".2f", vmax=1, vmin=vmin, cmap=cmap)
 
     if save_path is not None:
         plot.get_figure().savefig(os.path.expanduser(save_path))
@@ -898,7 +1012,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     :type data_to_plot: pandas.DataFrame
 
     :param segments_to_plot: if set, display the segments using columns "chromosome", "start", "end" and "mean_cnv" of
-        the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_variation())
+        the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_segmentation())
     :type segments_to_plot: pandas.DataFrame
 
     :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
@@ -1159,17 +1273,17 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
                     log10=log10, title=title, save_path=save_path)
 
 
-def manhattan_plot_cnv(data_to_plot: pd.DataFrame, segments_to_plot=None,
+def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,
                        x_col='start_bin', chromosome_col='chromosome', y_col='cnv',
                        figsize:tuple[float, float]|None=(10, 8), title: None | str = None, save_path: None | str=None) -> None:
-    """Display a Manhattan plot of the given CNV data, designed to work with the dataframes returned by
-    copy_number_variation()
+    """Display a Manhattan plot of the given CNS data, designed to work with the dataframes returned by
+    copy_number_segmentation()
 
     :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
     :type data_to_plot: pandas.DataFrame
 
     :param segments_to_plot: if set, display the segments using columns "chromosome", "start", "end" and "mean_cnv" of
-        the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_variation())
+        the given dataframe, where start and end are the position on the chromosome (as returned by copy_number_segmentation())
     :type segments_to_plot: pandas.DataFrame
 
     :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome

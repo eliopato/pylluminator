@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import pytest
 
-from pylluminator.dm import get_dmp, get_dmr, _get_model_parameters, get_top_dmrs
+from pylluminator.dm import get_dmp, get_dmr, _get_model_parameters, get_top_dmr
 
 
 def test_dmp_ols(test_samples):
@@ -104,4 +104,4 @@ def test_dmr(test_samples):
                        0.055821167098151304, 0.75053453, 0.80635566, -0.05582112]
     assert dmrs.loc['cg00017004_BC21', ].values.tolist() == pytest.approx(expected_values)
 
-    assert len(get_top_dmrs(dmrs, test_samples.annotation, 'sample_type[T.PREC]')) == 10
+    assert len(get_top_dmr(dmrs, test_samples.annotation, 'sample_type[T.PREC]')) == 10

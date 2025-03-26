@@ -16,8 +16,8 @@ from pylluminator.utils import get_logger
 LOGGER = get_logger()
 
 
-def copy_number_variation(samples: Samples, sample_label: str, normalization_sample_labels: str | list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
-    """Perform copy number variation (CNV) and copy number segmentation for a sample
+def copy_number_variation(samples: Samples, sample_label: str, normalization_sample_labels: str | list[str] | None = None) -> pd.DataFrame | None:
+    """Perform copy number variation (CNV)
 
     :param samples: samples to be analyzed
     :type samples: Samples
@@ -30,8 +30,8 @@ def copy_number_variation(samples: Samples, sample_label: str, normalization_sam
         work for EPIC/hg38 and EPICv2/hg38; for other array versions, you **need** to provide samples. Default []
     :type normalization_sample_labels: str | list[str]
 
-    :return: a tuple with : the bins coordinates, the bins signal, the segments
-    :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
+    :return: the probe coordinates dataframe with the CNV information
+    :rtype: pandas.DataFrame
     """
 
     available_samples = samples.sample_labels
@@ -68,7 +68,6 @@ def copy_number_variation(samples: Samples, sample_label: str, normalization_sam
 
         norm_intensities = normal_samples.get_total_ib_intensity()
 
-    genome_info = samples.annotation.genome_info
     probe_coords_df = samples.annotation.genomic_ranges
 
     # get total intensity per probe and drop unnecessary indexes
@@ -91,6 +90,33 @@ def copy_number_variation(samples: Samples, sample_label: str, normalization_sam
     fitted_model = LinearRegression().fit(X, y)
     predicted = np.maximum(fitted_model.predict(X), 1)
     probe_coords_df['cnv'] = np.log2(target_intensity / predicted)
+
+    return probe_coords_df
+
+
+def copy_number_segmentation(samples: Samples, sample_label: str, normalization_sample_labels: str | list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
+    """Perform copy number variation (CNV) and copy number segmentation for a sample
+
+    :param samples: samples to be analyzed
+    :type samples: Samples
+
+    :param sample_label: name of the samples to calculate CNV of.
+    :type sample_label: str
+
+    :param normalization_sample_labels: names of the samples to use for normalization, that have to be part of the passed
+        Samples object. If empty (default), default normalization samples will be loaded from a database - but this only
+        work for EPIC/hg38 and EPICv2/hg38; for other array versions, you **need** to provide samples. Default []
+    :type normalization_sample_labels: str | list[str]
+
+    :return: a tuple with : the bins coordinates, the bins signal, the segments
+    :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
+    """
+    probe_coords_df = copy_number_variation(samples, sample_label, normalization_sample_labels)
+
+    if probe_coords_df is None:
+        return None, None, None
+
+    genome_info = samples.annotation.genome_info
 
     # make tiles
     tile_width = 50000

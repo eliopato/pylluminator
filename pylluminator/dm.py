@@ -69,8 +69,9 @@ def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_name
     if fitted_model is None:
         return [np.nan] * (2 + 4 * len(factor_names))
 
-    # fitted ols is a statsmodels.regression.linear_model.RegressionResultsWrapper (if OLS) or statsmodels.regression.mixed_linear_model.MixedLMResults object
-    estimates = fitted_model.params[1:].tolist()  + [0]  # remove the intercept
+    # fitted ols is a statsmodels.regression.linear_model.RegressionResultsWrapper (if OLS)
+    # or statsmodels.regression.mixed_linear_model.MixedLMResults object
+    estimates = fitted_model.params.iloc[1:].tolist()  + [0]  # remove the intercept
     effect_size = max(estimates) - min(estimates)
     if groups is None:
         results = [fitted_model.f_pvalue , effect_size]  # p-value of the F-statistic.
@@ -347,7 +348,7 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     return dmr
 
 
-def get_top_dmrs(dmrs: pd.DataFrame, annotation: Annotations, contrast:str, chromosome_col='chromosome',
+def get_top_dmr(dmrs: pd.DataFrame, annotation: Annotations, contrast:str, chromosome_col='chromosome',
                  annotation_col: str = 'genes', n_dmrs=10, columns_to_keep:list[str]=None):
 
     if dmrs is None or len(dmrs) == 0:

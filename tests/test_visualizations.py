@@ -2,12 +2,12 @@ import os
 import pandas as pd
 
 from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
-                                         manhattan_plot_dmr, manhattan_plot_cnv, visualize_gene, betas_dendrogram,
-                                         plot_pc_correlation, plot_methylation_distribution, plot_betas_heatmap,
-                                         analyze_replicates)
+                                         manhattan_plot_dmr, manhattan_plot_cns, visualize_gene, betas_dendrogram,
+                                         pc_association_heatmap, pc_correlation_heatmap, plot_methylation_distribution,
+                                         plot_betas_heatmap, analyze_replicates)
 
 from pylluminator.dm import get_dmp, get_dmr
-from pylluminator.cnv import copy_number_variation
+from pylluminator.cnv import copy_number_segmentation
 
 def test_plot_betas_2D(test_samples):
     models = ['PCA', 'MDS', 'DL', 'FA', 'FICA', 'IPCA', 'KPCA', 'LDA', 'MBDL', 'MBNMF', 'MBSPCA', 'NMF', 'SPCA', 'TSVD']
@@ -128,26 +128,26 @@ def test_dmr_plot(test_samples):
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
-def test_cnv_plot(test_samples):
-    ranges, signal_bins_df, segments_df = copy_number_variation(test_samples, sample_label='PREC_500_3')
+def test_cns_plot(test_samples):
+    ranges, signal_bins_df, segments_df = copy_number_segmentation(test_samples, sample_label='PREC_500_3')
 
-    manhattan_plot_cnv(signal_bins_df, segments_df, save_path='cnv_plot.png')
-    assert os.path.exists('cnv_plot.png')
-    os.remove('cnv_plot.png')
+    manhattan_plot_cns(signal_bins_df, segments_df, save_path='cns_plot.png')
+    assert os.path.exists('cns_plot.png')
+    os.remove('cns_plot.png')
 
-    manhattan_plot_cnv(signal_bins_df, save_path='cnv_plot.png', title='test', figsize=(3, 19))
-    assert os.path.exists('cnv_plot.png')
-    os.remove('cnv_plot.png')
+    manhattan_plot_cns(signal_bins_df, save_path='cns_plot.png', title='test', figsize=(3, 19))
+    assert os.path.exists('cns_plot.png')
+    os.remove('cns_plot.png')
 
     # test wrong parameters
-    manhattan_plot_cnv(signal_bins_df, segments_df, x_col='tet', save_path='cnv_plot.png')
-    assert not os.path.exists('cnv_plot.png')
+    manhattan_plot_cns(signal_bins_df, segments_df, x_col='tet', save_path='cns_plot.png')
+    assert not os.path.exists('cns_plot.png')
 
-    manhattan_plot_cnv(signal_bins_df, segments_df, chromosome_col='tet', save_path='cnv_plot.png')
-    assert not os.path.exists('cnv_plot.png')
+    manhattan_plot_cns(signal_bins_df, segments_df, chromosome_col='tet', save_path='cns_plot.png')
+    assert not os.path.exists('cns_plot.png')
 
-    manhattan_plot_cnv(signal_bins_df, segments_df, y_col='tet', save_path='cnv_plot.png')
-    assert not os.path.exists('cnv_plot.png')
+    manhattan_plot_cns(signal_bins_df, segments_df, y_col='tet', save_path='cns_plot.png')
+    assert not os.path.exists('cns_plot.png')
 
 def test_plot_b_chr(test_samples):
     plot_nb_probes_and_types_per_chr(test_samples, save_path='nb_probes_per_chr.png', title='test')
@@ -186,13 +186,22 @@ def test_betas_dendrogram(test_samples):
     assert os.path.exists('dendrogram.png')
     os.remove('dendrogram.png')
 
-def test_plot_pc_correlation(test_samples):
-    plot_pc_correlation(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3)
+def test_pc_association_heatmap(test_samples):
+    pc_association_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3)
     assert os.path.exists('pc_bias.png')
     os.remove('pc_bias.png')
 
     # more components than sample, fail
-    plot_pc_correlation(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
+    pc_association_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
+    assert not os.path.exists('pc_bias.png')
+
+def test_pc_correlation_heatmap(test_samples):
+    pc_correlation_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3)
+    assert os.path.exists('pc_bias.png')
+    os.remove('pc_bias.png')
+
+    # more components than sample, fail
+    pc_correlation_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')
 
 def test_methylation_distribution(test_samples, caplog):
