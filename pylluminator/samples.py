@@ -1453,7 +1453,7 @@ class Samples:
 
     def poobah(self, sample_labels: str | list[str] | None = None, apply_mask: bool = True, use_negative_controls=True, threshold=0.05) -> None:
         """Detection P-value based on empirical cumulative distribution function (ECDF) of out-of-band signal
-        aka pOOBAH (p-vals by Out-Of-Band Array Hybridization). Each sample is handled separately.
+        aka pOOBAH (P-value with out-of-band (OOB) array hybridization). Each sample is handled separately.
 
         Adds two columns in the signal dataframe, 'p_value' and 'poobah_mask'. Add probes that are (strictly) above the
         defined threshold to the mask.
@@ -1849,7 +1849,8 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
     if len(dfs) != len(sample_labels):
         LOGGER.warning(f'{len(dfs)} dfs != {len(sample_labels)} samples names for {datadir}')
 
-    samples._signal_df = pd.concat(dfs, axis=1, keys=sample_labels)
+    samples._signal_df = pd.concat(dfs, axis=1, keys=sample_labels).drop_duplicates()
+    samples._signal_df.columns.names = ['sample_id', 'signal_channel', 'methylation_state']
 
     LOGGER.info('done reading sesame files\n')
     return samples
