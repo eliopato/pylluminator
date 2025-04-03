@@ -32,6 +32,8 @@ def _combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
 
     :return: numpy array of combined p-values
     :rtype: numpy.ndarray"""
+    if len(p_values) == 1:
+        return p_values.iloc[0]
     return combine_pvalues(p_values, method='stouffer')[1]
 
 
@@ -96,7 +98,8 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     :type samples: Samples
     :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
     :type formula: str
-    :param reference_value: reference value for each factor. Default: None
+    :param reference_value: reference value for each factor. Dictionary where keys are the factor names, and values are
+        their reference value. Default: None
     :type reference_value: dict | None
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
     :type custom_sheet: pandas.DataFrame
@@ -151,10 +154,9 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
     if probe_ids is not None:
         betas = betas.loc[probe_ids]
 
-    sheet = custom_sheet[custom_sheet[samples.sample_label_name].isin(betas.columns)]
-
     # make the design matrix
-    sample_info = sheet.set_index(samples.sample_label_name)
+    sample_info = custom_sheet[custom_sheet[samples.sample_label_name].isin(betas.columns)]
+    sample_info = sample_info.set_index(samples.sample_label_name)
     # order betas and sample_info the same way
     sample_names_order = [c for c in betas.columns if c in sample_info.index]
     sample_info = sample_info.loc[sample_names_order]
@@ -169,7 +171,6 @@ def get_dmp(samples: Samples, formula: str, reference_value:dict | None=None, cu
             if column_name in sample_info.columns:
                 order = [value] + [v for v in set(sample_info[column_name]) if v != value]
                 sample_info[column_name] = pd.Categorical(sample_info[column_name], categories=order, ordered=True)
-
     try:
         design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
     except:
@@ -254,7 +255,7 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     probe_coords_df = samples.annotation.genomic_ranges.drop(columns='strand', errors='ignore')
     non_empty_coords_df = probe_coords_df[probe_coords_df.end > probe_coords_df.start]  # remove 0-width ranges
 
-    betas_no_na = betas.dropna()  # remove probes with missing values
+    betas_no_na = betas.dropna(how='all')  # remove probes with missing values
     cpg_ids = non_empty_coords_df.join(betas_no_na, how='inner')
 
     # if there was no match, try again after trimming the suffix from the genomic ranges probe IDs
@@ -329,7 +330,13 @@ def get_dmr(samples: Samples, dmps: pd.DataFrame, contrast: str | list[str], dis
     if isinstance(contrast, str):
         contrast = [contrast]
     for c in contrast:
-        dmr[f'segment_{c}_p_value'] = segments_grouped[f'{c}_p_value'].transform(_combine_p_values_stouffer)
+        seg_pvals = segments_grouped[f'{c}_p_value'].apply(_combine_p_values_stouffer)
+        seg_pvals_df = pd.DataFrame({f'segment_{c}_p_value': seg_pvals.values,
+                                     'segment_id': [n + 1 for n in range(len(seg_pvals))] })
+        probe_ids = dmr.index
+        dmr = dmr.merge(seg_pvals_df, on='segment_id', how='left')
+        dmr.index = probe_ids
+
         nb_significant = len(dmr.loc[dmr[f'segment_{c}_p_value'] < 0.05, 'segment_id'].drop_duplicates())
         LOGGER.info(f' - {nb_significant:,} significant segments for {c} (p-value < 0.05)')
 
