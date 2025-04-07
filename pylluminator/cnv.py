@@ -95,7 +95,7 @@ def copy_number_variation(samples: Samples, sample_label: str, normalization_sam
 
 
 def copy_number_segmentation(samples: Samples, sample_label: str, normalization_sample_labels: str | list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
-    """Perform copy number variation (CNV) and copy number segmentation for a sample
+    """Perform copy number variation (CNV) and group the genome in segments with similar CNV.
 
     :param samples: samples to be analyzed
     :type samples: Samples
@@ -112,7 +112,6 @@ def copy_number_segmentation(samples: Samples, sample_label: str, normalization_
     :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
     """
     probe_coords_df = copy_number_variation(samples, sample_label, normalization_sample_labels)
-
     if probe_coords_df is None:
         return None, None, None
 
@@ -127,11 +126,6 @@ def copy_number_segmentation(samples: Samples, sample_label: str, normalization_
     non_empty_coords = probe_coords_df[probe_coords_df.end > probe_coords_df.start]  # remove 0-width ranges
     probe_coords = pr.PyRanges(non_empty_coords.rename(columns={'chromosome':'Chromosome', 'end': 'End', 'start': 'Start',
                                                           'strand': 'Strand'}))
-    diff_tiles = diff_tiles.count_overlaps(probe_coords.reset_index())
-
-    if len(diff_tiles) == 0:
-        LOGGER.error('No diff tiles')
-        return None, None, None
 
     # merge small bins together, until they reach a minimum of 20 overlapping probes #todo optimize (10sec)
     bins = _merge_bins_to_minimum_overlap(diff_tiles, probe_coords, 20, 1)
@@ -208,7 +202,6 @@ def _merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with:
     """Merge adjacent intervals from `pr_to_merge` until they have a minimum probes overlap such as defined in parameter
     `minimum_overlap`.
 
-
     Overlap count is calculated with `pr_to_overlap_with`.
 
     :param pr_to_merge: intervals to merge
@@ -229,17 +222,18 @@ def _merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with:
     :return: intervals with probes overlap >= `minimum_overlap`
     :rtype: pyranges.PyRanges"""
 
-    pr_to_merge = pr_to_merge.reset_index(drop=True)  # to ensure an int type index, not object
-    pr_to_overlap_with = pr_to_overlap_with.reset_index(drop=True)  # to ensure an int type index, not object
-    columns_ini = pr_to_merge.columns  # to restore columns at the end
+    pr_to_merge = pr_to_merge.sort_ranges().reset_index(drop=True)  # to ensure an int type index, not object
+    pr_to_overlap_with = pr_to_overlap_with.sort_ranges().reset_index(drop=True)  # to ensure an int type index, not object
 
     # we can't already have a 'Cluster' column as clustering will fail if so
-    if 'Cluster' in columns_ini:
-        columns_ini = columns_ini.drop('Cluster')
+    if 'Cluster' in pr_to_merge.columns:
+        pr_to_merge = pr_to_merge.drop(columns='Cluster')
 
     # count overlaps with other pyRanges object
-    if 'NumberOverlaps' not in columns_ini:
-        pr_to_merge = pr_to_merge.count_overlaps(pr_to_overlap_with)
+    if 'NumberOverlaps' not in pr_to_merge.columns:
+        pr_to_merge = pr_to_merge.count_overlaps(pr_to_overlap_with, overlap_col="NumberOverlaps")
+
+    columns_ini = pr_to_merge.columns  # to restore columns at the end
 
     # for best precision, do an extra step of merging only small tiles together
     if precision == 0:
@@ -247,15 +241,15 @@ def _merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with:
             has_high_overlap = pr_to_merge.NumberOverlaps > current_min
             high_overlaps = pr_to_merge[has_high_overlap]
             low_overlaps = pr_to_merge[~has_high_overlap]
-            low_overlaps_merged = low_overlaps.merge_overlaps(slack=1).count_overlaps(pr_to_overlap_with)
+            low_overlaps_merged = low_overlaps.merge_overlaps(slack=1).count_overlaps(pr_to_overlap_with, overlap_col="NumberOverlaps")
             pr_to_merge = pr.concat([low_overlaps_merged, high_overlaps]).sort_ranges()
-
     # main merge technique : see iteratively if ranges with low number of overlapping probes have neighbors they can
     # merge with. Iterations are useful for a more precise result - the bigger the steps, the bigger the intervals
 
     precision = np.clip(precision, a_min=1, a_max=minimum_overlap)  # ensure precision is within bounds
     # we need to force the value of minimum overlap in the iteration loop, as it can be excluded depending on precision
     mins = [n for n in range(max(1, pr_to_merge.NumberOverlaps.min()), minimum_overlap, precision)] + [minimum_overlap]
+    mins = sorted(list(set(mins)))  # remove duplicates and sort
 
     for current_min in mins:
         pr_to_merge = pr_to_merge.sort_ranges().cluster(slack=1)  # cluster intervals to identify neighbors
@@ -276,9 +270,10 @@ def _merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with:
             continue
 
         # finally, merge identified intervals and update interval overlap
-        merged_bins = pr_to_merge[to_merge].merge_overlaps(slack=1).count_overlaps(pr_to_overlap_with)
+        merged_bins = pr_to_merge[to_merge].merge_overlaps(slack=1).count_overlaps(pr_to_overlap_with, overlap_col="NumberOverlaps")
         # add intervals that were not involved in the merge step and filter out unnecessary columns
         pr_to_merge = pr.concat([merged_bins, pr_to_merge[~to_merge]]).reset_index()[columns_ini]
 
+
     # only return rows that have a number of overlaps above (>=) threshold
-    return pr_to_merge[pr_to_merge.NumberOverlaps >= minimum_overlap].sort_ranges()
+    return pr_to_merge[pr_to_merge.NumberOverlaps >= minimum_overlap].sort_ranges().reset_index(drop=True)

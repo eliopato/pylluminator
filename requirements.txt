@@ -13,7 +13,7 @@ numpy<2.0.0
 packaging==24.2
 pandas>=2.2.0,<3.0.0
 patsy==1.0.1
-pyranges1==1.0.3
+pyranges1==1.0.7
 pytest==8.3.4  # optional requirement - for testing
 python-dateutil==2.9.0.post0
 pytz==2024.2
