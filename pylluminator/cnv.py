@@ -16,14 +16,16 @@ from pylluminator.utils import get_logger
 LOGGER = get_logger()
 
 
-def copy_number_variation(samples: Samples, sample_label: str, normalization_sample_labels: str | list[str] | None = None) -> pd.DataFrame | None:
+def copy_number_variation(samples: Samples, sample_labels: str | list[str] | None=None, normalization_sample_labels: str | list[str] | None = None) -> pd.DataFrame | None:
     """Perform copy number variation (CNV)
 
-    :param samples: samples to be analyzed
+    :param samples: Samples object that contains the samples to be analyzed, and the normalization samples if
+        normalization_sample_labels are specified.
     :type samples: Samples
 
-    :param sample_label: name of the samples to calculate CNV of.
-    :type sample_label: str
+    :param sample_labels: name(s) of the samples to calculate CNV of. If None (default), all samples in the Samples object
+        will be used, except the normalization samples if specified.
+    :type sample_labels: str
 
     :param normalization_sample_labels: names of the samples to use for normalization, that have to be part of the passed
         Samples object. If empty (default), default normalization samples will be loaded from a database - but this only
@@ -33,17 +35,27 @@ def copy_number_variation(samples: Samples, sample_label: str, normalization_sam
     :return: the probe coordinates dataframe with the CNV information
     :rtype: pandas.DataFrame
     """
+    # make lists of normalization samples and samples to analyze
+
+    if isinstance(normalization_sample_labels, str):
+        normalization_sample_labels = [normalization_sample_labels]
 
     available_samples = samples.sample_labels
-    if sample_label not in available_samples:
-        LOGGER.error(f'Sample {sample_label} not found in the Samples object')
-        return None
+    if isinstance(sample_labels, str):
+        sample_labels = [sample_labels]
+    if isinstance(sample_labels, list):
+        for sample in sample_labels:
+            if sample not in available_samples:
+                LOGGER.error(f'Sample {sample} not found in the Samples object')
+                return None
+    if sample_labels is None or len(sample_labels) == 0:
+        if normalization_sample_labels is None:
+            sample_labels = available_samples
+        else:
+            sample_labels = [s for s in available_samples if s not in normalization_sample_labels]
 
     if normalization_sample_labels is not None:
 
-        # make sure it's a list
-        if isinstance(normalization_sample_labels, str):
-            normalization_sample_labels = [normalization_sample_labels]
 
         # extract normalization samples from the samples object.
         for norm_sample_name in normalization_sample_labels:
@@ -70,28 +82,32 @@ def copy_number_variation(samples: Samples, sample_label: str, normalization_sam
 
     probe_coords_df = samples.annotation.genomic_ranges
 
-    # get total intensity per probe and drop unnecessary indexes
-    target_intensity = samples.get_total_ib_intensity(sample_label)
-    target_intensity = target_intensity.droplevel(['channel', 'type', 'probe_type']).dropna()
-
     norm_intensities = norm_intensities.droplevel(['channel', 'type', 'probe_type']).dropna()
+    target_intensities = samples.get_total_ib_intensity(sample_labels).droplevel(['channel', 'type', 'probe_type'])
+    indexes = norm_intensities.index.intersection(probe_coords_df.index)
+    cnv_series = [probe_coords_df]
 
-    # keep only probes that are in all 3 files (target methylation, normalization methylation and genome ranges)
-    overlapping_probes = target_intensity.index.intersection(norm_intensities.index).intersection(probe_coords_df.index)
-    LOGGER.debug(f'Keeping {len(overlapping_probes)} overlapping probes')
-    target_intensity = target_intensity.loc[overlapping_probes]
-    norm_intensities = norm_intensities.loc[overlapping_probes]
-    probe_coords_df = probe_coords_df.loc[overlapping_probes]
+    for sample_label in sample_labels:
+        # get total intensity per probe and drop unnecessary indexes
+        target_intensity = target_intensities[sample_label].dropna()
 
-    LOGGER.info('Fitting the linear regression on normalization intensities')
+        # keep only probes that are in all 3 files (target methylation, normalization methylation and genome ranges)
+        overlapping_probes = target_intensity.index.intersection(indexes)
+        LOGGER.debug(f'Keeping {len(overlapping_probes)} overlapping probes for sample {sample_label}')
+        target_intensity = target_intensity.loc[overlapping_probes]
+        sample_norm_intensities = norm_intensities.loc[overlapping_probes]
 
-    X = norm_intensities.values
-    y = target_intensity.values
-    fitted_model = LinearRegression().fit(X, y)
-    predicted = np.maximum(fitted_model.predict(X), 1)
-    probe_coords_df['cnv'] = np.log2(target_intensity / predicted)
+        LOGGER.info(f'Fitting the linear regression on normalization intensities for sample {sample_label}')
 
-    return probe_coords_df
+        X = sample_norm_intensities.values
+        y = target_intensity.values
+        fitted_model = LinearRegression().fit(X, y)
+        predicted = np.maximum(fitted_model.predict(X), 1)
+        cnv_series.append(pd.Series(np.log2(target_intensity / predicted),
+                                    index=overlapping_probes,
+                                    name=f'cnv_{sample_label}'))
+
+    return pd.concat(cnv_series, axis=1)
 
 
 def copy_number_segmentation(samples: Samples, sample_label: str, normalization_sample_labels: str | list[str] | None = None) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
@@ -115,6 +131,7 @@ def copy_number_segmentation(samples: Samples, sample_label: str, normalization_
     if probe_coords_df is None:
         return None, None, None
 
+
     genome_info = samples.annotation.genome_info
 
     # make tiles
@@ -123,7 +140,7 @@ def copy_number_segmentation(samples: Samples, sample_label: str, normalization_
     diff_tiles = tiles.subtract_ranges(genome_info.gap_info).reset_index(drop=True)
 
     # make bins
-    non_empty_coords = probe_coords_df[probe_coords_df.end > probe_coords_df.start]  # remove 0-width ranges
+    non_empty_coords = probe_coords_df[probe_coords_df.end > probe_coords_df.start].dropna()  # remove 0-width ranges
     probe_coords = pr.PyRanges(non_empty_coords.rename(columns={'chromosome':'Chromosome', 'end': 'End', 'start': 'Start',
                                                           'strand': 'Strand'}))
 
@@ -136,8 +153,8 @@ def copy_number_segmentation(samples: Samples, sample_label: str, normalization_
         return None, None, None
 
     joined_pr = probe_coords.reset_index().join_ranges(bins, suffix='_bin')
-    signal_bins = joined_pr.groupby(['Chromosome', 'Start_bin', 'End_bin'])['cnv'].median().reset_index()
-    signal_bins = signal_bins.rename(columns={'Chromosome': 'chromosome', 'Start_bin': 'start_bin', 'End_bin': 'end_bin'})
+    signal_bins = joined_pr.groupby(['Chromosome', 'Start_bin', 'End_bin'])[f'cnv_{sample_label}'].median().reset_index()
+    signal_bins = signal_bins.rename(columns={'Chromosome': 'chromosome', 'Start_bin': 'start_bin', 'End_bin': 'end_bin', f'cnv_{sample_label}': 'cnv'})
     signal_bins['map_loc'] = ((signal_bins['start_bin'] + signal_bins['end_bin']) / 2).astype(int)
 
     # todo : improve this method (and optimize : 15sec)
