@@ -7,7 +7,8 @@ from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatm
                                          plot_betas_heatmap, analyze_replicates)
 
 from pylluminator.dm import get_dmp, get_dmr
-from pylluminator.cnv import copy_number_segmentation
+from pylluminator.cnv import copy_number_segmentation, copy_number_variation
+
 
 def test_plot_betas_2D(test_samples):
     models = ['PCA', 'MDS', 'DL', 'FA', 'FICA', 'IPCA', 'KPCA', 'LDA', 'MBDL', 'MBNMF', 'MBSPCA', 'NMF', 'SPCA', 'TSVD']
@@ -129,7 +130,8 @@ def test_dmr_plot(test_samples):
     os.remove('dmr_plot.png')
 
 def test_cns_plot(test_samples):
-    ranges, signal_bins_df, segments_df = copy_number_segmentation(test_samples, sample_label='PREC_500_3')
+    cnv_df = copy_number_variation(test_samples, sample_labels='PREC_500_3')
+    ranges, signal_bins_df, segments_df = copy_number_segmentation(test_samples, cnv_df, 'PREC_500_3')
 
     manhattan_plot_cns(signal_bins_df, segments_df, save_path='cns_plot.png')
     assert os.path.exists('cns_plot.png')

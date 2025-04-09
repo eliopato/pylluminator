@@ -1279,7 +1279,8 @@ def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,
     """Display a Manhattan plot of the given CNS data, designed to work with the dataframes returned by
     copy_number_segmentation()
 
-    :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
+    :param data_to_plot: dataframe to use for plotting. Typically, the bins coordinate dataframe returned by
+        copy_number_segmentation()
     :type data_to_plot: pandas.DataFrame
 
     :param segments_to_plot: if set, display the segments using columns "chromosome", "start", "end" and "mean_cnv" of
@@ -1312,14 +1313,6 @@ def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,
                     log10=False, annotation=None, draw_significance=False, save_path=save_path)
 
 ########################################################################################################################
-
-def visualize_chr_region(samples: Samples, chr_id:str | int, start_pos: int, end_pos: int,
-                         apply_mask: bool=True, padding=1500, keep_na: bool=False, protein_coding_only=True,
-                         custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
-                         figsize:tuple[float, float]=(15, 10), save_path: None | str=None,
-                         row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
-
-    """Show the beta values of a gene for all probes and samples in its transcription zone."""
 
 
 def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
