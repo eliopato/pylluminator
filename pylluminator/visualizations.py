@@ -12,6 +12,7 @@ import matplotlib.text as mtext
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 from scipy.cluster.hierarchy import linkage, dendrogram
 from patsy import dmatrix
 from statsmodels.api import OLS
@@ -1723,3 +1724,116 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
 
     if return_df:
         return long_df.groupby(['Replicate', 'channel']).describe()
+
+def _select_metadata(input_data: Samples | pd.DataFrame, columns:list[str]|None=None,
+                     numeric_only=False, keep_col: str|None=None) -> pd.DataFrame | None:
+    if isinstance(input_data, Samples):
+        metadata = input_data.sample_sheet.drop(columns=input_data.sample_label_name)
+    elif isinstance(input_data, pd.DataFrame):
+        metadata = input_data.copy()
+    else:
+        LOGGER.error('input_data must be a Samples object or a pandas DataFrame')
+        return None
+
+    if keep_col is not None and keep_col not in metadata.columns:
+        LOGGER.error(f'Column {keep_col} not found in the metadata')
+        return None
+
+    if numeric_only:
+        valid_columns = metadata.select_dtypes(include=[np.number]).columns
+
+        if len(valid_columns) == 0:
+            LOGGER.error('No numeric columns to plot')
+            return None
+    else:
+        valid_columns = metadata.columns
+
+    if columns is not None:
+        selected_cols = []
+        for c in columns:
+            if c not in valid_columns:
+                LOGGER.warning(f'Column {c} not found in the metadata, ignoring it')
+            else:
+                selected_cols.append(c)
+        if len(selected_cols) == 0:
+            LOGGER.error('No valid columns to plot')
+            return None
+
+        if keep_col is not None:
+            selected_cols.append(keep_col)
+        metadata = metadata[selected_cols]
+
+    return metadata
+
+def metadata_correlation(input_data: Samples | pd.DataFrame, columns:list[str]|None=None, abs_corr=True, save_path=None) -> None:
+    """Plot the correlation between the metadata columns of the samplesheet.
+
+    :param input_data: Samples object to analyze the sample sheet of, or a sample sheet dataframe directly
+    :type input_data: Samples | pd.DataFrame
+
+    :param columns: list of columns to use for the correlation. If None, use all columns. Default: None
+    :type columns: list[str] | None
+
+    :param abs_corr: if True, plot the absolute correlation. Default: True
+    :type abs_corr: bool
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+    """
+    metadata = _select_metadata(input_data, columns)
+    if metadata is None:
+        return
+
+    plt.style.use('ggplot')
+
+    corr = metadata.apply(lambda x:  x if is_numeric_dtype(x) else pd.factorize(x)[0]).corr(method='pearson', min_periods=1)
+
+    fisize = max(5.0, len(metadata.columns)/1.5)
+    plt.subplots(figsize=(fisize,fisize - 1))
+    cmap = sns.cm.rocket_r if abs_corr else 'vlag'
+    vmin = 0 if abs_corr else -1
+    sns.heatmap(corr, annot=True, fmt=".2f", vmax=1, vmin=vmin, cmap=cmap)
+
+    if save_path is not None:
+        plt.savefig(os.path.expanduser(save_path))
+
+def metadata_pairplot(input_data: Samples | pd.DataFrame, columns:list[str]|None=None,
+                      hue: str | None = None, kind='reg', corner=True, height=1.5,
+                      save_path=None, **kwargs) -> None:
+    """ Build a pair plot from the samples' sample sheet. Just a very simple wrapper around sns.pairplot()
+
+    :param input_data: Samples object to analyze the sample sheet of, or a sample sheet dataframe directly
+    :type input_data: Samples | pd.DataFrame
+
+    :param columns: list of columns to use for the correlation. If None, use all columns. Default: None
+    :type columns: list[str] | None
+
+    :param hue: column name to use for the color of the points and categorize them for regression. Default: None
+    :type hue: str | None
+
+    :param kind: kind of plot to use. Possible values: 'scatter', 'kde', 'hist', 'reg'. Default: 'reg'
+    :type kind: str
+
+    :param corner: if True, plot only the lower triangle of the matrix. Default: True
+    :type corner: bool
+
+    :param height: height of each facet in inches. Default: 1.5
+    :type height: float
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+
+    :param kwargs: additional arguments to pass to sns.pairplot()
+    :return: None
+    """
+
+    metadata = _select_metadata(input_data, columns, True, keep_col=hue)
+    if metadata is None:
+        return
+
+    plt.style.use('ggplot')
+
+    sns.pairplot(metadata, height=height, corner=corner, kind=kind, hue=hue, **kwargs)
+
+    if save_path is not None:
+        plt.savefig(os.path.expanduser(save_path))

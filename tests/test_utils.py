@@ -11,9 +11,6 @@ def test_set_logger():
     set_logger('WARNING')
     assert get_logger_level() == 30
 
-    set_logger('DEBUG')
-    assert get_logger_level() == 10
-
     set_logger(30)
     assert get_logger_level() == 30
 
@@ -25,13 +22,16 @@ def test_set_logger():
     set_logger(56)
     assert get_logger_level() == 30
 
+    set_logger('DEBUG')
+    assert get_logger_level() == 10
+
 def test_get_logger():
-    logger = get_logger(40)
+    logger = get_logger(20)
     assert logger is not None
     assert isinstance(logger,logging.Logger)
-    assert get_logger_level() == 40
+    assert get_logger_level() == 20
     get_logger()
-    assert get_logger_level() == 40
+    assert get_logger_level() == 20
 
 def test_remove_probe_suffix():
     test_str = 'cg00002033_TC12'

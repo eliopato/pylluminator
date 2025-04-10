@@ -4,7 +4,7 @@ import pandas as pd
 from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
                                          manhattan_plot_dmr, manhattan_plot_cns, visualize_gene, betas_dendrogram,
                                          pc_association_heatmap, pc_correlation_heatmap, plot_methylation_distribution,
-                                         plot_betas_heatmap, analyze_replicates)
+                                         plot_betas_heatmap, analyze_replicates, metadata_correlation, metadata_pairplot)
 
 from pylluminator.dm import get_dmp, get_dmr
 from pylluminator.cnv import copy_number_segmentation, copy_number_variation
@@ -230,3 +230,58 @@ def test_analyze_replicates(test_samples, caplog):
     assert 'ERROR' not in caplog.text
     assert os.path.exists('replicates.png')
     os.remove('replicates.png')
+
+def test_metadata_correlation(test_samples, caplog):
+    metadata_correlation(test_samples, save_path='metadata_correlation.png')
+    assert os.path.exists('metadata_correlation.png')
+    os.remove('metadata_correlation.png')
+
+    caplog.clear()
+    metadata_correlation(['jui'], save_path='metadata_correlation.png')
+    assert not os.path.exists('metadata_correlation.png')
+    assert 'input_data must be a Samples object or a pandas DataFrame' in caplog.text
+
+    caplog.clear()
+    metadata_correlation(test_samples.sample_sheet, columns=['sample_type', 'sentrix_id', 'sample_number'],
+                         abs_corr=False, save_path='metadata_correlation.png')
+    assert os.path.exists('metadata_correlation.png')
+    assert 'Column sentrix_id not found' in caplog.text
+    os.remove('metadata_correlation.png')
+
+    caplog.clear()
+    metadata_correlation(test_samples.sample_sheet, columns=['sentrix_id'], abs_corr=False,
+                         save_path='metadata_correlation.png')
+    assert not os.path.exists('metadata_correlation.png')
+    assert 'No valid columns to plot' in caplog.text
+
+def test_metadata_pairplot(test_samples, caplog):
+    metadata_pairplot(test_samples, save_path='metadata_pairplot.png')
+    assert os.path.exists('metadata_pairplot.png')
+    os.remove('metadata_pairplot.png')
+
+    caplog.clear()
+    metadata_pairplot(['jui'], save_path='metadata_pairplot.png')
+    assert not os.path.exists('metadata_pairplot.png')
+    assert 'input_data must be a Samples object or a pandas DataFrame' in caplog.text
+
+    caplog.clear()
+    metadata_pairplot(test_samples.sample_sheet, columns=['sample_type', 'sentrix_id', 'sample_number'],
+                      save_path='metadata_pairplot.png')
+    assert os.path.exists('metadata_pairplot.png')
+    assert 'Column sentrix_id not found' in caplog.text
+    os.remove('metadata_pairplot.png')
+
+    caplog.clear()
+    metadata_pairplot(test_samples.sample_sheet, columns=['sentrix_id'], save_path='metadata_pairplot.png')
+    assert not os.path.exists('metadata_pairplot.png')
+    assert 'No valid columns to plot' in caplog.text
+
+    caplog.clear()
+    metadata_pairplot(test_samples.sample_sheet.drop(columns='sample_number'), save_path='metadata_pairplot.png')
+    assert not os.path.exists('metadata_pairplot.png')
+    assert 'No numeric columns to plot' in caplog.text
+
+    caplog.clear()
+    metadata_pairplot(test_samples, hue='nonexistent', save_path='metadata_pairplot.png')
+    assert not os.path.exists('metadata_pairplot.png')
+    assert 'Column nonexistent not found' in caplog.text
