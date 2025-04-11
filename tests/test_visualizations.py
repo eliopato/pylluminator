@@ -6,7 +6,7 @@ from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatm
                                          pc_association_heatmap, pc_correlation_heatmap, plot_methylation_distribution,
                                          plot_betas_heatmap, analyze_replicates, metadata_correlation, metadata_pairplot)
 
-from pylluminator.dm import get_dmp, get_dmr
+from pylluminator.dm import DM
 from pylluminator.cnv import copy_number_segmentation, copy_number_variation
 
 
@@ -59,54 +59,54 @@ def test_plot_betas_heatmap(test_samples):
 
 def test_dmp_heatmap_ols(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
-    dmps, contrasts = get_dmp(test_samples, '~ sample_type', probe_ids=probe_ids)
+    my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png')
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png')
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', custom_sheet=pd.DataFrame())
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', custom_sheet=pd.DataFrame())
     assert not os.path.exists('dmp_heatmap.png')
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', contrast=['a', 'b'])
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', contrast=['a', 'b'])
     assert not os.path.exists('dmp_heatmap.png')
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', contrast=contrasts[0])
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', contrast=my_dms.contrasts[0])
     assert os.path.exists('dmp_heatmap.png')
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', nb_probes=500, figsize=(3, 19), var='sample_type', row_factors=['sample_type'])
-    assert os.path.exists('dmp_heatmap.png')
-    os.remove('dmp_heatmap.png')
-
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', drop_na=False, row_factors=['sample_type'])
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', nb_probes=500, figsize=(3, 19), var='sample_type', row_factors=['sample_type'])
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', row_factors=['sample_type'], row_legends=['sample_type'])
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', drop_na=False, row_factors=['sample_type'])
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png', pval_threshold=0.05, delta_beta_threshold=0.1)
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', row_factors=['sample_type'], row_legends=['sample_type'])
+    assert os.path.exists('dmp_heatmap.png')
+    os.remove('dmp_heatmap.png')
+
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', pval_threshold=0.05, delta_beta_threshold=0.1)
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
 def test_dmp_heatmap_mixed_model(test_samples, caplog):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     test_samples.sample_sheet['sentrix_position'] = [name[-1:] for name in test_samples.sample_sheet['sample_name']]
-    dmps, contrasts = get_dmp(test_samples, '~ sentrix_position', group_column='sentrix_position', probe_ids=probe_ids)
+    my_dms = DM(test_samples, '~ sentrix_position', group_column='sentrix_position', probe_ids=probe_ids)
 
     caplog.clear()
-    plot_dmp_heatmap(dmps, test_samples, save_path='dmp_heatmap.png')
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png')
     assert not os.path.exists('dmp_heatmap.png')
     assert 'You need to specify a contrast for DMPs calculated with a mixed model' in caplog.text
 
     caplog.clear()
-    plot_dmp_heatmap(dmps, test_samples, contrast=contrasts[0], save_path='dmp_heatmap.png', sort_by='unknown')
+    plot_dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', sort_by='unknown')
     assert not os.path.exists('dmp_heatmap.png')
     assert 'parameter unknown not found. Must be pvalue, delta_beta' in caplog.text
 
     caplog.clear()
-    plot_dmp_heatmap(dmps, test_samples, contrast=contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'])
+    plot_dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'])
     assert os.path.exists('dmp_heatmap.png')
     assert 'ERROR' not in caplog.text
     os.remove('dmp_heatmap.png')
@@ -114,18 +114,19 @@ def test_dmp_heatmap_mixed_model(test_samples, caplog):
 
 def test_dmr_plot(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
-    dmps, contrasts = get_dmp(test_samples, '~ sample_type', probe_ids=probe_ids)
-    dmrs = get_dmr(test_samples, dmps, contrasts, probe_ids=probe_ids)
+    my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
+    my_dms.compute_dmr(probe_ids=probe_ids)
 
-    manhattan_plot_dmr(dmrs, contrast=contrasts[0], save_path='dmr_plot.png')
+    manhattan_plot_dmr(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png')
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
-    manhattan_plot_dmr(dmrs,  contrast=contrasts[0], save_path='dmr_plot.png', draw_significance=False, figsize=(3, 19))
+    manhattan_plot_dmr(my_dms,  contrast=my_dms.contrasts[0], save_path='dmr_plot.png', draw_significance=False, figsize=(3, 19))
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
-    manhattan_plot_dmr(dmrs, annotation=test_samples.annotation, contrast=contrasts[0], save_path='dmr_plot.png',  title='juju', medium_threshold=0.1, high_threshold=0.2)
+    manhattan_plot_dmr(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png',  title='juju',
+                       medium_threshold=0.1, high_threshold=0.2)
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 

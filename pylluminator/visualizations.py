@@ -20,6 +20,7 @@ import seaborn as sns
 
 from pylluminator.samples import Samples
 from pylluminator.annotations import Annotations
+from pylluminator.dm import DM
 from pylluminator.ml import dimensionality_reduction
 from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes
 from pylluminator.utils import merge_series_values
@@ -860,7 +861,7 @@ def plot_betas_heatmap(samples: Samples, apply_mask:bool=True,
 
 
 
-def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None = None,
+def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
                      nb_probes: int = 100, figsize: tuple[float, float]=(10, 10),
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
@@ -869,27 +870,31 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
-    :param dmps:  p-values and statistics for each probe, as returned by get_dmp()
-    :type dmps: pandas.DataFrame
-    :param samples: samples to use for plotting
-    :type samples: Samples
+
     :param contrast: name of the contrast to use to sort beta values. Must be one of the output contrasts from get_dmp().
         If None is given, will use the F-statistics p-value. Default: None
     :type contrast: str | None
+
     :param nb_probes: number of probes to plot. Default: 100
     :type nb_probes: int
+
     :param figsize: size of the plot. Default: (10, 10)
     :type figsize: tuple
+
     :param var: name of the variable to use for the columns of the heatmap. If None, will use the sample names. Default: None
     :type var: str | list[str] | None
+
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
         samples to display. Default: None
     :type custom_sheet: pandas.DataFrame | None
+
     :param drop_na: set to True to drop probes with any NA beta values. Note that if set to False, the rendered plot
         won't show the hierarchical clusters. Default: True
     :type drop_na: bool
+
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
+
     :param sort_by: column to order dmps by. Can be pvalue, delta_beta, or any dmp column name. Default: pvalue
     :type sort_by: str
     :param pval_threshold: maximum DMP p-value. If None, no filter is applied on pvalues. Default: None
@@ -905,31 +910,32 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
 
     :return: None"""
 
-    if dmps is None or len(dmps) == 0:
+    if dm is None or dm.dmp is None or len(dm.dmp) == 0:
+        LOGGER.error('No DMPs to plot')
         return
 
     if isinstance(contrast, list):
         LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
         return
 
-    # no F-statistic p_value for DMPs calculated with MixedModelLM, so we need a constrast specified
-    if pd.isna(dmps['f_pvalue']).all() and contrast is None:
+    # no F-statistic p_value for DMPs calculated with MixedModelLM, so we need a contrast specified
+    if pd.isna(dm.dmp['f_pvalue']).all() and contrast is None:
         LOGGER.error('You need to specify a contrast for DMPs calculated with a mixed model')
         return None
 
-    if sort_by not in ['pvalue', 'delta_beta'] + dmps.columns.tolist():
+    if sort_by not in ['pvalue', 'delta_beta'] + dm.dmp.columns.tolist():
         LOGGER.error(f'parameter {sort_by} not found. Must be pvalue, delta_beta or a column of dmps dataframe')
         return
 
-    label = samples.sample_label_name
-    betas = samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
+    label = dm.samples.sample_label_name
+    betas = dm.samples.get_betas(custom_sheet=custom_sheet, drop_na=drop_na)
     if betas is None or len(betas) == 0:
         LOGGER.error('No beta values found')
         return None
 
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
-    dmps = dmps.copy()
+    dmps = dm.dmp.copy()
     dmps['delta_beta'] = dmps[[c for c in dmps.columns if c.startswith('avg_beta_delta')]].max(axis=1)
     pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value'
     if pval_threshold is not None:
@@ -952,7 +958,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         LOGGER.error('No betas to plot')
         return
 
-    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
+    sheet = custom_sheet if custom_sheet is not None else dm.sample_info
     sheet = sheet.copy()[sheet[label].isin(betas.columns)]  #  get intersection of the two dfs
     sheet = sheet.set_index(label)
 
@@ -964,7 +970,7 @@ def plot_dmp_heatmap(dmps: pd.DataFrame, samples: Samples, contrast: str | None 
         new_labels = [f'{c} ({",".join([str(sheet.loc[c, v]) for v in var])})' for c in betas.columns]
         sheet = sheet.loc[betas.columns,]  # sort sheet like beta columns
         sheet.index = new_labels  # update sheet index values
-        sheet.index.name = samples.sample_label_name
+        sheet.index.name = dm.samples.sample_label_name
         betas.columns = new_labels
 
     betas = betas.loc[sorted_probe_idxs].T
@@ -1214,21 +1220,21 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         plt.savefig(os.path.expanduser(save_path))
 
 
-def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
+def manhattan_plot_dmr(dm: DM, contrast: str,
                        chromosome_col='chromosome', x_col='segment_start', y_col='p_value',
-                       annotation: Annotations | None = None, annotation_col='genes', log10=True,
+                       annotation_col='genes', log10=True,
                        draw_significance=True, figsize:tuple[float, float]=(10, 8),
                        medium_threshold: float | None = None, high_threshold: float | None = None,
                        title: None | str = None, save_path: None | str=None):
     """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
 
-    :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
-    :type data_to_plot: pandas.DataFrame
+    :param dm: DM object with computed DMRs
+    :type dm: pylluminator.DM
 
-    :param contrast: name of the contrast from DMP calculation to use.
+    :param contrast: name of the contrast to use.
     :type contrast: str
 
-    :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
+    :param chromosome_col: the name of the chromosome column in the `dmr` dataframe. Default: chromosome
     :type chromosome_col: str
 
     :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: start
@@ -1236,9 +1242,6 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
 
     :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
     :type y_col: str
-
-    :param annotation: Annotation data to use to annotation significant probes. No annotation if set to None. Default: None
-    :type annotation: Annotations | None
 
     :param annotation_col: the name of a column used to write annotation on the plots for data that is above the
         significant threshold. Must be a column in the Annotation data. Default: None
@@ -1268,8 +1271,15 @@ def manhattan_plot_dmr(data_to_plot: pd.DataFrame, contrast: str,
     :type save_path: str | None
     :return: nothing"""
 
-    _manhattan_plot(data_to_plot=data_to_plot, chromosome_col=chromosome_col, y_col=f'segment_{contrast}_{y_col}_adjusted', x_col=x_col,
-                    draw_significance=draw_significance, annotation=annotation, annotation_col=annotation_col,
+    if dm.dmr is None:
+        LOGGER.error('No DMRs found')
+        return None
+    if dm.samples is None:
+        LOGGER.error('No samples found in DM object')
+        return None
+
+    _manhattan_plot(data_to_plot=dm.dmr, chromosome_col=chromosome_col, y_col=f'segment_{contrast}_{y_col}_adjusted', x_col=x_col,
+                    draw_significance=draw_significance, annotation=dm.samples.annotation, annotation_col=annotation_col,
                     medium_threshold=medium_threshold, high_threshold=high_threshold, figsize=figsize,
                     log10=log10, title=title, save_path=save_path)
 
