@@ -23,6 +23,12 @@ def test_dmp_ols(test_samples):
     assert my_dms.dmp.loc['cg00000029_TC21', 'sample_number_p_value'] == pytest.approx(0.30724222260281375) # Pval_sample_typeP
     assert my_dms.dmp.loc['cg00000029_TC21', 'effect_size'] == pytest.approx(0.7096783705055711)  # Eff_sample_type
 
+    top_10_dmrs = my_dms.get_top('DMP','sample_type[T.PREC]')
+    assert len(top_10_dmrs) == 10
+    assert 'BRWD1P2' in top_10_dmrs.iloc[0].genes
+    assert 'ENSG00000258216' in top_10_dmrs.iloc[0].genes
+
+
 def test_dmp_mixedmodel(test_samples, caplog):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     test_samples.sample_sheet['sentrix_id'] = pd.NA
@@ -88,18 +94,30 @@ def test_ols_na():
     assert len(params) == 2 + nb_factors * 4
     assert np.isnan(params).all()
 
-def test_dmr(test_samples):
+def test_dmr(test_samples, caplog):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
+    # probe_ids.extend(['cg14515812_TC11', 'cg14515812_TC12'])
     my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
+
+    # test get_top function before compute DMR = bug
+    caplog.clear()
+    my_dms.get_top('DMR','sample_type[T.PREC]')
+    assert 'Please calculate DMR first' in caplog.text
+
     my_dms.compute_dmr()
+
+    # check segments
     assert max(my_dms.segments.segment_id) == 516
-    assert len(my_dms.dmr[my_dms.dmr.segment_id == 515]) == 3
+    assert len(my_dms.segments[my_dms.segments.segment_id == 515]) == 3
+    assert my_dms.segments.loc['cg00017004_BC21', 'segment_id'] == 515
 
-    expected_values =['X', 152871744, 152871746, 515, 0.06386775794434923, 0.043502926826477106, 2.221477392945478e-07,
-                       72.06726215266515, 0.8722137212753295, 0.012102773093109292, 0.06386775794434901,
-                      -2.5416666348952717, -0.043502926826477106, 0.017115905850599335, 0.87221366, 0.8287108,
-                      0.043502867, 151960303, 153792416, 0.04285787432065091, 0.055877280730965984, 0.7505345278316073,
+    # check DMR values
+    expected_values = [151960303, 153792416, 'X', 0.04285787432065091, 0.06373101772177485, 0.7505345278316073,
                        0.055821167098151304, 0.75053453, 0.80635566, -0.05582112]
-    assert my_dms.dmr.loc['cg00017004_BC21', ].values.tolist() == pytest.approx(expected_values)
+    assert my_dms.dmr.loc[515, ].values.tolist() == pytest.approx(expected_values)
 
-    assert len(my_dms.get_top('DMR','sample_type[T.PREC]')) == 10
+    # test get_top function
+    top_10_dmrs = my_dms.get_top('DMR','sample_type[T.PREC]')
+    assert len(top_10_dmrs) == 10
+    assert "MIR34AHG" in top_10_dmrs.iloc[0].genes
+    assert "CASZ1" in top_10_dmrs.iloc[0].genes

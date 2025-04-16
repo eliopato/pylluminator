@@ -2,7 +2,7 @@
 ==============================
 
 .. image:: https://img.shields.io/github/last-commit/eliopato/pylluminator.svg
-   :target: https://github.com/eliopato/pylluminator/commits/master
+   :target: https://github.com/eliopato/pylluminator/commits/dev
    :alt: Last commit
 
 .. image:: https://img.shields.io/github/actions/workflow/status/eliopato/pylluminator/run_test.yml?branch=main
@@ -20,6 +20,8 @@
 .. image:: https://img.shields.io/badge/License-MIT-blue.svg
    :target: ./LICENSE
    :alt: MIT License
+
+`Tutorials <https://pylluminator.readthedocs.io/en/latest/tutorials.html>`_ | `API documentation <https://pylluminator.readthedocs.io/en/latest/api.html>`_ | `Source code <https://github.com/eliopato/pylluminator>`_ | `Release on pip <https://pypi.org/project/pylluminator/>`_
 
 Pylluminator is a Python package designed to provide an efficient workflow for processing and analyzing DNA
 methylation data, mirroring the functionalities of the popular R package `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_.

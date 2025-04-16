@@ -16,7 +16,6 @@ from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
 from enum import Enum, unique
-from pylluminator.annotations import Annotations
 from pylluminator.utils import remove_probe_suffix, set_level_as_index, get_logger, merge_alt_chromosomes
 from pylluminator.samples import Samples
 from pylluminator.stats import get_factors_from_formula
@@ -173,24 +172,26 @@ class DM:
             LOGGER.error('Please calculate DMP first')
             return
 
-        if dm_type == DM_TYPE.DMR and contrast not in self.dmr.keys():
-            LOGGER.error(f'Contrast {contrast} not found in DMR list. Please calculate DMR for this contrast first')
-            return
+        sort_column =  f'{contrast}_p_value'
+        columns_to_keep = [] if columns_to_keep is None else columns_to_keep
 
-        top_dm = self.dmr if dm_type == DM_TYPE.DMR else self.dmp
-        sort_column = f'segment_{contrast}_p_value' if dm_type == DM_TYPE.DMR else f'{contrast}_p_value'
+        if dm_type in [DM_TYPE.DMR, 'DMR']:
+            if self.dmr is None or self.segments is None:
+                LOGGER.error('Please calculate DMR first')
+                return None
+            top_dm = self.dmr.join(self.segments.reset_index().set_index('segment_id'))
+            if chromosome_col not in top_dm.columns:
+                LOGGER.error(f'Chromosome column {chromosome_col} was not found in the dataframe')
+                return None
+            columns_to_keep += [chromosome_col, 'probe_id']
+            top_dm[chromosome_col] = merge_alt_chromosomes(top_dm[chromosome_col])
+        else:
+            top_dm = self.dmp
+
         if sort_column not in top_dm.columns:
             LOGGER.error(f'The column {sort_column} for contrast {contrast} was not found in the dataframe. '
                          f'Available contrasts: {self.contrasts}')
             return None
-
-        columns_to_keep = [] if columns_to_keep is None else columns_to_keep
-        if dm_type == DM_TYPE.DMR :
-            if chromosome_col not in top_dm.columns:
-                LOGGER.error(f'Chromosome column {chromosome_col} was not found in the dataframe')
-                return None
-            columns_to_keep += [chromosome_col, 'segment_id']
-            top_dm[chromosome_col] = merge_alt_chromosomes(top_dm[chromosome_col])
 
         top_dm = top_dm[[sort_column] + columns_to_keep].dropna(subset=sort_column)
 
@@ -201,10 +202,10 @@ class DM:
                          f'Available columns : {probe_infos.columns}.')
         else:
             gene_info = probe_infos[['probe_id', annotation_col]].drop_duplicates().set_index('probe_id')
-            gene_info = gene_info.dropna()
-            top_dm = top_dm.join(gene_info, how='inner')
+            gene_info = gene_info.dropna().reset_index()
+            top_dm = top_dm.reset_index().merge(gene_info, how='inner', on='probe_id').drop(columns='probe_id')
 
-            # todo filter with the first N probes/segments then do that
+            # todo time optimization: filter with the first N probes/segments then do that
             group_columns = top_dm.columns.tolist()
             group_columns.remove(annotation_col)
             top_dm = top_dm.reset_index(drop=True).drop_duplicates().groupby(group_columns).agg(merge_series_values)
@@ -247,7 +248,6 @@ class DM:
         """
 
         LOGGER.info('>>> Start calculating DMP')
-
         if custom_sheet is None:
             custom_sheet = samples.sample_sheet.copy()
 
@@ -488,36 +488,30 @@ class DM:
 
         # group segments by ID to compute DMR values
         segments_grouped = dmr.groupby('segment_id')
-
+        seg_dmr = pd.DataFrame()
+        seg_dmr['start'] = segments_grouped['start'].min()
+        seg_dmr['end'] = segments_grouped['end'].max()
+        seg_dmr['chromosome'] = segments_grouped['chromosome'].first()
         # calculate each segment's p-values
         LOGGER.info('combining p-values, it might take a few minutes...')
 
-        # get each segment's start and end
-        dmr['segment_start'] = segments_grouped['start'].transform('min')
-        dmr['segment_end'] = segments_grouped['end'].transform('max')
-
         for c in contrast:
+            pval_col = f'{c}_p_value'
+            seg_dmr[pval_col] = segments_grouped[pval_col].apply(_combine_p_values_stouffer)
 
-            seg_pvals = segments_grouped[f'{c}_p_value'].apply(_combine_p_values_stouffer)
-            seg_pvals_df = pd.DataFrame({f'segment_{c}_p_value': seg_pvals.values,
-                                         'segment_id': [n + 1 for n in range(len(seg_pvals))] })
-            probe_ids = dmr.index
-            dmr = dmr.merge(seg_pvals_df, on='segment_id', how='left')
-            dmr.index = probe_ids
-
-            nb_significant = len(dmr.loc[dmr[f'segment_{c}_p_value'] < 0.05, 'segment_id'].drop_duplicates())
+            nb_significant = len(seg_dmr.loc[seg_dmr[pval_col] < 0.05])
             LOGGER.info(f' - {nb_significant:,} significant segments for {c} (p-value < 0.05)')
 
             # use Benjamini/Hochberg's method to adjust p-values
-            idxs = ~np.isnan(dmr[f'segment_{c}_p_value'])  # any NA in segment_p_value column causes BH method to crash
-            dmr.loc[idxs, f'segment_{c}_p_value_adjusted'] = multipletests(dmr.loc[idxs, f'segment_{c}_p_value'], method='fdr_bh')[1]
-            nb_significant = len(dmr.loc[dmr[f'segment_{c}_p_value_adjusted'] < 0.05, 'segment_id'].drop_duplicates())
+            idxs = ~np.isnan(seg_dmr[pval_col])  # any NA in segment_p_value column causes BH method to crash
+            seg_dmr.loc[idxs, f'{pval_col}_adjusted'] = multipletests(seg_dmr.loc[idxs, pval_col], method='fdr_bh')[1]
+            nb_significant = len(seg_dmr.loc[seg_dmr[f'{pval_col}_adjusted'] < 0.05])
             LOGGER.info(f' - {nb_significant:,} significant segments after Benjamini/Hochberg\'s adjustment for {c} (p-value < 0.05)')
 
         # calculate estimates' means for each factor
         for c in self.dmp.columns:
             if c.endswith('estimate') or c.startswith('avg_beta_'):
-                dmr[f'segment_{c}'] = segments_grouped[c].transform('mean')
+                seg_dmr[c] = segments_grouped[c].mean()
 
         # # get each segment's start and end
         # dmr['segment_start'] = segments_grouped['start'].transform('min')
@@ -551,6 +545,5 @@ class DM:
 
         # dmr = dmr.drop(columns = dmps.columns, errors='ignore')
 
-        self.segments = segments
-        self.dmr = dmr
-        return dmr
+        self.segments = segments[['segment_id']]
+        self.dmr = seg_dmr

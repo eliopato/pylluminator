@@ -1025,7 +1025,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     :param chromosome_col: the name of the chromosome column in the `data_to_plot` dataframe. Default: chromosome
     :type chromosome_col: str
 
-    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: segment_start
+    :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: start
     :type x_col: str
 
     :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
@@ -1077,18 +1077,13 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
     data_to_plot = data_to_plot[cols_to_keep]
     data_to_plot = data_to_plot.dropna(subset=y_col)
-
     data_to_plot['merged_chr'] = merge_alt_chromosomes(data_to_plot[chromosome_col])
-
     # convert the chromosome column to int values
     if data_to_plot.dtypes[chromosome_col] is not int:
         data_to_plot['chr_id'] = get_chromosome_number(data_to_plot['merged_chr'], True)
         data_to_plot = data_to_plot.astype({'chr_id': 'int'})
     else:
         data_to_plot['chr_id'] = data_to_plot[chromosome_col]
-
-    # sort by chromosome and make the column a category
-    data_to_plot = data_to_plot.sort_values(['chr_id', x_col]).astype({'chr_id': 'category'})
 
     # figure initialization
     fig, ax = plt.subplots(figsize=figsize)
@@ -1130,15 +1125,18 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             LOGGER.error(f'{annotation_col} was not found in the annotation dataframe. '
                          f'Available columns : {annotation.probe_infos.columns}.')
         else:
-            gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates().set_index('probe_id')
+            gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates()
             gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
-            if 'segment_id' in data_to_plot.columns:
-                genes_per_seg = data_to_plot[['segment_id']].join(gene_info).groupby('segment_id', observed=True).agg(merge_series_values)
-                data_to_plot = data_to_plot.drop_duplicates().set_index('segment_id').join(genes_per_seg)
+            if data_to_plot.index.name == 'segment_id':
+                data_to_plot = data_to_plot.merge(gene_info, on='probe_id').groupby(['start', 'chr_id'], observed=True).agg(merge_series_values)
                 data_to_plot[annotation_col] = data_to_plot[annotation_col].apply(lambda x: ';'.join(set(x.split(';'))))
+                data_to_plot = data_to_plot.reset_index()
             else:
-                data_to_plot = data_to_plot.join(gene_info)
+                data_to_plot = data_to_plot.join(gene_info.set_index('probe_id'))
     data_to_plot = data_to_plot.reset_index(drop=True).drop_duplicates()
+    # sort by chromosome and make the column a category
+    data_to_plot = data_to_plot.sort_values(['chr_id', x_col]).astype({'chr_id': 'category'})
+
     # make indices for plotting
     data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
 
@@ -1221,7 +1219,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
 
 def manhattan_plot_dmr(dm: DM, contrast: str,
-                       chromosome_col='chromosome', x_col='segment_start', y_col='p_value',
+                       chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation_col='genes', log10=True,
                        draw_significance=True, figsize:tuple[float, float]=(10, 8),
                        medium_threshold: float | None = None, high_threshold: float | None = None,
@@ -1278,7 +1276,8 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
         LOGGER.error('No samples found in DM object')
         return None
 
-    _manhattan_plot(data_to_plot=dm.dmr, chromosome_col=chromosome_col, y_col=f'segment_{contrast}_{y_col}_adjusted', x_col=x_col,
+    data = dm.dmr.join(dm.segments.reset_index().set_index('segment_id'))
+    _manhattan_plot(data_to_plot=data, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}_adjusted', x_col=x_col,
                     draw_significance=draw_significance, annotation=dm.samples.annotation, annotation_col=annotation_col,
                     medium_threshold=medium_threshold, high_threshold=high_threshold, figsize=figsize,
                     log10=log10, title=title, save_path=save_path)

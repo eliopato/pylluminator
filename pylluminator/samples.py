@@ -665,7 +665,6 @@ class Samples:
     def remove_probes_suffix(self, apply_mask=True):
         """Merge probes that have the same ID but different suffixes (e.g. _BC11, _TC21..) by averaging their signal
         values. Resets calculated pvalues and betas.
-        TODO: to match ChAMP, take the values of the probe with the best poobah pvalue
 
         :param apply_mask: skip masked probes values when merging samples if True. Default: True
         :type apply_mask: bool
@@ -1077,7 +1076,7 @@ class Samples:
         :type include_out_of_band: bool
 
         :return: None"""
-        LOGGER.info('Calculating beta values..')
+        LOGGER.info('Calculate beta values')
         df = self.get_signal_df(False).sort_index()  # sort indexes returns a copy
         
         idx = pd.IndexSlice
