@@ -22,7 +22,7 @@
    :alt: MIT License
 
 Pylluminator is a Python package designed to provide an efficient workflow for processing, analyzing, and visualizing DNA
-methylation data. Pylluminator is inspired from the popular R packages `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>` and  `ChAMP <https://bioconductor.org/packages/release/bioc/html/ChAMP.html>`_.
+methylation data. Pylluminator is inspired from the popular R packages `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_ and  `ChAMP <https://bioconductor.org/packages/release/bioc/html/ChAMP.html>`_.
 
 Pylluminator supports the following Illumina's Infinium array versions:
 
