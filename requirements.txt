@@ -4,6 +4,7 @@ Cython==3.0.11
 fastcluster==1.2.6  # optional requirement - for optimized clustering
 inmoose==0.7.3
 joblib==1.4.2
+KDEpy==1.1.12
 linear_segment==1.2.1
 matplotlib==3.10.0
 natsort==8.4.0

@@ -17,6 +17,7 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from patsy import dmatrix
 from statsmodels.api import OLS
 import seaborn as sns
+from KDEpy import FFTKDE
 
 from pylluminator.samples import Samples
 from pylluminator.annotations import Annotations
@@ -105,16 +106,13 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict | No
     return legend_handles, linestyle_categories
 
 
-def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, group_column: None | str | list[str] = None,
+def betas_density(samples: Samples, title: None | str = None, group_column: None | str | list[str] = None,
                color_column: str | None = None,  linestyle_column=None, figsize=(10, 7),
                custom_sheet: None | pd.DataFrame = None, apply_mask=True, save_path: None | str=None) -> None:
     """Plot beta values density for each sample
 
     :param samples: with beta values already calculated
     :type samples: Samples
-
-    :param n_ind: number of evaluation points for the estimated PDF. Default: 100
-    :type n_ind: int
 
     :param title: custom title for the plot to override generated title. Default: None
     :type title: str | None
@@ -144,6 +142,8 @@ def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, 
 
     # initialize values
     plt.style.use('ggplot')
+    plt.subplots(figsize=figsize)
+
     # get betas with or without masked probes and samples
     betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet, drop_na=True)
     if betas is None or len(betas) == 0:
@@ -169,16 +169,11 @@ def betas_density(samples: Samples, n_ind: int = 100, title: None | str = None, 
     ls_legend_handles, linestyles = _get_linestyles(sheet, linestyle_column)
     legend_handles = c_legend_handles + ls_legend_handles
 
-    if n_ind < 10:
-        LOGGER.warning('n_ind is too low, setting it to 10')
-        n_ind = 10
-
-    inds = [(n-2)*(1/n_ind) for n in range(1, n_ind+4)]
-    if linestyles is None:
-        betas.plot.density(ind=inds, figsize=figsize, color=colors)
-    else:
-        for name, linestyle in linestyles.items():
-            betas[name].plot.density(ind=inds, figsize=figsize, color=colors[name], linestyle=linestyle)
+    for c in betas.columns:
+        x, y = FFTKDE(kernel="gaussian", bw="silverman").fit(betas[c].values).evaluate()
+        ls = '-' if linestyles is None else linestyles[c]
+        col = None if colors is None else colors[c]
+        plt.plot(x, y, label=c, color=col, linestyle=ls)
 
     if title is None:
         if group_column is None:

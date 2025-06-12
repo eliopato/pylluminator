@@ -39,8 +39,8 @@ def test_plot_betas_density(test_samples):
     assert os.path.exists('betas_plot.png')
     os.remove('betas_plot.png')
 
-    betas_density(test_samples, n_ind=5, save_path='betas_plot.png', title='titre', group_column='sample_type',
-               linestyle_column='sample_type')
+    betas_density(test_samples, save_path='betas_plot.png', title='titre', group_column='sample_type',
+                  linestyle_column='sample_type')
     assert os.path.exists('betas_plot.png')
     os.remove('betas_plot.png')
 
