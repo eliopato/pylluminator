@@ -24,7 +24,7 @@ from pylluminator.utils import merge_series_values
 LOGGER = get_logger()
 
 
-def _combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
+def combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
     """shortcut to scipy's function, using Stouffer method to combine p-values. Only return the combined p-value
 
     :param p_values: p-values to combine
@@ -284,17 +284,14 @@ class DM:
         # drop probes with only NAs even if drop_na is false
         if not drop_na:
             betas = betas.dropna(how='all')
-
         if len(betas) == 0:
             LOGGER.error('No probes left')
             return None, None
 
         betas = set_level_as_index(betas, 'probe_id', drop_others=True)
-
         if probe_ids is not None:
             probe_ids = betas.index.intersection(probe_ids)
             betas = betas.loc[probe_ids]
-
         # make the design matrix
         sample_info = custom_sheet[custom_sheet[samples.sample_label_name].isin(betas.columns)]
         sample_info = sample_info.set_index(samples.sample_label_name)
@@ -302,7 +299,6 @@ class DM:
         sample_names_order = [c for c in betas.columns if c in sample_info.index]
         sample_info = sample_info.loc[sample_names_order]
         betas = betas[sample_names_order]
-
         groups_info = sample_info[group_column] if group_column is not None else None
 
         # the reference level for each factor is the first level of the sorted factor values. If a specific reference value
@@ -349,6 +345,10 @@ class DM:
                     first_factor = name
                 else:
                     dmps[f'avg_beta_delta_{col}_{first_factor}_vs_{name}'] = dmps[f'avg_beta_{col}_{first_factor}'] - dmps[f'avg_beta_{col}_{name}']
+
+        # adjust p-values
+        for f in factor_names:
+            dmps[f'{f}_p_value_adjusted'] = multipletests(dmps[f'{f}_p_value'], method='fdr_bh')[1]
 
         self.dmp = dmps
         self.contrasts = factor_names[1:]
@@ -497,7 +497,7 @@ class DM:
 
         for c in contrast:
             pval_col = f'{c}_p_value'
-            seg_dmr[pval_col] = segments_grouped[pval_col].apply(_combine_p_values_stouffer)
+            seg_dmr[pval_col] = segments_grouped[pval_col].apply(combine_p_values_stouffer)
 
             nb_significant = len(seg_dmr.loc[seg_dmr[pval_col] < 0.05])
             LOGGER.info(f' - {nb_significant:,} significant segments for {c} (p-value < 0.05)')
@@ -512,38 +512,6 @@ class DM:
         for c in self.dmp.columns:
             if c.endswith('estimate') or c.startswith('avg_beta_'):
                 seg_dmr[c] = segments_grouped[c].mean()
-
-        # # get each segment's start and end
-        # dmr['segment_start'] = segments_grouped['start'].transform('min')
-        # dmr['segment_end'] = segments_grouped['end'].transform('max')
-        #
-        # # calculate each segment's p-values
-        # LOGGER.info('combining p-values, it might take a few minutes...')
-        #
-        # for c in contrast:
-        #
-        #     seg_pvals = segments_grouped[f'{c}_p_value'].apply(_combine_p_values_stouffer)
-        #     seg_pvals_df = pd.DataFrame({f'segment_{c}_p_value': seg_pvals.values,
-        #                                  'segment_id': [n + 1 for n in range(len(seg_pvals))] })
-        #     probe_ids = dmr.index
-        #     dmr = dmr.merge(seg_pvals_df, on='segment_id', how='left')
-        #     dmr.index = probe_ids
-        #
-        #     nb_significant = len(dmr.loc[dmr[f'segment_{c}_p_value'] < 0.05, 'segment_id'].drop_duplicates())
-        #     LOGGER.info(f' - {nb_significant:,} significant segments for {c} (p-value < 0.05)')
-        #
-        #     # use Benjamini/Hochberg's method to adjust p-values
-        #     idxs = ~np.isnan(dmr[f'segment_{c}_p_value'])  # any NA in segment_p_value column causes BH method to crash
-        #     dmr.loc[idxs, f'segment_{c}_p_value_adjusted'] = multipletests(dmr.loc[idxs, f'segment_{c}_p_value'], method='fdr_bh')[1]
-        #     nb_significant = len(dmr.loc[dmr[f'segment_{c}_p_value_adjusted'] < 0.05, 'segment_id'].drop_duplicates())
-        #     LOGGER.info(f' - {nb_significant:,} significant segments after Benjamini/Hochberg\'s adjustment for {c} (p-value < 0.05)')
-        #
-        # # calculate estimates' means for each factor
-        # for c in dmps.columns:
-        #     if c.endswith('estimate') or c.startswith('avg_beta_'):
-        #         dmr[f'segment_{c}'] = segments_grouped[c].transform('mean')
-
-        # dmr = dmr.drop(columns = dmps.columns, errors='ignore')
 
         self.segments = segments[['segment_id']]
         self.dmr = seg_dmr

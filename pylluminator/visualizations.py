@@ -442,7 +442,6 @@ def pc_association_heatmap(samples: Samples, params: list[str] | None = None, nb
         plot.get_figure().savefig(os.path.expanduser(save_path))
 
 
-
 def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb_probes: int | None = None,
                            apply_mask=True, custom_sheet: None | pd.DataFrame = None, abs_corr=True,
                            save_path: None | str = None, model='PCA',  orientation='v', **kwargs):
@@ -1128,7 +1127,8 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates()
             gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
             if data_to_plot.index.name == 'segment_id':
-                data_to_plot = data_to_plot.merge(gene_info, on='probe_id').groupby(['start', 'chr_id'], observed=True).agg(merge_series_values)
+                data_to_plot = (data_to_plot.merge(gene_info, on='probe_id').drop(columns='probe_id')
+                                .groupby(['start', 'chromosome'], observed=True).agg(merge_series_values))
                 data_to_plot[annotation_col] = data_to_plot[annotation_col].apply(lambda x: ';'.join(set(x.split(';'))))
                 data_to_plot = data_to_plot.reset_index()
             else:
@@ -1192,7 +1192,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
     ax.yaxis.grid(True, color='white', alpha=0.9, linestyle='dotted')
     ax.set_axisbelow(True)  # so that the axis lines stay behind the dots
-    ax.set_xlim([0 - margin, chrom_end + margin])
+    ax.set_xlim((0 - margin, chrom_end + margin))
 
     # display chromosomes labels on x axis
     ax.set_xticks(x_major_ticks, labels=x_labels)
@@ -1223,7 +1223,7 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
                        annotation_col='genes', log10=True,
                        draw_significance=True, figsize:tuple[float, float]=(10, 8),
                        medium_threshold: float | None = None, high_threshold: float | None = None,
-                       title: None | str = None, save_path: None | str=None):
+                       title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
 
     :param dm: DM object with computed DMRs
@@ -1277,10 +1277,10 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
         return None
 
     data = dm.dmr.join(dm.segments.reset_index().set_index('segment_id'))
-    _manhattan_plot(data_to_plot=data, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}_adjusted', x_col=x_col,
-                    draw_significance=draw_significance, annotation=dm.samples.annotation, annotation_col=annotation_col,
-                    medium_threshold=medium_threshold, high_threshold=high_threshold, figsize=figsize,
-                    log10=log10, title=title, save_path=save_path)
+    return _manhattan_plot(data_to_plot=data, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}_adjusted',
+                           x_col=x_col, draw_significance=draw_significance, annotation=dm.samples.annotation,
+                           annotation_col=annotation_col, medium_threshold=medium_threshold,
+                           high_threshold=high_threshold, figsize=figsize, log10=log10, title=title, save_path=save_path)
 
 
 def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,

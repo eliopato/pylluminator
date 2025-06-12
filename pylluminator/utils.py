@@ -521,14 +521,19 @@ def merge_series_values(items: pd.Series, how:str='any'):
     :param how: operation to apply on boolean series. 'any' or 'all'. Default: 'any'
     :type how: str
     """
-    if items.dtypes == 'object' or items.dtypes == 'category':
-        return ';'.join(set(items.astype('str')))
-    if np.issubdtype(items.dtypes, np.number):
+    if len(items) == 1:
+        return items.iloc[0]
+
+    item_type = items.dtype
+
+    if item_type in ['object', 'category']:
+        return ';'.join(items.astype('str').unique())
+
+    if pd.api.types.is_numeric_dtype(item_type):
         return items.mean()
-    if items.dtypes == 'bool':
-        if how == 'any':
-            return items.any()
-        if how == 'all':
-            return items.all()
-    LOGGER.warning(f'unable to find an aggregation function for dtype {items.dtypes}')
+
+    if item_type == 'bool':
+        return items.all() if how == 'all' else items.any()
+
+    LOGGER.warning(f'unable to find an aggregation function for dtype {item_type}')
     return items.iloc[0]
