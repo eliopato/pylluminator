@@ -33,10 +33,6 @@ Pylluminator supports the following Illumina's Infinium Beadchip array versions:
 .. |logo| image:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png
     :width: 100px
 
-.. note::
-   
-   **This project is under active development.**
-
 
 Main functionalities
 --------------------
@@ -45,11 +41,11 @@ Main functionalities
 
 * data preprocessing
 
-  * background correction
-  * normalization
-  * dye bias correction
-  * pOOBAH
-  * batch effect correction with ComBat
+  * Type-I probes channel inference
+  * Dye bias correction (3 methods: using normalization control probes / linear scaling / non-linear scaling)
+  * Detection p-value calculation (pOOBAH)
+  * Background correction (NOOB)
+  * Batch effect correction (ComBat)
 
 * data analysis and visualisation
 
