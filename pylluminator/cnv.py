@@ -36,7 +36,7 @@ def copy_number_variation(samples: Samples,
 
     :param normalization_labels: if `group_by` is specified, name(s) of the group(s) to use for normalization. Otherwise,
         name(s) of the samples to use for normalization. If None (default), default normalization samples will be loaded
-        from pyyluminator-data - but this only work for EPIC/hg38 and EPICv2/hg38; for other array versions, you
+        from pylluminator-data - but this only work for EPIC/hg38 and EPICv2/hg38; for other array versions, you
         **need** to normalization data. Default: None
     :type normalization_labels: str | list[str] | None
 

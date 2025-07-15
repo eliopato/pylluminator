@@ -1103,7 +1103,7 @@ class Samples:
         self._betas = self._betas.sort_index(axis=1)
 
     def reset_poobah(self) -> None:
-        """Remove poobah pvalues from the signal dataframe
+        """Remove poobah p-values from the signal dataframe
 
         :return None"""
         self._signal_df = self._signal_df.drop(['p_value'], level='signal_channel', axis=1, errors='ignore')
@@ -1180,8 +1180,7 @@ class Samples:
         return betas
 
     def dye_bias_correction(self, sample_label: str | None = None, apply_mask: bool = True, reference: dict | None = None) -> None:
-        """Correct dye bias by linear scaling. Scale both the green and red signal to a reference level. If
-        the reference level is not given, it is set to the mean intensity of all the in-band signals.
+        """Dye bias correction using normalization control probes.
 
         :param sample_label: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
         :type sample_label: str | None
@@ -1199,15 +1198,15 @@ class Samples:
         if sample_label is None:
             for sample_label in self.sample_labels:
                 self.dye_bias_correction(sample_label, apply_mask, reference)
-            return
+            return None
 
         if not isinstance(sample_label, str):
             LOGGER.error('sample_label should be a string')
-            return
+            return None
 
         if sample_label not in self.sample_labels:
             LOGGER.error(f'Sample {sample_label} not found')
-            return
+            return None
 
         if reference is None:
             reference = self.get_mean_ib_intensity(sample_label, apply_mask)
@@ -1221,9 +1220,11 @@ class Samples:
             factor = reference[sample_label] / norm_values_dict[channel][sample_label]
             self._signal_df[(sample_label, channel)] *= factor
 
+        return None
+
     def dye_bias_correction_l(self, sample_label: str | None = None, apply_mask: bool = True, reference: dict | None = None) -> None:
-        """Correct dye bias by linear scaling. Scale both the green and red signal to a reference level. If
-        the reference level is not given, it is set to the mean intensity of all the in-band signals.
+        """Linear dye bias correction. Scale both the green and red signal to a reference level. If the reference level
+         is not given, it is set to the mean intensity of all the in-band signals.
 
         :param sample_label: the name of the sample to correct dye bias for. If None, correct dye bias for all samples.
         :type sample_label: str | None
@@ -1262,7 +1263,7 @@ class Samples:
             self._signal_df[(sample_label, channel)] *= factor
 
     def dye_bias_correction_nl(self, sample_labels: str | list[str] | None = None, apply_mask: bool = True) -> None:
-        """Dye bias correction by matching green and red to mid-point. Each sample is handled separately.
+        """Non-linear dye bias correction by matching green and red to mid-point. Each sample is handled separately.
 
         This function compares the Type-I Red probes and Type-I Grn probes and generates and mapping to correct signal
         of the two channels to the middle.
