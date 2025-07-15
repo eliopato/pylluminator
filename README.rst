@@ -23,21 +23,18 @@
 
 `Tutorials <https://pylluminator.readthedocs.io/en/latest/tutorials.html>`_ | `API documentation <https://pylluminator.readthedocs.io/en/latest/api.html>`_ | `Source code <https://github.com/eliopato/pylluminator>`_ | `Release on pip <https://pypi.org/project/pylluminator/>`_
 
-Pylluminator is a Python package designed to provide an efficient workflow for processing and analyzing DNA
-methylation data, mirroring the functionalities of the popular R package `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_.
+Pylluminator is a Python package designed to provide an efficient workflow for processing, analyzing, and visualizing DNA
+methylation data. Pylluminator is inspired from the popular R packages `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_ and  `ChAMP <https://bioconductor.org/packages/release/bioc/html/ChAMP.html>`_.
 
-It supports the following Illumina's Infinium array versions :
 
-* human : 27k, 450k, MSA, EPIC, EPIC+, EPICv2
-* mouse : MM285
+Pylluminator supports the following Illumina's Infinium Beadchip array versions:
+
+* human: 27k, 450k, MSA, EPIC, EPIC+, EPICv2
+* mouse: MM285
 * mammalian: Mammal40
 
 .. |logo| image:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/logo.png
     :width: 100px
-
-.. note::
-
-   **This project is under active development.**
 
 
 Main functionalities
@@ -47,11 +44,11 @@ Main functionalities
 
 * data preprocessing
 
-  * background correction
-  * normalization
-  * dye bias correction
-  * pOOBAH
-  * batch effect correction with ComBat
+  * Type-I probes channel inference
+  * Dye bias correction (3 methods: using normalization control probes / linear scaling / non-linear scaling)
+  * Detection p-value calculation (pOOBAH)
+  * Background correction (NOOB)
+  * Batch effect correction (ComBat)
 
 * data analysis and visualisation
 
