@@ -173,7 +173,7 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
         x, y = FFTKDE(kernel="gaussian", bw="silverman").fit(betas[c].values).evaluate()
         ls = '-' if linestyles is None else linestyles[c]
         col = None if colors is None else colors[c]
-        plt.plot(x, y, label=c, color=col, linestyle=ls)
+        plt.plot(x, y, label=c, color=col, linestyle=ls, alpha=0.8)
 
     if title is None:
         if group_column is None:
@@ -668,6 +668,7 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
 
     chromosome_df, type_df = get_nb_probes_per_chr_and_type(sample)
 
+    plt.style.use('ggplot')
     fig, axes = plt.subplots(2)
 
     chromosome_df.plot.bar(stacked=True, figsize=figsize, ax=axes[0])
@@ -1664,7 +1665,7 @@ def plot_methylation_distribution(samples: Samples, group_column: str| None=None
 
 
 def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names: list[str] = None,  return_df=False,
-                       xlim: None|tuple[float, float]=None, save_path: str =None, **kwargs) -> pd.DataFrame | None:
+                       xlim: None|tuple[float, float]=None, save_path: str =None, figsize=(10, 5), **kwargs) -> pd.DataFrame | None:
     """ Analyze the beta values standard deviation of the technical replicates to check for batch effect or quality
     issues.
 
@@ -1690,7 +1691,6 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
     :return: the dataframe with beta values standard deviation per replicate, or None if return_df is False
     :rtype: pandas.DataFrame | None
     """
-    plt.style.use('ggplot')
 
     if replicate_names is None:
         replicate_names = samples.sample_labels
@@ -1717,7 +1717,8 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
     long_df['channel'] = 'type ' + long_df['type'].astype(str) + ' ' + long_df['channel']
 
     # plot
-    g = sns.catplot(long_df, kind='violin', hue='Replicate', y='channel', x='Value', aspect=3, **kwargs)
+    plt.style.use('ggplot')
+    g = sns.catplot(long_df, kind='violin', hue='Replicate', y='channel', x='Value', height=figsize[0], aspect=figsize[0]/figsize[1], **kwargs)
     g.set_axis_labels('beta values standard deviation', 'probes channel')
 
     if xlim is not None:
@@ -1728,6 +1729,8 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
 
     if return_df:
         return long_df.groupby(['Replicate', 'channel']).describe()
+
+    return None
 
 def _select_metadata(input_data: Samples | pd.DataFrame, columns:list[str]|None=None,
                      numeric_only=False, keep_col: str|None=None) -> pd.DataFrame | None:

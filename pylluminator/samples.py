@@ -1849,8 +1849,9 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
     if len(dfs) != len(sample_labels):
         LOGGER.warning(f'{len(dfs)} dfs != {len(sample_labels)} samples names for {datadir}')
 
-    samples._signal_df = pd.concat(dfs, axis=1, keys=sample_labels).drop_duplicates()
-    samples._signal_df.columns.names = ['sample_id', 'signal_channel', 'methylation_state']
+    sig_df = pd.concat(dfs, axis=1, keys=sample_labels).drop_duplicates()
+    sig_df.columns.names = ['sample_id', 'signal_channel', 'methylation_state']
+    samples._signal_df = sig_df
 
     LOGGER.info('done reading sesame files\n')
     return samples
