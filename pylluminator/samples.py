@@ -1741,7 +1741,7 @@ def read_samples(datadir: str | os.PathLike | MultiplexedPath,
 
     # only load the N first samples
     if max_samples is not None:
-        sample_sheet_df = sample_sheet_df.head(max_samples)
+        sample_sheet_df = sample_sheet_df.sort_values('sample_id').head(max_samples)
 
     samples = Samples(sample_sheet_df)
     samples.idata, label_column = read_idata(sample_sheet_df, datadir)
@@ -1848,6 +1848,7 @@ def from_sesame(datadir: str | os.PathLike | MultiplexedPath, annotation: Annota
 
     if len(dfs) != len(sample_labels):
         LOGGER.warning(f'{len(dfs)} dfs != {len(sample_labels)} samples names for {datadir}')
+        return None
 
     sig_df = pd.concat(dfs, axis=1, keys=sample_labels).drop_duplicates()
     sig_df.columns.names = ['sample_id', 'signal_channel', 'methylation_state']

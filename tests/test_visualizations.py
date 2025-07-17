@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
                                          manhattan_plot_dmr, manhattan_plot_cns, visualize_gene, betas_dendrogram,
@@ -34,6 +35,8 @@ def test_plot_betas_2D(test_samples):
     betas_2D(test_samples, custom_sheet=pd.DataFrame())
     assert not os.path.exists('PCA_2D_plot.png')
 
+    plt.close("all")
+
 def test_plot_betas_density(test_samples):
     betas_density(test_samples, save_path='betas_plot.png')
     assert os.path.exists('betas_plot.png')
@@ -52,10 +55,13 @@ def test_plot_betas_density(test_samples):
     betas_density(test_samples, save_path='betas_plot.png', custom_sheet=pd.DataFrame())
     assert not os.path.exists('betas_plot.png')
 
+    plt.close("all")
+
 def test_plot_betas_heatmap(test_samples):
     plot_betas_heatmap(test_samples, save_path='betas_heatmap.png')
     assert os.path.exists('betas_heatmap.png')
     os.remove('betas_heatmap.png')
+    plt.close("all")
 
 def test_dmp_heatmap_ols(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
@@ -89,6 +95,7 @@ def test_dmp_heatmap_ols(test_samples):
     plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', pval_threshold=0.05, delta_beta_threshold=0.1)
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
+    plt.close('all')
 
 def test_dmp_heatmap_mixed_model(test_samples, caplog):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
@@ -111,6 +118,8 @@ def test_dmp_heatmap_mixed_model(test_samples, caplog):
     assert 'ERROR' not in caplog.text
     os.remove('dmp_heatmap.png')
 
+    plt.close("all")
+
 
 def test_dmr_plot(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
@@ -129,6 +138,8 @@ def test_dmr_plot(test_samples):
                        medium_threshold=0.1, high_threshold=0.2)
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
+
+    plt.close("all")
 
 def test_cns_plot(test_samples):
     cnv_df = copy_number_variation(test_samples, sample_labels='PREC_500_3')
@@ -152,10 +163,14 @@ def test_cns_plot(test_samples):
     manhattan_plot_cns(signal_bins_df, segments_df, y_col='tet', save_path='cns_plot.png')
     assert not os.path.exists('cns_plot.png')
 
+    plt.close("all")
+
 def test_plot_b_chr(test_samples):
     plot_nb_probes_and_types_per_chr(test_samples, save_path='nb_probes_per_chr.png', title='test')
     assert os.path.exists('nb_probes_per_chr.png')
     os.remove('nb_probes_per_chr.png')
+    plt.close("all")
+
 
 def test_visualize_gene(test_samples):
     visualize_gene(test_samples, 'TUBA1C', save_path='gene_plot.png')
@@ -177,6 +192,8 @@ def test_visualize_gene(test_samples):
     assert os.path.exists('gene_plot.png')
     os.remove('gene_plot.png')
 
+    plt.close("all")
+
 def test_betas_dendrogram(test_samples):
     betas_dendrogram(test_samples, save_path='dendrogram.png')
     assert os.path.exists('dendrogram.png')
@@ -189,6 +206,8 @@ def test_betas_dendrogram(test_samples):
     assert os.path.exists('dendrogram.png')
     os.remove('dendrogram.png')
 
+    plt.close("all")
+
 def test_pc_association_heatmap(test_samples):
     pc_association_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3)
     assert os.path.exists('pc_bias.png')
@@ -198,6 +217,8 @@ def test_pc_association_heatmap(test_samples):
     pc_association_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')
 
+    plt.close("all")
+
 def test_pc_correlation_heatmap(test_samples):
     pc_correlation_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3)
     assert os.path.exists('pc_bias.png')
@@ -206,6 +227,9 @@ def test_pc_correlation_heatmap(test_samples):
     # more components than sample, fail
     pc_correlation_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')
+
+    plt.close("all")
+
 
 def test_methylation_distribution(test_samples, caplog):
     plot_methylation_distribution(test_samples, save_path='methylation_distribution.png')
@@ -224,6 +248,9 @@ def test_methylation_distribution(test_samples, caplog):
     assert os.path.exists('methylation_distribution.png')
     os.remove('methylation_distribution.png')
 
+    plt.close("all")
+
+
 def test_analyze_replicates(test_samples, caplog):
     test_samples.sample_sheet['replicate'] = ['1', '2', '3', '1', '2', '3']
     caplog.clear()
@@ -231,6 +258,7 @@ def test_analyze_replicates(test_samples, caplog):
     assert 'ERROR' not in caplog.text
     assert os.path.exists('replicates.png')
     os.remove('replicates.png')
+    plt.close("all")
 
 def test_metadata_correlation(test_samples, caplog):
     metadata_correlation(test_samples, save_path='metadata_correlation.png')
@@ -254,6 +282,8 @@ def test_metadata_correlation(test_samples, caplog):
                          save_path='metadata_correlation.png')
     assert not os.path.exists('metadata_correlation.png')
     assert 'No valid columns to plot' in caplog.text
+
+    plt.close("all")
 
 def test_metadata_pairplot(test_samples, caplog):
     metadata_pairplot(test_samples, save_path='metadata_pairplot.png')
@@ -286,3 +316,5 @@ def test_metadata_pairplot(test_samples, caplog):
     metadata_pairplot(test_samples, hue='nonexistent', save_path='metadata_pairplot.png')
     assert not os.path.exists('metadata_pairplot.png')
     assert 'Column nonexistent not found' in caplog.text
+
+    plt.close("all")

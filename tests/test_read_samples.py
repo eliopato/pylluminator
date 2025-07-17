@@ -191,7 +191,7 @@ def test_read_sample_wrong_input(data_path):
     assert read_samples(data_path, sample_sheet_df=pd.DataFrame(), sample_sheet_name='sample.csv') is None
     assert read_samples(data_path, sample_sheet_name='nonexistent.csv') is None
 
-def test_from_sesame(test_samples):
+def test_from_sesame(test_samples, tmpdir):
     assert from_sesame('fakedir', test_samples.annotation) is None
     assert from_sesame(['liste'], test_samples.annotation) is None  # input cant be a list
 
@@ -205,9 +205,16 @@ def test_from_sesame(test_samples):
      '"7","cg00000236_TC21",NA,NA,1491,433,"2",FALSE\n'
      '"8","cg00000289_TC21",NA,NA,406,289,"2",TRUE\n'
      '"9","cg00000292_BC21",NA,NA,3596,3219,"2",FALSE\n')
-    file_path = 'sesame1.csv'
+
+    file_path = f'{tmpdir}/sesame1.csv'
     with open(file_path, 'w') as f:
         f.write(csv_content)
+
+    sample1 = from_sesame(file_path, test_samples.annotation)
+    assert sample1 is not None
+    assert sample1.sample_labels == ['sesame1']
+    assert sample1.nb_probes == 9
+    assert sample1.masks.number_probes_masked(sample_label='sesame1') == 2
 
     csv_content = ''',Probe_ID,MG,MR,UG,UR,col,mask\n
     1,cg00000029_TC21,NA,NA,187,4268,2,FALSE\n
@@ -220,23 +227,14 @@ def test_from_sesame(test_samples):
     8,cg00000289_TC21,NA,NA,599,166,2,FALSE\n
     9,cg00000292_BC21,NA,NA,4161,3318,2,FALSE\n
     '''
-    file_path = 'sesame2.csv'
+    file_path = f'{tmpdir}/sesame2.csv'
     with open(file_path, 'w') as f:
         f.write(csv_content)
 
-    sample1 = from_sesame('sesame1.csv', test_samples.annotation)
-    assert sample1 is not None
-    assert sample1.sample_labels == ['sesame1']
-    assert sample1.nb_probes == 9
-    assert sample1.masks.number_probes_masked(sample_label='sesame1') == 2
-
-    samples = from_sesame('.', test_samples.annotation)
+    samples = from_sesame(tmpdir, test_samples.annotation)
     assert samples is not None
     assert 'sesame1' in samples.sample_labels
     assert 'sesame2' in samples.sample_labels
     assert samples.nb_probes == 9
     assert samples.masks.number_probes_masked(sample_label='sesame1') == 2
     assert samples.masks.number_probes_masked(sample_label='sesame2') == 0
-
-    os.remove('sesame1.csv')
-    os.remove('sesame2.csv')
