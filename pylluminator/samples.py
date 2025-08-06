@@ -418,7 +418,7 @@ class Samples:
     ####################################################################################################################
 
     def __str__(self):
-        return self.sample_labels
+        return ", ".join(self.sample_labels)
 
     def __repr__(self):
         description = f'Samples object with {self.nb_samples} samples: {", ".join(self.sample_labels)}\n'
