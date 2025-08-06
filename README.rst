@@ -132,7 +132,7 @@ Your are now ready to install the dependencies and the package :
 .. code-block:: shell
 
     cd pylluminator
-    pip install .
+    pip install -r requirements.txt
 
 
 Usage
