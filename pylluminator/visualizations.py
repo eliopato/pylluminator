@@ -614,7 +614,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
 ########################################################################################################################
 
 
-def get_nb_probes_per_chr_and_type(samples: Samples) -> (pd.DataFrame, pd.DataFrame):
+def get_nb_probes_per_chr_and_type(samples: Samples) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Count the number of probes covered by the sample-s per chromosome and design type
 
     :param samples: Samples to analyze
@@ -701,8 +701,7 @@ class _LegendTitle(object):
         handlebox.add_artist(title)
         return title
 
-
-def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str] | None) -> tuple:
+def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str] | None = None) -> tuple:
     """Treat each column of the dataframe as a distinct category, and convert its values to colors. If the values are
     string, treat them as categories, if they are numbers, use a continuous colormap. Generate the associated legend
     handles for the specified names.
@@ -729,6 +728,8 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
         return colormaps.get_cmap(number_cmaps[number_cmap_index % len(number_cmaps)])(norm(val))
 
     how_to = {column: merge_series_values for column in input_df.columns}
+    if input_df.index.name is None:
+        input_df.index.name = 'index'
     input_df = input_df.groupby(input_df.index.name).agg(how_to)
     color_df = input_df.copy()
 
