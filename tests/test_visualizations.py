@@ -134,8 +134,7 @@ def test_dmr_plot(test_samples):
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
-    manhattan_plot_dmr(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png',  title='juju',
-                       medium_threshold=0.1, high_threshold=0.2)
+    manhattan_plot_dmr(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png',  title='juju', sig_threshold=0.1)
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 

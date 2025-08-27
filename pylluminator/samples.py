@@ -1612,10 +1612,10 @@ class Samples:
                                     precision=precision, na_cov_action=na_cov_action)
 
 
-def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> (dict, str):
+def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> tuple[dict, str]:
     """
     Reads IDAT files for each sample in the provided sample sheet, organizes the data by sample name and channel,
-    and returns a dictionary with the IDAT data.
+    and returns a dictionary with the IDAT data and the label column name.
 
     :param sample_sheet_df: A DataFrame containing sample information, including columns for 'sample_label', 'sample_id',
         'sentrix_id', and 'sentrix_position'. Each row corresponds to a sample in the experiment.
@@ -1624,10 +1624,11 @@ def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> (dict, str
     :param datadir: The directory where the IDAT files are located.
     :type datadir: str
 
-    :return: A dictionary where the keys are sample names (from the 'sample_label' column in `sample_sheet_df`), and the
+    :return: A tuple of a dictionary (samples) and a string (label column name).
+        The samples dictionary keys are sample names (from the 'sample_label' column in `sample_sheet_df`), and the
         values are dictionaries mapping channel names (from `Channel`) to their respective IDAT data (as DataFrame
         objects, derived from the `IdatDataset` class).
-    :rtype: dict
+    :rtype: (dict, str)
 
     Notes:
         - The function searches for IDAT files by sample ID and channel. If no files are found, it attempts to search
@@ -1636,7 +1637,7 @@ def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> (dict, str
         - If no matching files are found, an error is logged and the sample is skipped.
 
     Example:
-        idata = read_idata(sample_sheet_df, '/path/to/data')
+        idata, label_column = read_idata(sample_sheet_df, '/path/to/data')
     """
     idata = {}
     label_column = 'sample_id'

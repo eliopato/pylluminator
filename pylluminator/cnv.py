@@ -136,7 +136,7 @@ def copy_number_variation(samples: Samples,
 
 def copy_number_segmentation(samples: Samples,
                              cnv_df: pd.DataFrame,
-                             cnv_column_name: str) -> (pr.PyRanges, pd.DataFrame, pd.DataFrame):
+                             cnv_column_name: str) -> tuple[pr.PyRanges, pd.DataFrame, pd.DataFrame]:
     """With the output dataframe of copy_number_variation, group the genome in segments with similar CNV.
 
     :param samples: samples to be analyzed

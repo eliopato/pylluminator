@@ -30,7 +30,7 @@ from pylluminator.utils import merge_series_values
 LOGGER = get_logger()
 
 def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
-                color_column: str | None, group_column: str | list[str] | None = None, cmap_name: str = 'Spectral') -> (list, dict | None):
+                color_column: str | None, group_column: str | list[str] | None = None, cmap_name: str = 'Spectral_r') -> tuple[list, dict | None]:
     """Define the colors to use for each sample, depending on the columns used to categorized them.
 
     :param sheet: sample sheet data frame
@@ -42,7 +42,7 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
     :param color_column: name of the column of the sample sheet to use for color. If None, the function will return empty objects.
     :type color_column: str | None
 
-    :param cmap_name: name of the matplotlib color map to use. Default: spectral
+    :param cmap_name: name of the matplotlib color map to use. Default: Spectral_r
     :type cmap_name: str
 
     :return: the list of legend handles and a dict of color categories, with keys being the values of color_column
@@ -627,11 +627,9 @@ def get_nb_probes_per_chr_and_type(samples: Samples) -> tuple[pd.DataFrame, pd.D
     manifest = samples.annotation.probe_infos[['probe_id', 'chromosome', 'type']].drop_duplicates()
     manifest['chromosome'] = merge_alt_chromosomes(manifest['chromosome'])
 
-    # for name, masked in [('not masked', True), ('masked', False)]:
     masked_probe_ids = samples.masks.get_mask(sample_label=samples.sample_labels).get_level_values('probe_id')
     manifest_masked_probes = manifest.probe_id.isin(masked_probe_ids)
 
-    # for name, probes in [('not masked', unmasked_probes), ('masked', masked_probes)]:
     chrm_and_type = manifest.loc[manifest_masked_probes]
     chromosome_df['masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
     type_df['masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
@@ -639,12 +637,13 @@ def get_nb_probes_per_chr_and_type(samples: Samples) -> tuple[pd.DataFrame, pd.D
     chromosome_df['not masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
     type_df['not masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
 
-    # chromosome_df['masked'] = chromosome_df['masked'] - chromosome_df['not masked']
-    # type_df['masked'] = type_df['masked'] - type_df['not masked']
-
     # get the chromosomes numbers to order data frame correctly
     chromosome_df['chr_id'] = get_chromosome_number(chromosome_df.index.tolist())
     chromosome_df = chromosome_df.sort_values('chr_id').drop(columns='chr_id')
+
+    type_df.index = [f'Type {i}' for i in type_df.index]
+    type_df.index.name = 'Probe type'
+    chromosome_df.index.name = 'Chromosome number'
 
     return chromosome_df, type_df
 
@@ -671,19 +670,27 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
     plt.style.use('ggplot')
     fig, axes = plt.subplots(2)
 
-    chromosome_df.plot.bar(stacked=True, figsize=figsize, ax=axes[0])
-    type_df.plot.bar(stacked=True, figsize=figsize, ax=axes[1])
-
-    for container in axes[0].containers:
-        axes[0].bar_label(container, label_type='center', rotation=90, fmt='{:,.0f}')
-
-    for container in axes[1].containers:
-        axes[1].bar_label(container, label_type='center', fmt='{:,.0f}')
+    # make 'masked' bar blue and 'not masked' orange
+    chromosome_df.plot.bar(stacked=True, figsize=figsize, ax=axes[0], color=['#1f77b4', '#F8766D'] )
+    type_df.plot.bar(stacked=True, figsize=figsize, ax=axes[1], color=[ '#1f77b4', '#F8766D',] )
 
     if title is None:
         title = f'Number of probes per chromosome and type for {sample.nb_samples} samples'
 
     fig.suptitle(title)
+
+    # rotate x labels for better readability
+    plt.setp(axes[0].get_xticklabels(), rotation=0, ha='center')
+    plt.setp(axes[1].get_xticklabels(), rotation=0, ha='center')
+
+    # thousand separator for y axis
+    axes[0].yaxis.set_major_formatter('{x:,.0f}')
+    axes[1].yaxis.set_major_formatter('{x:,.0f}')
+    axes[0].set_ylabel('Number of probes')
+    axes[1].set_ylabel('Number of probes')
+
+    #add space between plots
+    plt.subplots_adjust(hspace=0.3)
 
     if save_path is not None:
         fig.savefig(os.path.expanduser(save_path))
@@ -822,7 +829,7 @@ def plot_betas_heatmap(samples: Samples, apply_mask:bool=True,
         betas.columns = new_labels
 
     # common parameters to clustermap and heatmap
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right',
                      'bbox_to_anchor': (0, 1)}
     betas = betas.T
@@ -972,7 +979,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
     betas = betas.loc[sorted_probe_idxs].T
     
     # common parameters to clustermap and heatmap
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
 
     if drop_na:
@@ -1007,7 +1014,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
                     x_col='start', y_col='p_value', log10=False, figsize:tuple[float, float]=(10,8),
                     annotation: Annotations | None = None, annotation_col: str = 'genes',
-                    medium_threshold: float | None = None, high_threshold: float | None = None,
+                    sig_threshold: float | None = None, 
                     title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given data.
 
@@ -1034,13 +1041,9 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         significant threshold. Must be a column in the Annotation data. Default: None
     :type annotation_col: str | None
 
-    :param medium_threshold: set the threshold used for displaying annotation (and significance line if d
+    :param sig_threshold: set the threshold used for displaying annotation (and significance line if d
         raw_significance is True). If None, takes the value of the 100th probe. Default: None
-    :type medium_threshold: float
-
-    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True). If
-        None, takes the value of the 20th probe. Default: None
-    :type high_threshold: float
+    :type sig_threshold: float
 
     :param log10: apply -log10 on the value column. Default: True
     :type log10: bool
@@ -1098,12 +1101,9 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     if log10:
         data_to_plot[y_col] = -np.log10(data_to_plot[y_col])
 
-    if high_threshold is None or medium_threshold is None:
+    if sig_threshold is None:
         sorted_pvals = data_to_plot[y_col].sort_values()
-        if high_threshold is None:
-            high_threshold = sorted_pvals.iloc[-20]
-        if medium_threshold is None:
-            medium_threshold = sorted_pvals.iloc[-100]
+        sig_threshold = sorted_pvals.iloc[-100]
 
     # define colormap and limits
     v_max = np.max(data_to_plot[y_col])
@@ -1130,6 +1130,11 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                 data_to_plot = data_to_plot.reset_index()
             else:
                 data_to_plot = data_to_plot.join(gene_info.set_index('probe_id'))
+            # shorten annotations that are too long
+            long_anno_idxs = gene_info[annotation_col].str.len() > 50
+            gene_info.loc[long_anno_idxs, annotation_col] = gene_info.loc[long_anno_idxs, annotation_col].str.slice(0, 47) + '...'
+            
+
     data_to_plot = data_to_plot.reset_index(drop=True).drop_duplicates()
     # sort by chromosome and make the column a category
     data_to_plot = data_to_plot.sort_values(['chr_id', x_col]).astype({'chr_id': 'category'})
@@ -1138,7 +1143,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
 
     # plot each chromosome scatter plot with its assigned color
-    for num, (name, group) in enumerate(data_to_plot_grouped):
+    for (_, group) in data_to_plot_grouped:
         # add margin to separate a bit the different groups; otherwise small groups won't show
         group[x_col] = chrom_start + group[x_col] + margin
         chrom_end = max(group[x_col]) + margin
@@ -1163,13 +1168,13 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
         # draw annotations for probes that are over the threshold, if annotation_col is set
         if annotation_col in group.columns:
-            if log10:
-                indexes_to_annotate = group[y_col] > medium_threshold
-            else:
-                indexes_to_annotate = group[y_col] < medium_threshold
+            indexes_to_annotate = group[y_col] > sig_threshold if log10 else group[y_col] < sig_threshold
             annot_col_idx = group.columns.get_loc(annotation_col)
             x_col_idx = group.columns.get_loc(x_col)
             y_col_idx = group.columns.get_loc(y_col)
+            # shorten annotations that are too long
+            long_anno_idxs = group[annotation_col].str.len() > 50
+            group.loc[long_anno_idxs, annotation_col] = group.loc[long_anno_idxs, annotation_col].str.slice(0, 47) + '...'
             for row in group[indexes_to_annotate].itertuples(index=False):
                 plt.annotate(row[annot_col_idx], (row[x_col_idx]+ 0.03, row[y_col_idx] + 0.03), c=cmap(row[y_col_idx] / v_max), annotation_clip=True)
 
@@ -1182,8 +1187,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     if draw_significance:
         x_start = 0 - margin
         x_end =  chrom_end + margin
-        plt.plot([x_start, x_end], [high_threshold, high_threshold], c=cmap(high_threshold), alpha=0.7, ls=':')
-        plt.plot([x_start, x_end], [medium_threshold, medium_threshold], ls=':', c=cmap(medium_threshold), alpha=0.5)
+        plt.plot([x_start, x_end], [sig_threshold, sig_threshold], ls=':', c=cmap(sig_threshold), alpha=0.5)
 
     # grids style and plot limits
     ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
@@ -1219,7 +1223,7 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
                        chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation_col='genes', log10=True,
                        draw_significance=True, figsize:tuple[float, float]=(10, 8),
-                       medium_threshold: float | None = None, high_threshold: float | None = None,
+                       sig_threshold: float | None = None, 
                        title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
 
@@ -1242,13 +1246,9 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
         significant threshold. Must be a column in the Annotation data. Default: None
     :type annotation_col: str | None
 
-    :param medium_threshold: set the threshold used for displaying annotation (and significance line if
+    :param sig_threshold: set the threshold used for displaying annotation (and significance line if
         raw_significance is True). If None, takes the value of the 100th probe. Default: None
-    :type medium_threshold: float | None
-
-    :param high_threshold: set the threshold for the higher significance line (drawn if draw_significance is True). If
-        None, takes the value of the 20th probe. Default: None
-    :type high_threshold: float | None
+    :type sig_threshold: float | None
 
     :param log10: apply -log10 on the value column. Default: True
     :type log10: bool
@@ -1276,8 +1276,8 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
     data = dm.dmr.join(dm.segments.reset_index().set_index('segment_id'))
     return _manhattan_plot(data_to_plot=data, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}_adjusted',
                            x_col=x_col, draw_significance=draw_significance, annotation=dm.samples.annotation,
-                           annotation_col=annotation_col, medium_threshold=medium_threshold,
-                           high_threshold=high_threshold, figsize=figsize, log10=log10, title=title, save_path=save_path)
+                           annotation_col=annotation_col, sig_threshold=sig_threshold,
+                           figsize=figsize, log10=log10, title=title, save_path=save_path)
 
 
 def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,
@@ -1408,7 +1408,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     ################## PLOT LINKS BETWEEN TRANSCRIPTS AND BETAS
 
-    # chromosome, chr-transcript links, transcripts, transcript-betas lings, betas heatmap
+    # chromosome, chr-transcript links, transcripts, transcript-betas links, betas heatmap
     nb_transcripts = len(set(gene_data.index))
     height_ratios = [0.02, 0.05, 0.02*nb_transcripts, 0.05, 0.02*len(gene_betas.columns)]
     nb_plots = len(height_ratios)
@@ -1437,14 +1437,14 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         sheet.index.name = label
         heatmap_data.index = new_labels
 
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral', 'vmin': 0, 'vmax': 1}
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
 
     if keep_na:
         fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
         sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, **heatmap_params)
         if row_factors is not None:
             LOGGER.warning('Parameter row_factors is ignored when keep_na is True')
-            row_factors = None
+            row_factors = None        
     else:
         handles, labels = [], []
         # convert categories to colors and get legends if specified
@@ -1457,7 +1457,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
             subset = sheet[row_factors]
             row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
         dendrogram_ratio = 0.05
-        g = sns.clustermap(heatmap_data, figsize=figsize, cbar_pos=None, col_cluster=False, row_colors=row_factors,
+        g = sns.clustermap(heatmap_data, cbar_pos=None, figsize=figsize,  col_cluster=False, row_colors=row_factors,
                            dendrogram_ratio=(dendrogram_ratio, 0), **heatmap_params)
         if len(handles) > 0 and len(labels) > 0:
             plt.legend(handles=handles, labels=labels, handler_map={str: _LegendTitle({'fontweight': 'bold'})},
@@ -1467,6 +1467,14 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio,
                                 height_ratios=height_ratios[:-1])
         axes = [g.fig.add_subplot(gs) for gs in gs2]
+        cbar_ax = axes[-1].inset_axes([-0.2, -0.7, 0.03, 0.6])
+
+        # add a colorbar for the heatmap on the left of the heatmap
+        norm = plt.Normalize(vmin=0, vmax=1)
+        sm = plt.cm.ScalarMappable(cmap='Spectral_r', norm=norm)
+        sm.set_array([])
+        cbar = g.fig.colorbar(sm, cax=cbar_ax)
+        cbar.set_label('beta value', rotation=270, labelpad=15)
 
     ################## plot chromosome and chromosome-transcript links
 
