@@ -65,7 +65,7 @@ Visualization examples:
     * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_16_0.png
             :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_1_-_Read_data_and_get_betas_16_0.png
 
-            Fig 1. Beta values
+            Fig 1. Samples beta values density
 
       - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_15_0.png
             :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_15_0.png
@@ -75,7 +75,7 @@ Visualization examples:
     * - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_17_1.png
             :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_3_-_Calculate_DMP_and_DMR_17_1.png
 
-            Fig 3. Gene visualization
+            Fig 3. Probes beta values associated with a specific gene
 
       - .. figure:: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_9_0.png
             :target: https://raw.githubusercontent.com/eliopato/pylluminator/refs/heads/main/docs/images/tutorials_4_-_Copy_Number_Variation_9_0.png

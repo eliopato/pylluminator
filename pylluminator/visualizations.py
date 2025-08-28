@@ -865,7 +865,7 @@ def plot_betas_heatmap(samples: Samples, apply_mask:bool=True,
 
 
 def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
-                     nb_probes: int = 100, figsize: tuple[float, float]=(10, 10),
+                     nb_probes: int = 100, figsize: tuple[float, float] | None = None,
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
                      sort_by = 'pvalue', pval_threshold: float | None = None, delta_beta_threshold: float | None = None,
@@ -881,7 +881,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
     :param nb_probes: number of probes to plot. Default: 100
     :type nb_probes: int
 
-    :param figsize: size of the plot. Default: (10, 10)
+    :param figsize: size of the plot. Default: None (automatic)
     :type figsize: tuple
 
     :param var: name of the variable to use for the columns of the heatmap. If None, will use the sample names. Default: None
@@ -982,6 +982,9 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
     heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1, 'cbar_kws': {'label': 'Beta value'}}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
 
+    if figsize is None:
+        figsize = (3 + 0.15 * nb_probes, 3 + 0.2 * len(betas))
+
     if drop_na:
         handles, labels = [], []
         # convert categories to colors and get legends if specified
@@ -1005,6 +1008,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
         if row_factors is not None:
             LOGGER.warning(f'Parameter {row_factors} is ignored when drop_na is False')
 
+        plt.subplots(figsize=figsize)
         plot = sns.heatmap(betas, **heatmap_params)
 
         if save_path is not None:
@@ -1318,6 +1322,20 @@ def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,
 
 ########################################################################################################################
 
+def show_chromosome_legend():
+    """Display a legend for chromosome regions colors used in the 'visualize_gene' function, corresponding to Giemsa staining."""
+    
+    # chromosome region legend
+    color_map = {'gene poor': 'lightgrey', 'moderate gene density': 'lightblue', 'intermediate gene density': 'blue', 'high gene density': 'darkblue', 'very high gene density': 'purple', 
+                'variable gene density (often polymorphic)': 'lightgreen', 'centromere': 'yellow', 'stalk': 'pink'}
+    #make a legend with the above colors
+    plt.style.use('ggplot')
+    patches = [mpatches.Patch(color=color, label=label) for label, color in color_map.items()]
+    plt.figure(figsize=(8, 1))
+    plt.legend(handles=patches, loc='center', ncol=len(patches))
+    plt.axis('off')
+    plt.title('Chromosome regions')
+    plt.show()
 
 def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padding=1500, keep_na: bool=False,
                    protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, var: None | str | list[str] = None,
@@ -1480,7 +1498,17 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     # make rectangles of different colors depending on the chromosome region
     for _, row in chr_df.iterrows():
-        chr_ax.add_patch(mpatches.Rectangle((row.start, 0), row.end - row.start, 0.5, color=color_map[row.giemsa_staining]))
+        curr_color = color_map[row.giemsa_staining]
+        # if the region is a centromere, make it two triangles facing each other
+        if row.giemsa_staining == 'acen':
+            if 'name' in row and 'p' in row['name']:
+                chr_ax.add_patch(mpatches.Polygon([[row.start, 0], [row.start + (row.end - row.start), 0.25], [row.start, 0.5]], color=curr_color))
+            elif 'name' in row and 'q' in row['name']:
+                chr_ax.add_patch(mpatches.Polygon([[row.start, 0.25], [row.end, 0], [row.end, 0.5]], color=curr_color))
+            else:
+                chr_ax.add_patch(mpatches.Rectangle((row.start, 0.05), row.end - row.start, 0.4, color=curr_color))
+        else:
+            chr_ax.add_patch(mpatches.Rectangle((row.start, 0), row.end - row.start, 0.5, color=curr_color))
 
     # red lines showing the beginning and end of the gene region
     chr_ax.plot([gene_transcript_start, gene_transcript_start], [-1, 1], **links_args)
