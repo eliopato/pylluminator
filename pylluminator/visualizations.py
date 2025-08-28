@@ -979,7 +979,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
     betas = betas.loc[sorted_probe_idxs].T
     
     # common parameters to clustermap and heatmap
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
+    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1, 'cbar_kws': {'label': 'Beta value'}}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
 
     if drop_na:
@@ -1130,9 +1130,6 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                 data_to_plot = data_to_plot.reset_index()
             else:
                 data_to_plot = data_to_plot.join(gene_info.set_index('probe_id'))
-            # shorten annotations that are too long
-            long_anno_idxs = gene_info[annotation_col].str.len() > 50
-            gene_info.loc[long_anno_idxs, annotation_col] = gene_info.loc[long_anno_idxs, annotation_col].str.slice(0, 47) + '...'
             
 
     data_to_plot = data_to_plot.reset_index(drop=True).drop_duplicates()
@@ -1176,7 +1173,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             long_anno_idxs = group[annotation_col].str.len() > 50
             group.loc[long_anno_idxs, annotation_col] = group.loc[long_anno_idxs, annotation_col].str.slice(0, 47) + '...'
             for row in group[indexes_to_annotate].itertuples(index=False):
-                plt.annotate(row[annot_col_idx], (row[x_col_idx]+ 0.03, row[y_col_idx] + 0.03), c=cmap(row[y_col_idx] / v_max), annotation_clip=True)
+                plt.annotate(' ' + row[annot_col_idx], (row[x_col_idx], row[y_col_idx]), c=cmap(row[y_col_idx] / v_max), annotation_clip=True)
 
         chrom_start = chrom_end
 
@@ -1211,7 +1208,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     ax.set_ylabel(f'log10({y_col})' if log10 else y_col)
 
     if title is None:
-        what = 'regions' if 'segment_id' in data_to_plot.columns else 'bins'
+        what = 'bins' if segments_to_plot is not None else 'regions'
         title = f'Plotting {len(data_to_plot):,} {what}'
     plt.title(title)
 
