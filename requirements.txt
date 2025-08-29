@@ -2,6 +2,7 @@ ailist==2.1.3
 coverage==7.6.10  # optional requirement - for testing
 Cython==3.0.11
 fastcluster==1.2.6  # optional requirement - for optimized clustering
+gseapy==1.1.8  # optional - for GSEA tutorial notebook
 inmoose==0.7.3
 joblib==1.4.2
 KDEpy==1.1.12
@@ -9,6 +10,7 @@ linear_segment==1.2.1
 matplotlib==3.10.0
 natsort==8.4.0
 ncls==0.0.68
+networkx=3.4.2  # optional - for GSEA tutorial notebook
 notebook>=7.2.2
 numpy<2.0.0
 packaging==24.2
