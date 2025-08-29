@@ -940,7 +940,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
 
     dmps = dm.dmp.copy()
     dmps['delta_beta'] = dmps[[c for c in dmps.columns if c.startswith('avg_beta_delta')]].max(axis=1)
-    pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value'
+    pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value_adjusted'
     if pval_threshold is not None:
         dmps = dmps[dmps[pval_column] <= pval_threshold]
     if delta_beta_threshold is not None:
@@ -1329,7 +1329,6 @@ def show_chromosome_legend():
     color_map = {'gene poor': 'lightgrey', 'moderate gene density': 'lightblue', 'intermediate gene density': 'blue', 'high gene density': 'darkblue', 'very high gene density': 'purple', 
                 'variable gene density (often polymorphic)': 'lightgreen', 'centromere': 'yellow', 'stalk': 'pink'}
     #make a legend with the above colors
-    plt.style.use('ggplot')
     patches = [mpatches.Patch(color=color, label=label) for label, color in color_map.items()]
     plt.figure(figsize=(8, 1))
     plt.legend(handles=patches, loc='center', ncol=len(patches))
@@ -1425,7 +1424,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
 
     # chromosome, chr-transcript links, transcripts, transcript-betas links, betas heatmap
     nb_transcripts = len(set(gene_data.index))
-    height_ratios = [0.02, 0.05, 0.02*nb_transcripts, 0.05, 0.02*len(gene_betas.columns)]
+    height_ratios = [0.02, 0.05, max(0.02, 0.02*nb_transcripts), 0.05, max(0.02, 0.02*len(gene_betas.columns))]
     nb_plots = len(height_ratios)
 
     betas_data = betas_location if keep_na else betas_location.dropna()
@@ -1455,7 +1454,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
 
     if keep_na:
-        fig, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
+        _, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
         sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, **heatmap_params)
         if row_factors is not None:
             LOGGER.warning('Parameter row_factors is ignored when keep_na is True')
@@ -1478,7 +1477,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
             plt.legend(handles=handles, labels=labels, handler_map={str: _LegendTitle({'fontweight': 'bold'})},
                        loc='upper left', bbox_to_anchor=(-0.1 * len(row_factors.columns), 1))
         shift_ratio = 1-(np.sum(height_ratios[:-1]) / np.sum(height_ratios))
-        g.gs.update(top=shift_ratio)  # shift the heatmap to the bottom of the figure
+        g.gs.update(top=shift_ratio, bottom=0)  # shift the heatmap to the bottom of the figure
         gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio,
                                 height_ratios=height_ratios[:-1])
         axes = [g.fig.add_subplot(gs) for gs in gs2]

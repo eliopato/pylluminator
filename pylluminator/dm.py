@@ -172,7 +172,7 @@ class DM:
             LOGGER.error('Please calculate DMP first')
             return
 
-        sort_column =  f'{contrast}_p_value'
+        sort_column =  f'{contrast}_p_value_adjusted'
         columns_to_keep = [] if columns_to_keep is None else columns_to_keep
 
         if dm_type in [DM_TYPE.DMR, 'DMR']:
@@ -332,7 +332,7 @@ class DM:
             result_array = Parallel(n_jobs=-1)(delayed(wrapper_get_model_parameters)(row[1:]) for row in betas.itertuples())
 
         dmps = pd.DataFrame(result_array, index=betas.index, columns=column_names, dtype='float64')
-
+        
         LOGGER.info('add average beta delta between groups')
 
         # get column names used in the formula that are categories or string
@@ -348,7 +348,8 @@ class DM:
 
         # adjust p-values
         for f in factor_names:
-            dmps[f'{f}_p_value_adjusted'] = multipletests(dmps[f'{f}_p_value'], method='fdr_bh')[1]
+            non_na_indexes = ~np.isnan(dmps[f'{f}_p_value'])  # any NA in f_p_value column causes BH method to crash
+            dmps.loc[non_na_indexes, f'{f}_p_value_adjusted'] = multipletests(dmps.loc[non_na_indexes, f'{f}_p_value'], method='fdr_bh')[1]
 
         self.dmp = dmps
         self.contrasts = factor_names[1:]
