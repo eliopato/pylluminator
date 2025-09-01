@@ -874,7 +874,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
     probes with dendrograms on the sides.
 
 
-    :param contrast: name of the contrast to use to sort beta values. Must be one of the output contrasts from get_dmp().
+    :param contrast: name of the contrast to use to sort beta values. Must be one of the contrasts of the DM object.
         If None is given, will use the F-statistics p-value. Default: None
     :type contrast: str | None
 
@@ -1022,7 +1022,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                     title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given data.
 
-    :param data_to_plot: dataframe to use for plotting. Typically, a dataframe returned by get_dmrs()
+    :param data_to_plot: dataframe to use for plotting. 
     :type data_to_plot: pandas.DataFrame
 
     :param segments_to_plot: if set, display the segments using columns "chromosome", "start", "end" and "mean_cnv" of
@@ -1226,7 +1226,7 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
                        draw_significance=True, figsize:tuple[float, float]=(10, 8),
                        sig_threshold: float | None = None, 
                        title: None | str = None, save_path: None | str=None) -> None:
-    """Display a Manhattan plot of the given DMR data, designed to work with the dataframe returned by get_dmrs()
+    """Display a Manhattan plot of the given DM data
 
     :param dm: DM object with computed DMRs
     :type dm: pylluminator.DM

@@ -145,11 +145,10 @@ def copy_number_segmentation(samples: Samples,
     :param cnv_df: dataframe with the CNV information
     :type cnv_df: pandas.DataFrame
 
-    :param cnv_column_name: name of the CNV column in the dataframe (it usually corresponds to the sample name used
-    for CNV calculation).
+    :param cnv_column_name: name of the CNV column in the dataframe (it usually corresponds to the sample name used for CNV calculation).
     :type cnv_column_name: str
 
-    :return: a tuple with : the bins coordinates, the bins signal, the segments
+    :return: a tuple with: the bins coordinates, the bins signal, the segments
     :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
     """
     if cnv_column_name not in cnv_df.columns:

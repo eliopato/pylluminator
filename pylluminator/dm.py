@@ -143,8 +143,8 @@ class DM:
 
     def get_top(self, dm_type: DM_TYPE | str, contrast:str, chromosome_col='chromosome', annotation_col: str = 'genes',
                 n_dms=10, columns_to_keep: list[str] = None) -> pd.DataFrame | None:
-        """Get the top DMRs from the dataframe returned by get_dmr(), ranked by the p-value of the given contrast. If an
-        annotation is provided, the DMRs will be annotated with the genes associated with the probes in the DMR.
+        """Get the top DMPs or DMRs, ranked by the p-value of the given contrast. By default, the results will be annotated with 
+            the genes associated with the probes in the DMP/DMR. You can control the annotation information with the `annotation_col` parameter.
 
         :param dm_type: type of Differentially Methylated object to get (DMR or DMP).
         :type dm_type: DM_TYPE | str
@@ -253,7 +253,7 @@ class DM:
 
         # check the sample sheet
         if samples.sample_label_name not in custom_sheet.columns:
-            LOGGER.error(f'get_dmp() : the provided sample sheet must have a "{samples.sample_label_name}" column')
+            LOGGER.error(f'compute_dmp() : the provided sample sheet must have a "{samples.sample_label_name}" column')
             return None, None
 
         # if a group column is specified, check the input

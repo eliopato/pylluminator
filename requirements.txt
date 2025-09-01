@@ -10,7 +10,7 @@ linear_segment==1.2.1
 matplotlib==3.10.0
 natsort==8.4.0
 ncls==0.0.68
-networkx=3.4.2  # optional - for GSEA tutorial notebook
+networkx==3.4.2  # optional - for GSEA tutorial notebook
 notebook>=7.2.2
 numpy<2.0.0
 packaging==24.2
