@@ -92,7 +92,7 @@ def test_dmp_heatmap_ols(test_samples):
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', pval_threshold=0.05, delta_beta_threshold=0.1)
+    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', pval_threshold=0.05, effect_size_threshold=0.1)
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
     plt.close('all')
@@ -110,7 +110,7 @@ def test_dmp_heatmap_mixed_model(test_samples, caplog):
     caplog.clear()
     plot_dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', sort_by='unknown')
     assert not os.path.exists('dmp_heatmap.png')
-    assert 'parameter unknown not found. Must be pvalue, delta_beta' in caplog.text
+    assert 'parameter sort_by=unknown not found. Must be "pvalue' in caplog.text
 
     caplog.clear()
     plot_dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'])
@@ -118,7 +118,7 @@ def test_dmp_heatmap_mixed_model(test_samples, caplog):
     assert 'ERROR' not in caplog.text
     os.remove('dmp_heatmap.png')
 
-    plt.close("all")
+    plt.close('all')
 
 
 def test_dmr_plot(test_samples):
@@ -130,7 +130,7 @@ def test_dmr_plot(test_samples):
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
-    manhattan_plot_dmr(my_dms,  contrast=my_dms.contrasts[0], save_path='dmr_plot.png', draw_significance=False, figsize=(3, 19))
+    manhattan_plot_dmr(my_dms,  contrast=my_dms.contrasts[0], save_path='dmr_plot.png', figsize=(3, 19))
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 

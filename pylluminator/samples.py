@@ -12,8 +12,8 @@ from inmoose.pycombat import pycombat_norm
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
-from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_series_values
-from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path
+from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_series_values, get_chromosome_number
+from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path, merge_alt_chromosomes
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
 from pylluminator.mask import MaskCollection, Mask
@@ -76,6 +76,7 @@ class Samples:
     @property
     def sample_labels(self) -> list[str]:
         """Return the names of the samples contained in this object, that also exist in the sample sheet.
+
         :return: the list of names
         :rtype: list[str]"""
         level_name_ini = self.sample_label_name
@@ -1105,7 +1106,7 @@ class Samples:
     def reset_poobah(self) -> None:
         """Remove poobah p-values from the signal dataframe
 
-        :return None"""
+        :return: None"""
         self._signal_df = self._signal_df.drop(['p_value'], level='signal_channel', axis=1, errors='ignore')
 
     def reset_betas(self) -> None:
@@ -1610,6 +1611,36 @@ class Samples:
         self._betas = pycombat_norm(self.get_betas(apply_mask=apply_mask).dropna(), batch,
                                     covar_mod=covariates, par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch,
                                     precision=precision, na_cov_action=na_cov_action)
+
+    def get_nb_probes_per_chr_and_type(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Count the number of probes covered by the sample-s per chromosome and design type
+
+        :return: two dataframes: number of probes per chromosome and number of probes per design type (masked and not masked) """
+
+        chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
+        type_df = pd.DataFrame(columns=['not masked', 'masked'])
+        manifest = self.annotation.probe_infos[['probe_id', 'chromosome', 'type']].drop_duplicates()
+        manifest['chromosome'] = merge_alt_chromosomes(manifest['chromosome'])
+
+        masked_probe_ids = self.masks.get_mask(sample_label=self.sample_labels).get_level_values('probe_id')
+        manifest_masked_probes = manifest.probe_id.isin(masked_probe_ids)
+
+        chrm_and_type = manifest.loc[manifest_masked_probes]
+        chromosome_df['masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
+        type_df['masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
+        chrm_and_type = manifest.loc[~manifest_masked_probes]
+        chromosome_df['not masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
+        type_df['not masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
+
+        # get the chromosomes numbers to order data frame correctly
+        chromosome_df['chr_id'] = get_chromosome_number(chromosome_df.index.tolist())
+        chromosome_df = chromosome_df.sort_values('chr_id').drop(columns='chr_id')
+
+        type_df.index = [f'Type {i}' for i in type_df.index]
+        type_df.index.name = 'Probe type'
+        chromosome_df.index.name = 'Chromosome number'
+
+        return chromosome_df, type_df
 
 
 def read_idata(sample_sheet_df: pd.DataFrame, datadir: str | Path) -> tuple[dict, str]:

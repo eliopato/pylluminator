@@ -1,5 +1,5 @@
 """
-Functions used to compute DMR (Differentially Methylated Regions) and DMP (Differentially Methylated Probes).
+Functions used to compute DMRs (Differentially Methylated Regions) and DMPs (Differentially Methylated Probes).
 """
 
 import warnings
@@ -39,7 +39,7 @@ def combine_p_values_stouffer(p_values: pd.Series) -> np.ndarray:
 
 def _get_model_parameters(betas_values, design_matrix: pd.DataFrame, factor_names: list[str], groups: pd.Series | None = None) -> list[float]:
     """Create an Ordinary Least Square model for the beta values, using the design matrix provided, fit it and
-    extract the required results for DMP detection (p-value, t-value, estimate, standard error).
+    extract the required results for DMPs detection (p-value, t-value, estimate, standard error).
 
     :param betas_values: beta values to fit
     :type betas_values: 1D numpy.array_like
@@ -95,10 +95,11 @@ class DM:
     def __init__(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
                  probe_ids: None | list[str] = None, group_column: str | None = None):
-        """Initialize the object by calcating the Differentially Methylated Probes (DMP). It fits an Ordinary Least
-         Square model (OLS) for each probe, following the given formula.
-         If a group column name is given, use a Mixed Model to account for random effects.
-
+        """Initialize the object by calculating the Differentially Methylated Probes (DMPs). It fits an Ordinary Least 
+        Square model (OLS) for each probe, following the given formula. The predictors used in the formula are column names of the sample sheet.
+        If a group column name is given, use a Mixed Model to account for random effects. The Benjamini-Hochberg procedure 
+        is used to adjust the p-values.
+           
         More info on  design matrices and formulas:
             - https://www.statsmodels.org/devel/gettingstarted.html
             - https://patsy.readthedocs.io/en/latest/overview.html
@@ -107,7 +108,7 @@ class DM:
         :type samples: Samples
         :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
         :type formula: str
-        :param reference_value: reference value for each factor. Dictionary where keys are the factor names, and values are
+        :param reference_value: reference value for each predictor. Dictionary where keys are the predictor names, and values are
             their reference value. Default: None
         :type reference_value: dict | None
         :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
@@ -144,9 +145,9 @@ class DM:
     def get_top(self, dm_type: DM_TYPE | str, contrast:str, chromosome_col='chromosome', annotation_col: str = 'genes',
                 n_dms=10, columns_to_keep: list[str] = None) -> pd.DataFrame | None:
         """Get the top DMPs or DMRs, ranked by the p-value of the given contrast. By default, the results will be annotated with 
-            the genes associated with the probes in the DMP/DMR. You can control the annotation information with the `annotation_col` parameter.
+        the genes associated with the probes in the DMPs/DMRs. You can control the annotation information with the `annotation_col` parameter.
 
-        :param dm_type: type of Differentially Methylated object to get (DMR or DMP).
+        :param dm_type: type of Differentially Methylated object to get (DMRs or DMPs).
         :type dm_type: DM_TYPE | str
 
         :param contrast: contrast to use for ranking the DMRs
@@ -169,7 +170,7 @@ class DM:
         """
         # check if the input parameters are correct
         if self.samples is None or self.dmp is None or len(self.dmp) == 0:
-            LOGGER.error('Please calculate DMP first')
+            LOGGER.error('Please calculate DMPs first')
             return
 
         sort_column =  f'{contrast}_p_value_adjusted'
@@ -177,7 +178,7 @@ class DM:
 
         if dm_type in [DM_TYPE.DMR, 'DMR']:
             if self.dmr is None or self.segments is None:
-                LOGGER.error('Please calculate DMR first')
+                LOGGER.error('Please calculate DMRs first')
                 return None
             top_dm = self.dmr.join(self.segments.reset_index().set_index('segment_id'))
             if chromosome_col not in top_dm.columns:
@@ -217,8 +218,10 @@ class DM:
     def compute_dmp(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
                  probe_ids: None | list[str] = None, group_column: str | None = None):
-        """Find Differentially Methylated Probes (DMP) by fitting an Ordinary Least Square model (OLS) for each probe,
-        following the given formula. If a group column name is given, use a Mixed Model to account for random effects.
+        """Find Differentially Methylated Probes (DMPs) by fitting an Ordinary Least Square model (OLS) for each probe,
+        following the given formula. The predictors used in the formula are column names of the sample sheet. 
+        If a group column name is given, use a Linear Mixed Model (LMM) to account for random effects. The Benjamini-Hochberg procedure
+        is used to adjust the p-values.
 
         More info on  design matrices and formulas:
             - https://www.statsmodels.org/devel/gettingstarted.html
@@ -228,7 +231,7 @@ class DM:
         :type samples: Samples
         :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
         :type formula: str
-        :param reference_value: reference value for each factor. Dictionary where keys are the factor names, and values are
+        :param reference_value: reference value for each predicto. Dictionary where keys are the predicto names, and values are
             their reference value. Default: None
         :type reference_value: dict | None
         :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
@@ -247,7 +250,7 @@ class DM:
         :rtype: pandas.DataFrame, list[str]
         """
 
-        LOGGER.info('>>> Start calculating DMP')
+        LOGGER.info('>>> Start calculating DMPs')
         if custom_sheet is None:
             custom_sheet = samples.sample_sheet.copy()
 
@@ -359,13 +362,13 @@ class DM:
         self.formula = formula
         self.group_column = group_column
 
-        LOGGER.info('get DMP done')
+        LOGGER.info('get DMPs done')
 
     def compute_dmr(self, contrast: str | list[str] | None=None, dist_cutoff: float | None = None,
                     seg_per_locus: float = 0.5, probe_ids:None|list[str]=None):
-        """Find Differentially Methylated Regions (DMR) based on euclidian distance between beta values
+        """Find Differentially Methylated Regions (DMRs) based on euclidian distance between beta values
 
-        :param contrast: contrast(s) to use for DMR detection
+        :param contrast: contrast(s) to use for DMRs detection
         :type contrast: str | list[str] | None
 
         :param dist_cutoff: cutoff used to find change points between DMRs, used on euclidian distance between beta values.
@@ -381,9 +384,9 @@ class DM:
 
         """
 
-        LOGGER.info('>>> Start get DMR')
+        LOGGER.info('>>> Start get DMRs')
         if self.dmr is not None:
-            LOGGER.warning('DMR already calculated. Replacing it.')
+            LOGGER.warning('DMRs already calculated. Replacing it.')
             self.dmr = None
             self.dist_cutoff = None
             self.seg_per_locus = None
@@ -391,7 +394,7 @@ class DM:
 
         # check if the input parameters are correct
         if self.dmp is None or self.samples is None or self.sample_info is None or self.contrasts is None:
-            LOGGER.error('Please calculate DMP first')
+            LOGGER.error('Please calculate DMPs first')
             return None
 
         if isinstance(contrast, str):
@@ -399,7 +402,7 @@ class DM:
         if isinstance(contrast, list):
             for c in contrast:
                 if c not in self.contrasts:
-                    LOGGER.error(f'Contrast {c} not found in DMP list. Please calculate DMP for this contrast first')
+                    LOGGER.error(f'Contrast {c} not found in DMPs list. Please calculate DMPs for this contrast first')
                     return None
         if contrast is None:
             contrast = self.contrasts
@@ -455,12 +458,12 @@ class DM:
                 LOGGER.warning(f'Invalid parameter `seg_per_locus` {seg_per_locus}, should be in ]0:1[. Setting it to 0.5')
                 seg_per_locus = 0.5
             if dist_cutoff is not None and dist_cutoff <= 0:
-                LOGGER.warning('Wrong input : euclidian distance cutoff for DMP should be > 0. Recalculating it.')
+                LOGGER.warning('Wrong input : euclidian distance cutoff for DMPs should be > 0. Recalculating it.')
             dist_cutoff = np.quantile(beta_euclidian_dist.dropna(), 1 - seg_per_locus)  # sesame (keep last probes)
             # dist_cutoff = np.quantile(beta_euclidian_dist[~last_probe_in_chromosome], 1 - seg_per_locus)
             LOGGER.info(f'Segments per locus : {seg_per_locus}')
 
-        LOGGER.info(f'Euclidian distance cutoff for DMP : {dist_cutoff}')
+        LOGGER.info(f'Euclidian distance cutoff for DMPs : {dist_cutoff}')
 
         # find change points
         change_points = last_probe_in_chromosome | (beta_euclidian_dist > dist_cutoff)
@@ -487,7 +490,7 @@ class DM:
         # combine probes p-values with segments information
         dmr = segments.join(self.dmp)
 
-        # group segments by ID to compute DMR values
+        # group segments by ID to compute DMRs values
         segments_grouped = dmr.groupby('segment_id')
         seg_dmr = pd.DataFrame()
         seg_dmr['start'] = segments_grouped['start'].min()

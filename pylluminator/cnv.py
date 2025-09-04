@@ -20,7 +20,8 @@ def copy_number_variation(samples: Samples,
                           sample_labels: str | list[str] | None=None,
                           group_by: str | None = None,
                           normalization_labels: str | list[str] | None = None) -> pd.DataFrame | None:
-    """Perform copy number variation (CNV)
+    """Perform copy number variation (CNV). The CNV calculation method on copy-number-normal samples to normalize probe signal intensity. 
+    It is strongly recommended to use normal samples that closely match the biological and technical characteristics of the target samples.
 
     :param samples: Samples object that contains the samples to be analyzed, and the normalization samples if
         normalization_sample_labels are specified.
@@ -137,7 +138,8 @@ def copy_number_variation(samples: Samples,
 def copy_number_segmentation(samples: Samples,
                              cnv_df: pd.DataFrame,
                              cnv_column_name: str) -> tuple[pr.PyRanges, pd.DataFrame, pd.DataFrame]:
-    """With the output dataframe of copy_number_variation, group the genome in segments with similar CNV.
+    """With the output dataframe of copy_number_variation, group the genome in segments with similar CNV using the
+    Circular Binary Segmentation (CBS) algorithm.
 
     :param samples: samples to be analyzed
     :type samples: Samples

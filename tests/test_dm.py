@@ -99,10 +99,10 @@ def test_dmr(test_samples, caplog):
     # probe_ids.extend(['cg14515812_TC11', 'cg14515812_TC12'])
     my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
 
-    # test get_top function before compute DMR = bug
+    # test get_top function before compute DMRs = bug
     caplog.clear()
     my_dms.get_top('DMR','sample_type[T.PREC]')
-    assert 'Please calculate DMR first' in caplog.text
+    assert 'Please calculate DMRs first' in caplog.text
 
     my_dms.compute_dmr()
 
@@ -111,7 +111,7 @@ def test_dmr(test_samples, caplog):
     assert len(my_dms.segments[my_dms.segments.segment_id == 515]) == 3
     assert my_dms.segments.loc['cg00017004_BC21', 'segment_id'] == 515
 
-    # check DMR values
+    # check DMRs values
     expected_values = [151960303, 153792416, 'X', 0.04285787432065091, 0.06373101772177485, 0.7505345278316073,
                        0.055821167098151304, 0.75053453, 0.80635566, -0.05582112]
     assert my_dms.dmr.loc[515, ].values.tolist() == pytest.approx(expected_values)

@@ -53,8 +53,9 @@ Main functionalities
 * data analysis and visualisation
 
   * beta values (density, PCA, MDS, dendrogram...)
-  * DMP and DMR, accounting for replicates / random effects
-  * CNV
+  * DMPs accounting for replicates / random effects, DMRs
+  * CNV, CNS
+  * pathway analysis with GSEApy (GSEA, ORA)
 
 * quality control
 

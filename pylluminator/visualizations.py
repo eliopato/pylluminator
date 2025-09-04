@@ -1,4 +1,4 @@
-"""Functions to plot data from Samples object or DMP/DMR dataframes"""
+"""Functions to plot data from Samples object or DMPs/DMRs dataframes"""
 
 import os.path
 
@@ -77,7 +77,7 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
     return legend_handles, color_categories
 
 
-def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> (list, dict | None):
+def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> tuple[list, dict | None]:
     """Define the line style to use for each sample, depending on the column used to categorized them.
 
     :param sheet: sample sheet data frame
@@ -614,41 +614,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
 ########################################################################################################################
 
 
-def get_nb_probes_per_chr_and_type(samples: Samples) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Count the number of probes covered by the sample-s per chromosome and design type
-
-    :param samples: Samples to analyze
-    :type samples: Samples
-
-    :return: None"""
-
-    chromosome_df = pd.DataFrame(columns=['not masked', 'masked'])
-    type_df = pd.DataFrame(columns=['not masked', 'masked'])
-    manifest = samples.annotation.probe_infos[['probe_id', 'chromosome', 'type']].drop_duplicates()
-    manifest['chromosome'] = merge_alt_chromosomes(manifest['chromosome'])
-
-    masked_probe_ids = samples.masks.get_mask(sample_label=samples.sample_labels).get_level_values('probe_id')
-    manifest_masked_probes = manifest.probe_id.isin(masked_probe_ids)
-
-    chrm_and_type = manifest.loc[manifest_masked_probes]
-    chromosome_df['masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
-    type_df['masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
-    chrm_and_type = manifest.loc[~manifest_masked_probes]
-    chromosome_df['not masked'] = chrm_and_type.groupby('chromosome', observed=True).count()['probe_id']
-    type_df['not masked'] = chrm_and_type.groupby('type', observed=False).count()['probe_id']
-
-    # get the chromosomes numbers to order data frame correctly
-    chromosome_df['chr_id'] = get_chromosome_number(chromosome_df.index.tolist())
-    chromosome_df = chromosome_df.sort_values('chr_id').drop(columns='chr_id')
-
-    type_df.index = [f'Type {i}' for i in type_df.index]
-    type_df.index.name = 'Probe type'
-    chromosome_df.index.name = 'Chromosome number'
-
-    return chromosome_df, type_df
-
-
-def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, figsize:tuple[float, float]=(10, 7), save_path: None | str=None) -> None:
+def plot_nb_probes_and_types_per_chr(samples: Samples, title: None | str = None, figsize:tuple[float, float]=(10, 7), save_path: None | str=None) -> None:
     """Plot the number of probes covered by the sample per chromosome and design type
 
     :param sample: Samples to be plotted
@@ -665,7 +631,7 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
 
     :return: None"""
 
-    chromosome_df, type_df = get_nb_probes_per_chr_and_type(sample)
+    chromosome_df, type_df = samples.get_nb_probes_per_chr_and_type()
 
     plt.style.use('ggplot')
     fig, axes = plt.subplots(2)
@@ -675,7 +641,7 @@ def plot_nb_probes_and_types_per_chr(sample: Samples, title: None | str = None, 
     type_df.plot.bar(stacked=True, figsize=figsize, ax=axes[1], color=[ '#1f77b4', '#F8766D',] )
 
     if title is None:
-        title = f'Number of probes per chromosome and type for {sample.nb_samples} samples'
+        title = f'Number of probes per chromosome and type for {samples.nb_samples} samples'
 
     fig.suptitle(title)
 
@@ -868,7 +834,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
                      nb_probes: int = 100, figsize: tuple[float, float] | None = None,
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
-                     sort_by = 'pvalue', pval_threshold: float | None = None, delta_beta_threshold: float | None = None,
+                     sort_by = 'pvalue', pval_threshold: float | None = None, effect_size_threshold: float | None = None,
                      row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
@@ -898,15 +864,19 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
-    :param sort_by: column to order dmps by. Can be pvalue, delta_beta, or any dmp column name. Default: pvalue
+    :param sort_by: column to order dmps by. Can be pvalue, effect_size, or any dmp column name. Default: pvalue
     :type sort_by: str
-    :param pval_threshold: maximum DMP p-value. If None, no filter is applied on pvalues. Default: None
+
+    :param pval_threshold: maximum DMPs p-value, float between 0 and 1. If None, no filter is applied on pvalues. Default: None
     :type pval_threshold: float | None
-    :param delta_beta_threshold: minimum average delta beta value between 2 groups. If None, no filter is applied on delta beta. Default: None
-    :type delta_beta_threshold: float | None
+
+    :param effect_size_threshold: minimum DMPs effect size, float between 0 and 1. If None, no filter is applied on effect size. Default: None
+    :type effect_size_threshold: float | None
+
     :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
         columns of the sample sheet. Default: None
     :type row_factors: str | list[str] | None
+
     :param row_legends: list of columns to generate a legend for. Set to None for no legends. Only work for columns also
         specified in row_factors. Default: '' (generate all legends)
     :type row_legends: str | list[str] | None
@@ -926,8 +896,8 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
         LOGGER.error('You need to specify a contrast for DMPs calculated with a mixed model')
         return None
 
-    if sort_by not in ['pvalue', 'delta_beta'] + dm.dmp.columns.tolist():
-        LOGGER.error(f'parameter {sort_by} not found. Must be pvalue, delta_beta or a column of dmps dataframe')
+    if sort_by not in ['pvalue'] + dm.dmp.columns.tolist():
+        LOGGER.error(f'parameter sort_by={sort_by} not found. Must be "pvalue" or any column of dmps dataframe')
         return
 
     label = dm.samples.sample_label_name
@@ -938,21 +908,26 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
 
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
-    dmps = dm.dmp.copy()
-    dmps['delta_beta'] = dmps[[c for c in dmps.columns if c.startswith('avg_beta_delta')]].max(axis=1)
+    # filter DMPs by p-value threshold and effect size threshold if the parameters are set
+    dmp_idxs = dm.dmp.index
     pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value_adjusted'
+
     if pval_threshold is not None:
-        dmps = dmps[dmps[pval_column] <= pval_threshold]
-    if delta_beta_threshold is not None:
-        dmps = dmps[dmps.delta_beta >= delta_beta_threshold]
+        dmp_idxs = dmp_idxs[dm.dmp.loc[dmp_idxs, pval_column] <= pval_threshold]
+
+    if effect_size_threshold is not None:
+        dmp_idxs = dmp_idxs[dm.dmp.loc[dmp_idxs, 'effect_size'] >= effect_size_threshold]
+
+    # sort the DMPs
     if sort_by == 'pvalue':
         sort_by = pval_column
+    sorted_probe_idxs = dm.dmp.loc[dmp_idxs].sort_values(sort_by).index.intersection(betas.index)
 
-    sorted_probe_idxs = dmps.sort_values(sort_by).index.intersection(betas.index)
     nb_probes = min(nb_probes, len(sorted_probe_idxs))
 
     if nb_probes == 0:
-        LOGGER.error(f'No significant probes found, consider increasing the p-value threshold (current threshold: {pval_threshold})')
+        LOGGER.error(f'No significant probes found, consider increasing the p-value threshold (current threshold: {pval_threshold}) \
+                     or decreasing the effect size threshold (current threshold: {effect_size_threshold}))')
         return
 
     sorted_probe_idxs = sorted_probe_idxs[:nb_probes]
@@ -1017,9 +992,9 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
 
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
                     x_col='start', y_col='p_value', log10=False, figsize:tuple[float, float]=(10,8),
-                    annotation: Annotations | None = None, annotation_col: str = 'genes',
+                    annotation: Annotations | None = None, annotation_col: str = 'genes', nb_annotated_probes: int = 100,
                     sig_threshold: float | None = None, 
-                    title: None | str = None, draw_significance=False, save_path: None | str=None) -> None:
+                    title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given data.
 
     :param data_to_plot: dataframe to use for plotting. 
@@ -1045,15 +1020,14 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         significant threshold. Must be a column in the Annotation data. Default: None
     :type annotation_col: str | None
 
-    :param sig_threshold: set the threshold used for displaying annotation (and significance line if d
-        raw_significance is True). If None, takes the value of the 100th probe. Default: None
-    :type sig_threshold: float
+    :param nb_annotated_probes: the number of probes to annotate (if annotation_col is provided). Defaul: 100
+    :type nb_annotated_probes: int
+
+    :param sig_threshold: threshold to display the significance line. If None, doesn't draw a line. Default: None
+    :type sig_threshold: float |None
 
     :param log10: apply -log10 on the value column. Default: True
     :type log10: bool
-
-    :param draw_significance: draw p-value significance lines (at 1e-05 and 5e-08). Default: False
-    :type draw_significance: bool
 
     :param title: custom title for the plot. Default: None
     :type title: str | None
@@ -1089,7 +1063,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         data_to_plot['chr_id'] = data_to_plot[chromosome_col]
 
     # figure initialization
-    fig, ax = plt.subplots(figsize=figsize)
+    _, ax = plt.subplots(figsize=figsize)
     margin = int(max(data_to_plot[x_col]) / 10)
     chrom_start, chrom_end = 0, 0
     x_labels, x_major_ticks, x_minor_ticks = [], [], [0]
@@ -1104,19 +1078,22 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     # apply -log10 to p-values if needed
     if log10:
         data_to_plot[y_col] = -np.log10(data_to_plot[y_col])
-
-    if sig_threshold is None:
-        sorted_pvals = data_to_plot[y_col].sort_values()
-        sig_threshold = sorted_pvals.iloc[-100]
+        if sig_threshold is not None:
+            sig_threshold = -np.log10(sig_threshold)
+    # get the value of the 100th most significant probe
+    annotation_threshold = data_to_plot[y_col].sort_values().iloc[-nb_annotated_probes]
 
     # define colormap and limits
     v_max = np.max(data_to_plot[y_col])
     v_min = np.min(data_to_plot[y_col])
 
     if v_min < 0:
-        cmap = colormaps.get_cmap('jet')
+        cmap = colormaps.get_cmap('Spectral')
+        amplitude = min(abs(v_max), abs(v_min))  # center on 0
+        v_max = amplitude
+        v_min = - amplitude
     else:
-        cmap = colormaps.get_cmap('viridis').reversed()
+        cmap = [colormaps.get_cmap('viridis_r'), colormaps.get_cmap('autumn_r')]
         v_min = 0
 
     # check annotation parameter, and select and clean up annotation if defined
@@ -1144,13 +1121,15 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
 
     # plot each chromosome scatter plot with its assigned color
-    for (_, group) in data_to_plot_grouped:
+    for idx_chr, (_, group) in enumerate(data_to_plot_grouped):
         # add margin to separate a bit the different groups; otherwise small groups won't show
         group[x_col] = chrom_start + group[x_col] + margin
         chrom_end = max(group[x_col]) + margin
 
         # build the chromosomes scatter plot
-        ax.scatter(group[x_col], group[y_col], c=group[y_col], vmin=v_min, vmax=v_max, cmap=cmap, alpha=1)
+        curr_cmap = cmap[idx_chr % 2] if isinstance(cmap, list) else cmap
+        ax.scatter(group[x_col], group[y_col], c=group[y_col], vmin=v_min, vmax=v_max, cmap=curr_cmap, alpha=1)
+        
         # save chromosome's name and limits for x-axis
         x_labels.append(' '.join(set(group['merged_chr'])).replace('chr', ''))
         x_minor_ticks.append(chrom_end)  # chromosome limits
@@ -1169,7 +1148,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
         # draw annotations for probes that are over the threshold, if annotation_col is set
         if annotation_col in group.columns:
-            indexes_to_annotate = group[y_col] > sig_threshold if log10 else group[y_col] < sig_threshold
+            indexes_to_annotate = group[y_col] > annotation_threshold if log10 else group[y_col] < annotation_threshold
             annot_col_idx = group.columns.get_loc(annotation_col)
             x_col_idx = group.columns.get_loc(x_col)
             y_col_idx = group.columns.get_loc(y_col)
@@ -1177,7 +1156,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             long_anno_idxs = group[annotation_col].str.len() > 50
             group.loc[long_anno_idxs, annotation_col] = group.loc[long_anno_idxs, annotation_col].str.slice(0, 47) + '...'
             for row in group[indexes_to_annotate].itertuples(index=False):
-                plt.annotate(' ' + row[annot_col_idx], (row[x_col_idx], row[y_col_idx]), c=cmap(row[y_col_idx] / v_max), annotation_clip=True)
+                plt.annotate(' ' + row[annot_col_idx], (row[x_col_idx], row[y_col_idx]), c=curr_cmap(row[y_col_idx] / v_max), annotation_clip=True)
 
         chrom_start = chrom_end
 
@@ -1185,10 +1164,10 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     [ax.spines[side].set_visible(False) for side in ax.spines]  # hide plot frame
 
     # add lines of significance threshold
-    if draw_significance:
+    if sig_threshold is not None:
         x_start = 0 - margin
         x_end =  chrom_end + margin
-        plt.plot([x_start, x_end], [sig_threshold, sig_threshold], ls=':', c=cmap(sig_threshold), alpha=0.5)
+        plt.plot([x_start, x_end], [sig_threshold, sig_threshold], ls=':', c='black', alpha=0.5)
 
     # grids style and plot limits
     ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
@@ -1222,9 +1201,9 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
 def manhattan_plot_dmr(dm: DM, contrast: str,
                        chromosome_col='chromosome', x_col='start', y_col='p_value',
-                       annotation_col='genes', log10=True,
-                       draw_significance=True, figsize:tuple[float, float]=(10, 8),
-                       sig_threshold: float | None = None, 
+                       annotation_col='genes', nb_annotated_probes: int=100, log10=True,
+                       figsize:tuple[float, float]=(10, 8),
+                       sig_threshold: float | None = 0.05, 
                        title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given DM data
 
@@ -1243,19 +1222,18 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
     :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
     :type y_col: str
 
-    :param annotation_col: the name of a column used to write annotation on the plots for data that is above the
-        significant threshold. Must be a column in the Annotation data. Default: None
+    :param annotation_col: the name of a column used to write annotation on the plots. Must be a column 
+        in the Annotation data. The top 100 regions are annotated. Default: None
     :type annotation_col: str | None
 
-    :param sig_threshold: set the threshold used for displaying annotation (and significance line if
-        raw_significance is True). If None, takes the value of the 100th probe. Default: None
+    :param nb_annotated_probes: the number of probes to annotate (if annotation_col is provided). Defaul: 100
+    :type nb_annotated_probes: int
+
+    :param sig_threshold: Threshold to draw the significance line. Set to None to ignore the line. Default: 0.05
     :type sig_threshold: float | None
 
     :param log10: apply -log10 on the value column. Default: True
     :type log10: bool
-
-    :param draw_significance: draw p-value significance lines (at 1e-05 and 5e-08). Default: False
-    :type draw_significance: bool
 
     :param figsize: size of the figure. Default: (10, 8)
     :type figsize: tuple
@@ -1276,7 +1254,7 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
 
     data = dm.dmr.join(dm.segments.reset_index().set_index('segment_id'))
     return _manhattan_plot(data_to_plot=data, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}_adjusted',
-                           x_col=x_col, draw_significance=draw_significance, annotation=dm.samples.annotation,
+                           x_col=x_col, annotation=dm.samples.annotation, nb_annotated_probes=nb_annotated_probes,
                            annotation_col=annotation_col, sig_threshold=sig_threshold,
                            figsize=figsize, log10=log10, title=title, save_path=save_path)
 
@@ -1318,7 +1296,7 @@ def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,
 
     _manhattan_plot(data_to_plot=data_to_plot, segments_to_plot=segments_to_plot, x_col=x_col,
                     chromosome_col=chromosome_col, y_col=y_col, title=title, figsize=figsize,
-                    log10=False, annotation=None, draw_significance=False, save_path=save_path)
+                    sig_threshold=None, log10=False, annotation=None, save_path=save_path)
 
 ########################################################################################################################
 
