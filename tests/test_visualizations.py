@@ -2,10 +2,10 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from pylluminator.visualizations import (betas_2D, betas_density, plot_dmp_heatmap, plot_nb_probes_and_types_per_chr,
-                                         manhattan_plot_dmr, manhattan_plot_cns, visualize_gene, betas_dendrogram,
-                                         pc_association_heatmap, pc_correlation_heatmap, plot_methylation_distribution,
-                                         plot_betas_heatmap, analyze_replicates, metadata_correlation, metadata_pairplot)
+from pylluminator.visualizations import (betas_2D, betas_density, dmp_heatmap, nb_probes_per_chr_and_type_hist,
+                                         dmr_manhattan_plot, cns_manhattan_plot, visualize_gene, betas_dendrogram,
+                                         pc_association_heatmap, pc_correlation_heatmap, methylation_distribution,
+                                         betas_heatmap, analyze_replicates, metadata_correlation, metadata_pairplot)
 
 from pylluminator.dm import DM
 from pylluminator.cnv import copy_number_segmentation, copy_number_variation
@@ -57,8 +57,8 @@ def test_plot_betas_density(test_samples):
 
     plt.close("all")
 
-def test_plot_betas_heatmap(test_samples):
-    plot_betas_heatmap(test_samples, save_path='betas_heatmap.png')
+def test_betas_heatmap(test_samples):
+    betas_heatmap(test_samples, save_path='betas_heatmap.png')
     assert os.path.exists('betas_heatmap.png')
     os.remove('betas_heatmap.png')
     plt.close("all")
@@ -67,32 +67,32 @@ def test_dmp_heatmap_ols(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png')
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png')
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', custom_sheet=pd.DataFrame())
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png', custom_sheet=pd.DataFrame())
     assert not os.path.exists('dmp_heatmap.png')
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', contrast=['a', 'b'])
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png', contrast=['a', 'b'])
     assert not os.path.exists('dmp_heatmap.png')
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', contrast=my_dms.contrasts[0])
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png', contrast=my_dms.contrasts[0])
     assert os.path.exists('dmp_heatmap.png')
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', nb_probes=500, figsize=(3, 19), var='sample_type', row_factors=['sample_type'])
-    assert os.path.exists('dmp_heatmap.png')
-    os.remove('dmp_heatmap.png')
-
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', drop_na=False, row_factors=['sample_type'])
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png', nb_probes=500, figsize=(3, 19), var='sample_type', row_factors=['sample_type'])
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', row_factors=['sample_type'], row_legends=['sample_type'])
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png', drop_na=False, row_factors=['sample_type'])
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
 
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png', pval_threshold=0.05, effect_size_threshold=0.1)
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png', row_factors=['sample_type'], row_legends=['sample_type'])
+    assert os.path.exists('dmp_heatmap.png')
+    os.remove('dmp_heatmap.png')
+
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png', pval_threshold=0.05, effect_size_threshold=0.1)
     assert os.path.exists('dmp_heatmap.png')
     os.remove('dmp_heatmap.png')
     plt.close('all')
@@ -103,17 +103,17 @@ def test_dmp_heatmap_mixed_model(test_samples, caplog):
     my_dms = DM(test_samples, '~ sentrix_position', group_column='sentrix_position', probe_ids=probe_ids)
 
     caplog.clear()
-    plot_dmp_heatmap(my_dms, save_path='dmp_heatmap.png')
+    dmp_heatmap(my_dms, save_path='dmp_heatmap.png')
     assert not os.path.exists('dmp_heatmap.png')
     assert 'You need to specify a contrast for DMPs calculated with a mixed model' in caplog.text
 
     caplog.clear()
-    plot_dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', sort_by='unknown')
+    dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', sort_by='unknown')
     assert not os.path.exists('dmp_heatmap.png')
     assert 'parameter sort_by=unknown not found. Must be "pvalue' in caplog.text
 
     caplog.clear()
-    plot_dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'])
+    dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'])
     assert os.path.exists('dmp_heatmap.png')
     assert 'ERROR' not in caplog.text
     os.remove('dmp_heatmap.png')
@@ -126,15 +126,15 @@ def test_dmr_plot(test_samples):
     my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
     my_dms.compute_dmr(probe_ids=probe_ids)
 
-    manhattan_plot_dmr(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png')
+    dmr_manhattan_plot(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png')
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
-    manhattan_plot_dmr(my_dms,  contrast=my_dms.contrasts[0], save_path='dmr_plot.png', figsize=(3, 19))
+    dmr_manhattan_plot(my_dms,  contrast=my_dms.contrasts[0], save_path='dmr_plot.png', figsize=(3, 19))
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
-    manhattan_plot_dmr(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png',  title='juju', sig_threshold=0.1)
+    dmr_manhattan_plot(my_dms, contrast=my_dms.contrasts[0], save_path='dmr_plot.png',  title='juju', sig_threshold=0.1)
     assert os.path.exists('dmr_plot.png')
     os.remove('dmr_plot.png')
 
@@ -144,28 +144,28 @@ def test_cns_plot(test_samples):
     cnv_df = copy_number_variation(test_samples, sample_labels='PREC_500_3')
     ranges, signal_bins_df, segments_df = copy_number_segmentation(test_samples, cnv_df, 'PREC_500_3')
 
-    manhattan_plot_cns(signal_bins_df, segments_df, save_path='cns_plot.png')
+    cns_manhattan_plot(signal_bins_df, segments_df, save_path='cns_plot.png')
     assert os.path.exists('cns_plot.png')
     os.remove('cns_plot.png')
 
-    manhattan_plot_cns(signal_bins_df, save_path='cns_plot.png', title='test', figsize=(3, 19))
+    cns_manhattan_plot(signal_bins_df, save_path='cns_plot.png', title='test', figsize=(3, 19))
     assert os.path.exists('cns_plot.png')
     os.remove('cns_plot.png')
 
     # test wrong parameters
-    manhattan_plot_cns(signal_bins_df, segments_df, x_col='tet', save_path='cns_plot.png')
+    cns_manhattan_plot(signal_bins_df, segments_df, x_col='tet', save_path='cns_plot.png')
     assert not os.path.exists('cns_plot.png')
 
-    manhattan_plot_cns(signal_bins_df, segments_df, chromosome_col='tet', save_path='cns_plot.png')
+    cns_manhattan_plot(signal_bins_df, segments_df, chromosome_col='tet', save_path='cns_plot.png')
     assert not os.path.exists('cns_plot.png')
 
-    manhattan_plot_cns(signal_bins_df, segments_df, y_col='tet', save_path='cns_plot.png')
+    cns_manhattan_plot(signal_bins_df, segments_df, y_col='tet', save_path='cns_plot.png')
     assert not os.path.exists('cns_plot.png')
 
     plt.close("all")
 
 def test_plot_b_chr(test_samples):
-    plot_nb_probes_and_types_per_chr(test_samples, save_path='nb_probes_per_chr.png', title='test')
+    nb_probes_per_chr_and_type_hist(test_samples, save_path='nb_probes_per_chr.png', title='test')
     assert os.path.exists('nb_probes_per_chr.png')
     os.remove('nb_probes_per_chr.png')
     plt.close("all")
@@ -231,18 +231,18 @@ def test_pc_correlation_heatmap(test_samples):
 
 
 def test_methylation_distribution(test_samples, caplog):
-    plot_methylation_distribution(test_samples, save_path='methylation_distribution.png')
+    methylation_distribution(test_samples, save_path='methylation_distribution.png')
     assert os.path.exists('methylation_distribution.png')
     assert 'ERROR' not in caplog.text
     os.remove('methylation_distribution.png')
 
     caplog.clear()
-    plot_methylation_distribution(test_samples, group_column='wrong_col', save_path='methylation_distribution.png')
+    methylation_distribution(test_samples, group_column='wrong_col', save_path='methylation_distribution.png')
     assert not os.path.exists('methylation_distribution.png')
     assert 'Column wrong_col not found in the sample sheet' in caplog.text
 
     caplog.clear()
-    plot_methylation_distribution(test_samples, group_column='sample_type', save_path='methylation_distribution.png')
+    methylation_distribution(test_samples, group_column='sample_type', save_path='methylation_distribution.png')
     assert 'ERROR' not in caplog.text
     assert os.path.exists('methylation_distribution.png')
     os.remove('methylation_distribution.png')

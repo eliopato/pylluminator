@@ -159,7 +159,7 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
         group_names = []
         for name, line in grouped_sheet[samples.sample_label_name].apply(list).items():
             avg_betas_list.append(betas[line].mean(axis=1))
-            group_names.append(name)
+            group_names.append(str(name))
 
         betas = pd.concat(avg_betas_list, axis=1)
         betas.columns = group_names
@@ -614,7 +614,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
 ########################################################################################################################
 
 
-def plot_nb_probes_and_types_per_chr(samples: Samples, title: None | str = None, figsize:tuple[float, float]=(10, 7), save_path: None | str=None) -> None:
+def nb_probes_per_chr_and_type_hist(samples: Samples, title: None | str = None, figsize:tuple[float, float]=(10, 7), save_path: None | str=None) -> None:
     """Plot the number of probes covered by the sample per chromosome and design type
 
     :param sample: Samples to be plotted
@@ -730,7 +730,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
     return color_df, handles, labels
 
 
-def plot_betas_heatmap(samples: Samples, apply_mask:bool=True,
+def betas_heatmap(samples: Samples, apply_mask:bool=True,
                      nb_probes: int = 100, figsize: tuple[float, float] = (10, 10),
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
@@ -830,7 +830,7 @@ def plot_betas_heatmap(samples: Samples, apply_mask:bool=True,
 
 
 
-def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
+def dmp_heatmap(dm: DM, contrast: str | None = None,
                      nb_probes: int = 100, figsize: tuple[float, float] | None = None,
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
@@ -888,7 +888,7 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
         return
 
     if isinstance(contrast, list):
-        LOGGER.error('plot_dmp_heatmap() : contrast must be a string, not a list')
+        LOGGER.error('dmp_heatmap() : contrast must be a string, not a list')
         return
 
     # no F-statistic p_value for DMPs calculated with MixedModelLM, so we need a contrast specified
@@ -909,19 +909,19 @@ def plot_dmp_heatmap(dm: DM, contrast: str | None = None,
     betas = set_level_as_index(betas, 'probe_id', drop_others=True)
 
     # filter DMPs by p-value threshold and effect size threshold if the parameters are set
-    dmp_idxs = dm.dmp.index
+    dmp = dm.dmp
     pval_column = 'f_pvalue' if contrast is None else f'{contrast}_p_value_adjusted'
 
     if pval_threshold is not None:
-        dmp_idxs = dmp_idxs[dm.dmp.loc[dmp_idxs, pval_column] <= pval_threshold]
+        dmp = dmp[dmp[pval_column] <= pval_threshold]
 
     if effect_size_threshold is not None:
-        dmp_idxs = dmp_idxs[dm.dmp.loc[dmp_idxs, 'effect_size'] >= effect_size_threshold]
+        dmp = dmp[dmp['effect_size'] >= effect_size_threshold]
 
     # sort the DMPs
     if sort_by == 'pvalue':
         sort_by = pval_column
-    sorted_probe_idxs = dm.dmp.loc[dmp_idxs].sort_values(sort_by).index.intersection(betas.index)
+    sorted_probe_idxs = dmp.sort_values(sort_by).index.intersection(betas.index)
 
     nb_probes = min(nb_probes, len(sorted_probe_idxs))
 
@@ -1199,7 +1199,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         plt.savefig(os.path.expanduser(save_path))
 
 
-def manhattan_plot_dmr(dm: DM, contrast: str,
+def dmr_manhattan_plot(dm: DM, contrast: str,
                        chromosome_col='chromosome', x_col='start', y_col='p_value',
                        annotation_col='genes', nb_annotated_probes: int=100, log10=True,
                        figsize:tuple[float, float]=(10, 8),
@@ -1259,7 +1259,7 @@ def manhattan_plot_dmr(dm: DM, contrast: str,
                            figsize=figsize, log10=log10, title=title, save_path=save_path)
 
 
-def manhattan_plot_cns(data_to_plot: pd.DataFrame, segments_to_plot=None,
+def cns_manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot=None,
                        x_col='start_bin', chromosome_col='chromosome', y_col='cnv',
                        figsize:tuple[float, float]|None=(10, 8), title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given CNS data, designed to work with the dataframes returned by
@@ -1583,7 +1583,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         plt.savefig(os.path.expanduser(save_path))
 
 
-def plot_methylation_distribution(samples: Samples, group_column: str| None=None, what: list[str] | str = 'hyper',
+def methylation_distribution(samples: Samples, group_column: str| None=None, what: list[str] | str = 'hyper',
                                   annotation_column:str='cgi', orientation: str|None='h', custom_sheet:pd.DataFrame|None=None,
                                   save_path: None | str=None) -> None:
     """
