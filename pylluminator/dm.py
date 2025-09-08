@@ -231,7 +231,7 @@ class DM:
         :type samples: Samples
         :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
         :type formula: str
-        :param reference_value: reference value for each predicto. Dictionary where keys are the predicto names, and values are
+        :param reference_value: reference value for each predicto. Dictionary where keys are the predictor names, and values are
             their reference value. Default: None
         :type reference_value: dict | None
         :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
@@ -307,10 +307,17 @@ class DM:
         # the reference level for each factor is the first level of the sorted factor values. If a specific reference value
         # is provided, we sort the levels accordingly
         if reference_value is not None:
+            if not isinstance(reference_value, dict):
+                LOGGER.error('parameter reference_value must be a dict')
+                return None, None
+            
             for column_name, value in reference_value.items():
                 if column_name in sample_info.columns:
                     order = [value] + [v for v in set(sample_info[column_name]) if v != value]
                     sample_info[column_name] = pd.Categorical(sample_info[column_name], categories=order, ordered=True)
+                else:
+                    LOGGER.error(f'predictor {column_name} was not found in sample metadata (available columns: {sample_info.columns}')
+                    return None, None
         try:
             design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
         except:

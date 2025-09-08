@@ -16,7 +16,7 @@ def test_plot_betas_2D(test_samples):
     for m in models:
         betas_2D(test_samples, model=m, nb_probes=1000)
 
-    betas_2D(test_samples, model='PCA', save_path='PCA_2D_plot.png', nb_probes=1000, color_column='sample_type', label_column='sample_type')
+    betas_2D(test_samples, model='PCA', save_path='PCA_2D_plot.png', nb_probes=None, color_column='sample_type', label_column='sample_type')
     assert os.path.exists('PCA_2D_plot.png')
     os.remove('PCA_2D_plot.png')
 
@@ -212,6 +212,10 @@ def test_pc_association_heatmap(test_samples):
     assert os.path.exists('pc_bias.png')
     os.remove('pc_bias.png')
 
+    pc_association_heatmap(test_samples, save_path='pc_bias.png')
+    assert os.path.exists('pc_bias.png')
+    os.remove('pc_bias.png')
+
     # more components than sample, fail
     pc_association_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')
@@ -231,23 +235,40 @@ def test_pc_correlation_heatmap(test_samples):
 
 
 def test_methylation_distribution(test_samples, caplog):
-    methylation_distribution(test_samples, save_path='methylation_distribution.png')
+    
+    # OK
+    caplog.clear()
+    methylation_distribution(test_samples, group_column='sample_type', save_path='methylation_distribution.png')
     assert os.path.exists('methylation_distribution.png')
     assert 'ERROR' not in caplog.text
     os.remove('methylation_distribution.png')
 
+    # NOK
     caplog.clear()
     methylation_distribution(test_samples, group_column='wrong_col', save_path='methylation_distribution.png')
     assert not os.path.exists('methylation_distribution.png')
     assert 'Column wrong_col not found in the sample sheet' in caplog.text
 
+    # NOK
     caplog.clear()
-    methylation_distribution(test_samples, group_column='sample_type', save_path='methylation_distribution.png')
-    assert 'ERROR' not in caplog.text
-    assert os.path.exists('methylation_distribution.png')
-    os.remove('methylation_distribution.png')
+    methylation_distribution(test_samples, group_column='sample_type', annotation_column='wrong_col', save_path='methylation_distribution.png')
+    assert not os.path.exists('methylation_distribution.png')
+    assert 'Column wrong_col not found in the annotation data.' in caplog.text
+
+    # NOK
+    caplog.clear()
+    methylation_distribution(test_samples, group_column='sample_type', delta_beta_threshold=-2, save_path='methylation_distribution.png')
+    assert not os.path.exists('methylation_distribution.png')
+    assert 'delta_beta_threshold must be betweend 0 and 1' in caplog.text
+    caplog.clear()
+
+    # NOK
+    methylation_distribution(test_samples, group_column='sample_type', delta_beta_threshold=2, save_path='methylation_distribution.png')
+    assert not os.path.exists('methylation_distribution.png')
+    assert 'delta_beta_threshold must be betweend 0 and 1' in caplog.text
 
     plt.close("all")
+
 
 
 def test_analyze_replicates(test_samples, caplog):

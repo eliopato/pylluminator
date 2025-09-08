@@ -8,6 +8,8 @@ data/
 .gitattributes
 build
 notebooks/
+.coverage*
+.vscode/
 
 # tests
 .coverage

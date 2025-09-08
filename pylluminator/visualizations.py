@@ -1583,28 +1583,27 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         plt.savefig(os.path.expanduser(save_path))
 
 
-def methylation_distribution(samples: Samples, group_column: str| None=None, what: list[str] | str = 'hyper',
-                                  annotation_column:str='cgi', orientation: str|None='h', custom_sheet:pd.DataFrame|None=None,
-                                  save_path: None | str=None) -> None:
-    """
-    Plot the distribution of hyper/hypo methylated probes in the samples.
+def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3),
+                             annotation_column:str='cgi', custom_sheet: pd.DataFrame|None = None,
+                             delta_beta_threshold:float=0.2, save_path: None | str=None) -> None:
+    
+    """Plot the distribution of hyper- and hypo- methylated probes in the samples. Compute the average beta values within each group of samples,
+    and calculates the proportion of probes that have a significant methylation difference.
 
-    :param samples: samples with beta values already calculated
+    :param samples: samples with beta values already calculated. NA beta values are dropped (i.e. masks are applied)
     :type samples: Samples
 
-    :param group_column: column name in the sample sheet to categorize the data vertically. Default: None
-    :type group_column: str | None
-
-    :param what: the metric to plot. Can be 'hypo', 'hyper', 'nas' or 'all' for the 3 of them. Default: 'hyper'
-    :type what: list[str] | str
+    :param group_column: column name of the sample metadata from the sample sheet used to categorize the data, e.g. Phenotype.
+      It only work with metadata that has 2 possibles values (e.g. Control vs Patients)
+    :type group_column: str
 
     :param annotation_column: column name of the probe_infos dataframe to use to annotation probes (cgi, promoter_or_body..). Default: 'cgi'
     :type annotation_column: str
 
-    :param orientation: 'h' or 'v', orientation of the plot. Default: 'h'
-    :type orientation: str | None
+    :param delta_beta_threshold: minimum difference of average beta value between the two groups to consider that a probe is hyper- or -hypo methylated. A float between 0 and 1. Default: 0.2
+    :type delta_beta_threshold: float
 
-    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display. Default: None
     :type custom_sheet: pandas.DataFrame | None
 
     :param save_path: if set, save the graph to save_path. Default: None
@@ -1612,68 +1611,64 @@ def methylation_distribution(samples: Samples, group_column: str| None=None, wha
 
     :return: None
     """
-    plt.style.use('ggplot')
+    # check input parameters
 
-    # add CGI annotations to betas
-    betas = samples.get_betas()
+    betas = samples.get_betas(custom_sheet=custom_sheet).dropna()
     if betas is None or len(betas) == 0:
         return None
 
     if annotation_column not in samples.annotation.probe_infos.columns:
-        LOGGER.error('No CGI annotations found in the annotation data')
+        LOGGER.error(f'Column {annotation_column} not found in the annotation data. ' \
+        'Available columns: {samples.annotation.probe_infos.columns}')
         return
 
+    if group_column not in samples.sample_sheet.columns:
+        LOGGER.error(f'Column {group_column} not found in the sample sheet')
+        return
+    
+    if not 0 < delta_beta_threshold < 1:
+        LOGGER.error('delta_beta_threshold must be betweend 0 and 1')
+        return
+    
+    # get samples metadata to group samples
+    sample_metadata = samples.sample_sheet[[samples.sample_label_name, group_column]].drop_duplicates().set_index(samples.sample_label_name)
+    sample_metadata_values = sample_metadata[group_column].unique()
+    if len(sample_metadata_values) != 2:
+        LOGGER.error(f'you need exactly two groups (e.g. control vs patients). Detected groups: {sample_metadata_values}')
+        return
+    
+    #replace samples labels by their respective group
+    betas.columns = [sample_metadata.loc[c, group_column] for c in betas.columns]
+    betas.columns.name = group_column
+    
+    # compute the average beta value per group, and the difference between each group
+    avg_beta_per_group = betas.T.groupby(by=group_column).mean().T
+    diff_beta_btw_group = avg_beta_per_group[sample_metadata_values[0]] - avg_beta_per_group[sample_metadata_values[1]]
+
+    # add CGI annotations to betas
     cgis = samples.annotation.probe_infos.set_index('probe_id')[annotation_column].dropna()
-    cgi_betas = set_level_as_index(betas, 'probe_id', drop_others=True).join(cgis, how='inner')
+    cgi_betas = set_level_as_index(diff_beta_btw_group, 'probe_id', drop_others=True).join(cgis, how='inner')
     cgi_betas[annotation_column] = cgi_betas[annotation_column].apply(lambda x: x.split(';'))
     cgi_betas = cgi_betas.explode(annotation_column)
 
     # define aggregation functions
     def hypo(x):
-        return 100 * sum(x == 0) / len(x)
+        return 100 * sum(x < - delta_beta_threshold) / len(x)
 
     def hyper(x):
-        return 100 * sum(x == 1) / len(x)
-
-    def nas(x):
-        return 100 * np.count_nonzero(np.isnan(x)) / len(x)
-
-    functions = {'hypo': hypo, 'hyper': hyper, 'nas': nas}
-    if isinstance(what, str):
-        what = functions.keys() if what == 'all' else [what]
-
-    meth_prop = cgi_betas.round().groupby(annotation_column).agg([functions[f] for f in what])
-    meth_prop = pd.DataFrame(meth_prop.unstack()).reset_index()
-    meth_prop.columns = [samples.sample_label_name, 'metric', annotation_column, 'proportion']
-
-    if group_column is not None:
-        if group_column not in samples.sample_sheet.columns:
-            LOGGER.error(f'Column {group_column} not found in the sample sheet - ignoring parameter')
-            return
-        else:
-            annot = samples.sample_sheet[[samples.sample_label_name, group_column]].drop_duplicates()
-            meth_prop = meth_prop.merge(annot, on=samples.sample_label_name)
-
-    hue = group_column if group_column is not None else 'metric'
-
-    if orientation == 'v':
-        g = sns.catplot(data=meth_prop, x='proportion', y=group_column, row=annotation_column, col='metric', hue=hue,
-                        kind='violin', fill=False, linewidth=1, inner='point',
-                        sharex=False, height=2, aspect=2, orient='h', margin_titles=True)
-
-        g.set_axis_labels('', '')
-        g.set_titles(row_template="{row_name}", col_template='Proportion of {col_name} methylated probes (%)')
-    else:
-        g = sns.catplot(data=meth_prop, y='proportion', x=group_column, col=annotation_column, row='metric', hue=hue,
-                        kind='violin', fill=False, linewidth=1, inner='point',
-                        sharey=False, height=4, aspect=1, orient='v', margin_titles=True)
-
-        g.set_axis_labels('', '')
-        g.set_titles(col_template="{col_name}", row_template='Proportion of {row_name} methylated probes (%)')
+        return 100 * sum(x > delta_beta_threshold) / len(x)
+    
+    meth_prop = cgi_betas.groupby(annotation_column).agg([hypo, hyper])
+    meth_prop = meth_prop.droplevel(0, axis=1)
+    meth_prop.columns = [f'hypomethylated probes ({sample_metadata_values[0]} < {sample_metadata_values[1]})',
+                         f'hypermethylated probes ({sample_metadata_values[0]} > {sample_metadata_values[1]})',]
+    
+    y_lim = [0, meth_prop.max(axis=None)*1.2]
+    g = meth_prop.plot.bar(ylabel='% probes', ylim=y_lim, figsize=figsize, color=[ '#F8766D', '#1f77b4'] )
+    g.set_title(f'Proportion of hypo/hyper methylated probes (delta beta threshold : {delta_beta_threshold})')
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))
-
 
 def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names: list[str] = None,  return_df=False,
                        xlim: None|tuple[float, float]=None, save_path: str =None, figsize=(10, 5), **kwargs) -> pd.DataFrame | None:

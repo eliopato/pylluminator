@@ -88,6 +88,27 @@ def test_dmp_wrong_formula(test_samples):
     assert my_dms.dmp is None
     assert my_dms.contrasts is None
 
+    
+def test_reference_value(test_samples, caplog):
+    # non existent factor column
+    caplog.clear()
+    my_dms = DM(test_samples, '~ sample_type', reference_value='PREC')
+    assert 'parameter reference_value must be a dict' in caplog.text
+    assert my_dms.dmp is None
+    assert my_dms.contrasts is None
+
+    caplog.clear()
+    my_dms = DM(test_samples, '~ sample_type', reference_value={'bad_key': 'PREC'})
+    assert 'predictor bad_key was not found in sample metadata' in caplog.text
+    assert my_dms.dmp is None
+    assert my_dms.contrasts is None
+    
+    caplog.clear()
+    my_dms = DM(test_samples, '~ sample_type', reference_value={'sample_type': 'PREC'})
+    assert my_dms.dmp is not None
+    assert my_dms.contrasts is not None
+
+
 def test_ols_na():
     nb_factors = 3
     params = _get_model_parameters([np.nan] * 5, pd.DataFrame(), ['factor'] * nb_factors)
@@ -121,3 +142,16 @@ def test_dmr(test_samples, caplog):
     assert len(top_10_dmrs) == 10
     assert "MIR34AHG" in top_10_dmrs.iloc[0].genes
     assert "CASZ1" in top_10_dmrs.iloc[0].genes
+
+    # test input parameters get_top
+    caplog.clear()
+    top_10_dmrs = my_dms.get_top('DMR','sample_type[T.PREC]', chromosome_col='unknown')
+    assert 'Chromosome column unknown was not found in the dataframe'
+
+    caplog.clear()
+    top_10_dmrs = my_dms.get_top('DMR', 'unknown')
+    assert 'The column unknown_p_value_adjusted for contrast unknown was not found in the dataframe.'
+    
+    caplog.clear()
+    top_10_dmrs = my_dms.get_top('DMR','sample_type[T.PREC]', annotation_col='unknown')
+    assert 'annotation_col was not found in the annotation dataframe.'
