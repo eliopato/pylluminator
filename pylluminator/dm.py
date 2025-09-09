@@ -526,3 +526,55 @@ class DM:
 
         self.segments = segments[['segment_id']]
         self.dmr = seg_dmr
+
+    def select_dmps(self, effect_size_th=None, p_value_th=None, p_value_th_col=None, sort_by=None, ascending=False):
+        if self.samples is None or self.dmp is None or len(self.dmp) == 0:
+            LOGGER.error('Please calculate DMPs first')
+            return
+
+        filter_query = []
+
+        if effect_size_th is not None:
+            filter_query.append('effect_size > @effect_size_th')
+        
+        if p_value_th is not None:
+
+            if p_value_th_col is not None:
+
+                if p_value_th_col not in self.dmp.columns:
+                    LOGGER.error(f'Column {p_value_th_col} not found in DMP columns. Available columns: {self.dmp.columns}')
+                    return None
+                
+                filter_query.append(f'`{p_value_th_col}` < @p_value_th')
+                
+            elif 'f_pvalue' in self.dmp.columns:
+
+                filter_query.append('f_pvalue < @p_value_th')
+
+            else:
+
+                pval_cols = [c for c in self.dmp.columns if '_p_value' in c]
+
+                if len(pval_cols) == 0:
+                    LOGGER.error(f'No p value column found. Please specify one among {self.dmp.columns}')
+                    return
+                
+                if len(pval_cols) > 1:
+                    LOGGER.error(f'Several p-values column found. Please specify the one to use among: {self.dmp.columns}')
+                    return
+                
+                LOGGER.info(f'Using {pval_cols[0]} column for p-value threshold')
+                filter_query.append(f'`{pval_cols[0]}` < @p_value_th')
+        
+        if len(filter_query) == 0:
+            LOGGER.warning('No filter applied')
+
+        if sort_by is None:
+            LOGGER.info(f'Using effect_size column for sorting values')
+            sort_by = 'effect_size'
+        
+        filtered_df = self.dmp.query(' & '.join(filter_query))
+        filtered_df.sort_values(sort_by, ascending=ascending)
+
+        return filtered_df
+

@@ -1116,9 +1116,13 @@ class Samples:
         self._betas = None
 
     def has_betas(self) -> bool:
+        """Return True if the beta values have already been calculated
+
+        :return: bool"""
+
         return self._betas is not None
 
-    def get_betas(self, sample_label: str | None = None, drop_na: bool = False,
+    def get_betas(self, sample_label: str | None = None, drop_na: bool = False, probe_ids: list[str] | str | None=None,
                   custom_sheet: pd.DataFrame | None = None, apply_mask: bool=True) -> pd.DataFrame | pd.Series | None:
         """Get the beta values for the sample. If no sample name is provided, return beta values for all samples.
 
@@ -1130,7 +1134,9 @@ class Samples:
         :type custom_sheet: pandas.DataFrame | None
         :param apply_mask: set to False if you don't want any mask to be applied. Default: False
         :type apply_mask: bool
-
+        :param probe_ids: the IDs of the probes to select
+        :type probe_ids: list[str]
+    
         :return: beta values as a DataFrame, or Series if sample_label is provided. If no beta values are found, return None
         :rtype: pandas.DataFrame | pandas.Series | None"""
 
@@ -1177,6 +1183,13 @@ class Samples:
 
         if drop_na:
             betas = betas.dropna()
+
+        if probe_ids is not None and len(probe_ids) > 0:
+
+            if isinstance(probe_ids, str):
+                probe_ids = [probe_ids]
+
+            return betas[betas.index.get_level_values('probe_id').isin(probe_ids)]
 
         return betas
 
