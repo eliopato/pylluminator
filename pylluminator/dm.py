@@ -527,7 +527,32 @@ class DM:
         self.segments = segments[['segment_id']]
         self.dmr = seg_dmr
 
-    def select_dmps(self, effect_size_th=None, p_value_th=None, p_value_th_col=None, sort_by=None, ascending=False):
+    def select_dmps(self, effect_size_th:float|None=None, p_value_th:float|None=None, p_value_th_col:str|None=None, 
+                    sort_by:str|None=None, ascending:bool=False) -> pd.DataFrame | None:
+        """ Select DMPs based on effect size and p-value thresholds. If several p-value columns are available,
+        you can specify which one to use with the `p_value_th_col` parameter. If not specified, the function will try to find
+        a p-value column automatically.
+
+        :param effect_size_th: effect size threshold. Default: None
+        :type effect_size_th: float | None
+        
+        :param p_value_th: p-value threshold. Must be between 0 and 1. Default: None
+        :type p_value_th: float | None
+
+        :param p_value_th_col: name of the p-value column to use for filtering. If not specified, the function will try to find a
+            p-value column automatically, either taking the F-statistics p-value if it exists, or the predictor p-value colum if there is only one. 
+            Default:None
+        :type p_value_th_col: str | None
+
+        :param sort_by: column name to use for sorting the results. If not specified, the effect_size column will be used. Default: None
+        :type sort_by: str | None
+
+        :param ascending: set to True to sort values in ascending order. Default: False
+        :type ascending: bool
+
+        :return: dataframe with the selected DMPs, or None if an error occurred
+        :rtype: pandas.DataFrame | None
+        """
         if self.samples is None or self.dmp is None or len(self.dmp) == 0:
             LOGGER.error('Please calculate DMPs first')
             return
@@ -568,13 +593,15 @@ class DM:
         
         if len(filter_query) == 0:
             LOGGER.warning('No filter applied')
+            filtered_df = self.dmp
+        else:
+            print('filter_query')
+            print(filter_query)
+            filtered_df = self.dmp.query(' & '.join(filter_query))
 
         if sort_by is None:
             LOGGER.info(f'Using effect_size column for sorting values')
             sort_by = 'effect_size'
         
-        filtered_df = self.dmp.query(' & '.join(filter_query))
-        filtered_df.sort_values(sort_by, ascending=ascending)
-
-        return filtered_df
+        return filtered_df.sort_values(sort_by, ascending=ascending)
 

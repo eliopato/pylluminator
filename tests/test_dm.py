@@ -155,3 +155,14 @@ def test_dmr(test_samples, caplog):
     caplog.clear()
     top_10_dmrs = my_dms.get_top('DMR','sample_type[T.PREC]', annotation_col='unknown')
     assert 'annotation_col was not found in the annotation dataframe.'
+
+def test_select_dmp(test_samples):
+    my_dms = DM(test_samples, '~ sample_type')
+    selected_dmps = my_dms.select_dmps()
+    assert len(selected_dmps) == 937688
+
+    sort_col = 'sample_type[T.PREC]_p_value_adjusted'
+    selected_dmps = my_dms.select_dmps(p_value_th=0.01, effect_size_th=0.2, sort_by=sort_col, ascending=True)
+    assert len(selected_dmps) == 307093
+    assert selected_dmps.iloc[0].name == 'cg17049328_TC21'
+    assert selected_dmps.iloc[0][sort_col] == min(selected_dmps[sort_col])

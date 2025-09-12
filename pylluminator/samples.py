@@ -963,7 +963,9 @@ class Samples:
             sample_labels = [sample_labels]
 
         # subset to use
-        type1_df = self._signal_df.loc['I', sample_labels].droplevel('methylation_state', axis=1)
+        non_na_indexes = self._signal_df[~self._signal_df[sample_labels].isnull().all(axis=1)].index
+        non_na_t1_indexes = non_na_indexes[non_na_indexes.get_level_values('type') == 'I']
+        type1_df = self._signal_df.loc[non_na_t1_indexes, sample_labels].droplevel('methylation_state', axis=1)
 
         # get the channel (provided by the index) where the signal is at its max for each probe
         type1_df['inferred_channel'] = type1_df.droplevel(0, axis=1).idxmax(axis=1, numeric_only=True).values
@@ -993,7 +995,7 @@ class Samples:
         # set the inferred channel as the new 'channel' index
         if not summary_only:
             # propagate the inferred channel to the signal dataframe
-            self._signal_df.loc['I', 'inferred_channel'] = type1_df['inferred_channel'].values
+            self._signal_df.loc[non_na_t1_indexes, 'inferred_channel'] = type1_df['inferred_channel'].values
             self._signal_df = set_channel_index_as(self._signal_df, 'inferred_channel', drop=True)  # make the inferred channel the new channel index
             self._signal_df = self._signal_df.sort_index(axis=1)
 
@@ -1192,6 +1194,63 @@ class Samples:
             return betas[betas.index.get_level_values('probe_id').isin(probe_ids)]
 
         return betas
+
+    @staticmethod
+    def _betas_to_m(beta_df: pd.DataFrame) -> pd.DataFrame:
+        """Convert the beta values dataframe to M-values
+        :param beta_df: beta values
+        :type beta_df: pd.DataFrame
+        
+        :return: M-values
+        :rtype: pd.DataFrame
+        """
+        epsilon = 1e-8  # add a small epsilon to avoid log2(0) or division by zero
+        x = beta_df.values + epsilon  # convert to NumPy array for speed
+        m_values = np.log2((x) / (1 - x))
+        return pd.DataFrame(m_values, index=beta_df.index, columns=beta_df.columns)
+
+    @staticmethod
+    def _m_to_betas(m_df: pd.DataFrame) -> pd.DataFrame:
+        """Convert M-values (logit-transformed beta values) back to beta values.
+        :param m_df: M-values
+        :type m_df: pd.DataFrame
+        
+        :return: beta values in [0, 1]
+        :rtype: pd.DataFrame
+        """
+        m = m_df.values if isinstance(m_df, pd.DataFrame) else m_df
+        beta = 1 / (1 + 2**(-m))
+        if isinstance(m_df, pd.DataFrame):
+            return pd.DataFrame(beta, index=m_df.index, columns=m_df.columns)
+        return beta
+    
+    def get_m_values(self, sample_label: str | None = None, drop_na: bool = False, probe_ids: list[str] | str | None=None,
+                  custom_sheet: pd.DataFrame | None = None, apply_mask: bool=True) -> pd.DataFrame | pd.Series | None:
+        """Get the M-values for the sample. If no sample name is provided, return M-values for all samples. They are 
+        calculated from the beta values, so they need to be calculated first using the calculate_betas() function.
+
+        :param sample_label: the name of the sample to get beta values for. If None, return beta values for all samples.
+        :type sample_label: str | None
+        :param drop_na: if set to True, drop rows with NA values. Default: False
+        :type drop_na: bool
+        :param custom_sheet: a custom sample sheet to filter samples. Ignored if sample_label is provided. Default: None
+        :type custom_sheet: pandas.DataFrame | None
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: False
+        :type apply_mask: bool
+        :param probe_ids: the IDs of the probes to select
+        :type probe_ids: list[str]
+    
+        :return: beta values as a DataFrame, or Series if sample_label is provided. If no beta values are found, return None
+        :rtype: pandas.DataFrame | pandas.Series | None"""
+
+        betas_df = self.get_betas(sample_label=sample_label, drop_na=drop_na, probe_ids=probe_ids, custom_sheet=custom_sheet,
+                                  apply_mask=apply_mask)
+        
+        if betas_df is None:
+            return None
+        
+
+        return self._betas_to_m(betas_df)
 
     def dye_bias_correction(self, sample_label: str | None = None, apply_mask: bool = True, reference: dict | None = None) -> None:
         """Dye bias correction using normalization control probes.
@@ -1547,7 +1606,8 @@ class Samples:
 
     def batch_correction(self, batch:list|str, apply_mask:bool=True, covariates:str|list[str]|None=None,
                          par_prior=True, mean_only=False, ref_batch=None, precision=None, na_cov_action='raise') -> None:
-        """Applies ComBat algorithm for batch correction on beta values.
+        """Applies ComBat algorithm for batch correction. To correct the beta values while staying in the [0:1] range, 
+        the algorithm is applied on M-values, that are converted back to beta values
 
         :param batch: If a string is provided, it's interpreted as the name of the column in the sample sheet that
             contains the batch information. If a list is provided, it should contain the batch indices, with as many
@@ -1621,9 +1681,13 @@ class Samples:
                 covariates = sheet[checked_covariates]
                 LOGGER.info(f'Using covariates {checked_covariates}')
 
-        self._betas = pycombat_norm(self.get_betas(apply_mask=apply_mask).dropna(), batch,
-                                    covar_mod=covariates, par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch,
-                                    precision=precision, na_cov_action=na_cov_action)
+        m_values = self._betas_to_m(self.get_betas(apply_mask=apply_mask).dropna())
+        
+        m_values = pycombat_norm(m_values, batch,
+                                 covar_mod=covariates, par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch,
+                                 precision=precision, na_cov_action=na_cov_action)
+        
+        self._betas = self._m_to_betas(m_values)
 
     def get_nb_probes_per_chr_and_type(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Count the number of probes covered by the sample-s per chromosome and design type
