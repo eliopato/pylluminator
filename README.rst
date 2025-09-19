@@ -99,7 +99,7 @@ You can install Pylluminator directly with:
 From source
 ~~~~~~~~~~~
 
-We recommend using a virtual environment with Python 3.12 to build pylluminator from source. Here is an example using Conda.
+We recommend using a virtual environment with Python 3.13 or 3.12 to build pylluminator from source. Here is an example using Conda.
 
 Setup the virtual environment (optional)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -115,7 +115,7 @@ Now you can create a Conda environment named "pylluminator" and activate it. You
 
 .. code-block:: shell
 
-    conda create -n pylluminator python=3.12
+    conda create -n pylluminator python=3.13
     conda activate pylluminator
 
 

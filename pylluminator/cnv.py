@@ -166,7 +166,7 @@ def copy_number_segmentation(samples: Samples,
     # make tiles
     tile_width = 50000
     tiles = pr.tile_genome(genome_info.seq_length, tile_width).reset_index(drop=True).sort_ranges()
-    diff_tiles = tiles.subtract_ranges(genome_info.gap_info).reset_index(drop=True)
+    diff_tiles = tiles.subtract_overlaps(genome_info.gap_info).reset_index(drop=True)
 
     # make bins
     non_empty_coords = cnv_df[cnv_df.end > cnv_df.start].dropna()  # remove 0-width ranges
@@ -181,7 +181,7 @@ def copy_number_segmentation(samples: Samples,
         LOGGER.error('No bins')
         return None, None, None
 
-    joined_pr = probe_coords.reset_index().join_ranges(bins, suffix='_bin')
+    joined_pr = probe_coords.reset_index().join_overlaps(bins, suffix='_bin')
     # we're done with pyranges, back to lowercase names <3
     joined_pr = joined_pr.rename(columns={'Chromosome': 'chromosome', 'Start_bin': 'start_bin', 'End_bin': 'end_bin'})
     signal_bins = joined_pr.groupby(['chromosome', 'start_bin', 'end_bin'])['cnv'].median().reset_index()
@@ -299,7 +299,7 @@ def _merge_bins_to_minimum_overlap(pr_to_merge: pr.PyRanges, pr_to_overlap_with:
     mins = sorted(list(set(mins)))  # remove duplicates and sort
 
     for current_min in mins:
-        pr_to_merge = pr_to_merge.sort_ranges().cluster(slack=1)  # cluster intervals to identify neighbors
+        pr_to_merge = pr_to_merge.sort_ranges().cluster_overlaps(slack=1)  # cluster intervals to identify neighbors
         needs_merge = pr_to_merge.NumberOverlaps < current_min
         is_left_neighbor_in_cluster = pr_to_merge.Cluster.diff() == 0
         is_right_neighbor_in_cluster = pr_to_merge.Cluster.diff(-1) == 0
