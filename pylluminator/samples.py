@@ -452,7 +452,7 @@ class Samples:
         save_object(self, filepath)
 
     @staticmethod
-    def load(filepath: str):
+    def load(filepath: str) -> 'Samples':
         """Load a pickled Samples object from `filepath`
 
         :param filepath: path to the file to read
@@ -1683,12 +1683,16 @@ class Samples:
 
         m_values = self._betas_to_m(self.get_betas(apply_mask=apply_mask).dropna())
         
-        m_values = pycombat_norm(m_values, batch,
-                                 covar_mod=covariates, par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch,
-                                 precision=precision, na_cov_action=na_cov_action)
-        
-        self._betas = self._m_to_betas(m_values)
+        try:
+            m_values = pycombat_norm(m_values, batch,
+                                    covar_mod=covariates, par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch,
+                                    precision=precision, na_cov_action=na_cov_action)
+            self._betas = self._m_to_betas(m_values)
 
+        except np.linalg.LinAlgError as e:
+            LOGGER.error(f'Batch correction failed due to {e}. This is most likely due to the experiment design leading to' \
+                          'linear dependencies. Please check your data and/or try to run with different or no covariates.')
+        
     def get_nb_probes_per_chr_and_type(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Count the number of probes covered by the sample-s per chromosome and design type
 
