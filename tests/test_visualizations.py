@@ -222,13 +222,18 @@ def test_pc_association_heatmap(test_samples):
 
     plt.close("all")
 
-def test_pc_correlation_heatmap(test_samples):
+def test_pc_correlation_heatmap(test_samples, caplog):
     pc_correlation_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3)
+    assert not os.path.exists('pc_bias.png')
+    assert 'No significant correlation found' in caplog.text
+    assert 'Parameter sentrix_id not found in the sample sheet, skipping' in caplog.text
+
+    pc_correlation_heatmap(test_samples, ['sample_type', 'sample_number'], save_path='pc_bias.png', nb_probes=1000, n_components=3, sig_threshold=None)
     assert os.path.exists('pc_bias.png')
     os.remove('pc_bias.png')
 
     # more components than sample, fail
-    pc_correlation_heatmap(test_samples, ['sample_type', 'sentrix_id', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
+    pc_correlation_heatmap(test_samples, ['sample_type', 'sample_number'], save_path='pc_bias.png', orientation='h', n_components=8)
     assert not os.path.exists('pc_bias.png')
 
     plt.close("all")

@@ -439,7 +439,7 @@ def pc_association_heatmap(samples: Samples, params: list[str] | None = None, nb
 
 
 def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb_probes: int | None = None,
-                           apply_mask=True, custom_sheet: None | pd.DataFrame = None, abs_corr=True,
+                           apply_mask=True, custom_sheet: None | pd.DataFrame = None, abs_corr=True, sig_threshold:float|None=0.05,
                            save_path: None | str = None, model='PCA',  orientation='v', **kwargs):
     """ Heatmap of the correlation between principal components and the metadata of the sample sheet.
 
@@ -522,11 +522,18 @@ def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb
             if fitted_model.explained_variance_ratio_[i] < 0.01:
                 break
             fitted_ols = OLS(reduced_data[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
+            # only report correlation if the association is significant
+            if sig_threshold is not None and fitted_ols.f_pvalue > sig_threshold:
+                continue
             result.loc[str(i), param] = np.sqrt(fitted_ols.rsquared)
             if not abs_corr and fitted_ols.params.iloc[1] < 0:
-                result.loc[str(i), param] = - result.loc[str(i), param]
+                result.loc[str(i), param] *= -1
             result.loc[str(i), 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
 
+    if result.empty:
+        LOGGER.warning('No significant correlation found')
+        return
+    
     # drop columns with only NA values (eg Sample Ids that are unique per sample)
     result = result.set_index('principal component').dropna(axis=1, how='all')
 
