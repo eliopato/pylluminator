@@ -5,7 +5,7 @@ import pandas as pd
 
 from pylluminator.utils import (set_logger, get_logger_level, get_logger, remove_probe_suffix, save_object, load_object,
                                 merge_alt_chromosomes, get_chromosome_number, set_level_as_index, download_from_link,
-                                merge_series_values)
+                                merge_series_values, merge_dataframe_by)
 
 def test_set_logger():
     set_logger('WARNING')
@@ -96,6 +96,21 @@ def test_failed_download():
     assert download_from_link('https://www.fakeurl.co/fakefile', 'data') == -1
 
 
+def test_merge_dataframe_by():
+    data = pd.DataFrame({
+        'A': [1, 1, 2, 2, 3],
+        'B': ['x', 'x', 'y', 'y', 'z'],
+        'C': [10, 20, 30, 40, 50]
+    })
+    merged = merge_dataframe_by(data, by=['A', 'B'])
+    expected = pd.DataFrame({
+        'A': [1, 2, 3], 
+        'B': ['x', 'y', 'z'],
+        'C': [15.0, 35.0, 50.0]
+    }).set_index(['A', 'B'])
+    
+    pd.testing.assert_frame_equal(merged, expected)
+
 def test_merge_series():
     data = pd.Series([1, 2, 3])
     assert merge_series_values(data) == 2.0
@@ -110,3 +125,6 @@ def test_merge_series():
 
     data = pd.Series(['jo', 2, 'bi'])
     assert 'jo' in merge_series_values(data)
+
+    data = pd.Series([np.nan, None, np.nan])
+    assert merge_series_values(data) is None

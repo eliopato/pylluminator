@@ -510,24 +510,47 @@ def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFra
 
     return df.droplevel('channel').set_index('channel', append=True).reorder_levels(lvl_order).sort_index()
 
+def merge_dataframe_by(df: pd.DataFrame, by: str | list[str], **kwargs) -> pd.DataFrame:
+    """Merge a dataframe by one or several columns, using the `merge_series_values` function
+    :param df: input dataframe
+    :type df: pandas.DataFrame
+    
+    :param by: column(s) to group by
+    :type by: str | list[str]
+
+    :param kwargs: additional parameters to pass to pandas.DataFrame.groupby
+    
+    :return: the merged dataframe
+    :rtype: pandas.DataFrame
+    """
+    cat_cols = [df.columns[i] for i, t in enumerate(df.dtypes) if t.name=='category']
+    merged = df.groupby(by, **kwargs).agg(merge_series_values)
+    merged = merged.astype({c: 'category' for c in cat_cols})
+    return merged
 
 def merge_series_values(items: pd.Series, how:str='any'):
-    """Merge the values of a series into a single value. If the series contains strings, return a list of unique
+    """Merge the values of a series into a single value. Ignores all NaN. If the series contains strings, return a list of unique
     strings. If the series contains numbers, return the mean. If the series contains booleans, return the result of
     the operation specified by the `how` parameter. Default is 'any'
 
     :param items: input series
     :type items: pandas.Series
+
     :param how: operation to apply on boolean series. 'any' or 'all'. Default: 'any'
     :type how: str
     """
-    if len(items) == 1:
-        return items.iloc[0]
-
+    
+    items = items.dropna()
+    if len(items) == 0:
+        return None
+    
     item_type = items.dtype
-
-    if item_type in ['object', 'category']:
+    
+    if item_type in ['object', 'category']: 
         return ';'.join(items.astype('str').unique())
+
+    if len(items) == 1:        
+        return items.iloc[0]
 
     if pd.api.types.is_numeric_dtype(item_type):
         return items.mean()
@@ -535,5 +558,5 @@ def merge_series_values(items: pd.Series, how:str='any'):
     if item_type == 'bool':
         return items.all() if how == 'all' else items.any()
 
-    LOGGER.warning(f'unable to find an aggregation function for dtype {item_type}')
+    LOGGER.error(f'unable to find an aggregation function for dtype {item_type}')
     return items.iloc[0]

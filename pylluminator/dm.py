@@ -19,7 +19,7 @@ from enum import Enum, unique
 from pylluminator.utils import remove_probe_suffix, set_level_as_index, get_logger, merge_alt_chromosomes
 from pylluminator.samples import Samples
 from pylluminator.stats import get_factors_from_formula
-from pylluminator.utils import merge_series_values
+from pylluminator.utils import merge_dataframe_by
 
 LOGGER = get_logger()
 
@@ -209,7 +209,7 @@ class DM:
             # todo time optimization: filter with the first N probes/segments then do that
             group_columns = top_dm.columns.tolist()
             group_columns.remove(annotation_col)
-            top_dm = top_dm.reset_index(drop=True).drop_duplicates().groupby(group_columns).agg(merge_series_values)
+            top_dm = merge_dataframe_by(top_dm.reset_index(drop=True).drop_duplicates(), group_columns)
             top_dm[annotation_col] = top_dm[annotation_col].apply(lambda x: ';'.join(set(x.split(';'))))
 
         return top_dm.sort_values(sort_column).iloc[:n_dms]

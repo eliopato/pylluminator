@@ -24,7 +24,7 @@ from pylluminator.annotations import Annotations
 from pylluminator.dm import DM
 from pylluminator.ml import dimensionality_reduction
 from pylluminator.utils import get_chromosome_number, set_level_as_index, get_logger, merge_alt_chromosomes
-from pylluminator.utils import merge_series_values
+from pylluminator.utils import merge_dataframe_by, merge_series_values
 
 
 LOGGER = get_logger()
@@ -420,7 +420,8 @@ def pc_association_heatmap(samples: Samples, params: list[str] | None = None, nb
             # stop when components explain less than 1% of the variance
             if fitted_model.explained_variance_ratio_[i] < 0.01:
                 break
-            fitted_ols = OLS(reduced_data[~sample_info[param].isna(), i], design_matrix, missing='drop').fit()
+
+            fitted_ols = OLS(reduced_data[design_matrix.index, i], design_matrix, missing='drop').fit()
             result.loc[str(i), param] = fitted_ols.f_pvalue
             result.loc[str(i), 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
 
@@ -1105,8 +1106,8 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates()
             gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
             if data_to_plot.index.name == 'segment_id':
-                data_to_plot = (data_to_plot.merge(gene_info, on='probe_id').drop(columns='probe_id')
-                                .groupby(['start', 'chromosome'], observed=True).agg(merge_series_values))
+                data_to_plot = merge_dataframe_by(data_to_plot.merge(gene_info, on='probe_id').drop(columns='probe_id'),
+                                                  ['start', 'chromosome'], observed=True)
                 data_to_plot[annotation_col] = data_to_plot[annotation_col].apply(lambda x: ';'.join(set(x.split(';'))))
                 data_to_plot = data_to_plot.reset_index()
             else:

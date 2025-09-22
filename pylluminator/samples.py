@@ -12,7 +12,7 @@ from inmoose.pycombat import pycombat_norm
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
-from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_series_values, get_chromosome_number
+from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_dataframe_by, get_chromosome_number
 from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path, merge_alt_chromosomes
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
@@ -661,7 +661,7 @@ class Samples:
             self._betas = new_beta_df
 
         # and merge the sample sheet
-        self.sample_sheet = self.sample_sheet.groupby(by).agg(merge_series_values).reset_index()
+        self.sample_sheet = merge_dataframe_by(self.sample_sheet, by).reset_index()
 
     def remove_probes_suffix(self, apply_mask=True):
         """Merge probes that have the same ID but different suffixes (e.g. _BC11, _TC21..) by averaging their signal
@@ -680,9 +680,8 @@ class Samples:
         sigdf.probe_id = sigdf.probe_id.map(remove_probe_suffix)
         dup_indexes = sigdf.probe_id.duplicated(keep=False)
         LOGGER.info('Average duplicated probes values..')
-        # todo instead of using merge_series_values, use the values of the probe with the best poobah pvalue (as ChAMP)
-        sigdf_merged = sigdf.loc[dup_indexes].groupby(index_cols, observed=True, sort=False, dropna=False,
-                                                      as_index=False).agg(merge_series_values)
+        # todo instead of using merge_dataframe_by, use the values of the probe with the best poobah pvalue (as ChAMP)
+        sigdf_merged = merge_dataframe_by(sigdf.loc[dup_indexes], index_cols, observed=True, sort=False, dropna=False, as_index=False)
         self._signal_df = pd.concat([sigdf.loc[~dup_indexes], sigdf_merged], ignore_index=True)
         self._signal_df = self._signal_df.set_index(index_cols).sort_index()
 
