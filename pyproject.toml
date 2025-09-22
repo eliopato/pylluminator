@@ -7,7 +7,7 @@ packages = ["pylluminator"]
 
 [project]
 name = "pylluminator"
-version = "1.0"
+version = "1.1"
 authors = [{name = "Elio", email = "elio.fanchon@univ-amu.fr"}]
 maintainers = [{name = "Elio", email = "elio.fanchon@univ-amu.fr"}]
 requires-python = ">= 3.12"
