@@ -523,10 +523,9 @@ def merge_dataframe_by(df: pd.DataFrame, by: str | list[str], **kwargs) -> pd.Da
     :return: the merged dataframe
     :rtype: pandas.DataFrame
     """
-    cat_cols = [df.columns[i] for i, t in enumerate(df.dtypes) if t.name=='category']
+    cat_cols = [df.columns[i] for i, t in enumerate(df.dtypes) if t.name=='category' and df.columns[i] not in by]
     merged = df.groupby(by, **kwargs).agg(merge_series_values)
-    merged = merged.astype({c: 'category' for c in cat_cols})
-    return merged
+    return merged.astype({c: 'category' for c in cat_cols})
 
 def merge_series_values(items: pd.Series, how:str='any'):
     """Merge the values of a series into a single value. Ignores all NaN. If the series contains strings, return a list of unique
