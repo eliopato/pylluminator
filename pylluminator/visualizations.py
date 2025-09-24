@@ -405,14 +405,15 @@ def pc_association_heatmap(samples: Samples, params: list[str] | None = None, nb
             LOGGER.warning(f'Parameter {param} not found in the sample sheet, skipping')
             continue
 
-        # the design matrix removes the NaN values
-        design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
-        if design_matrix.empty:
+        # skip parameters with only one value
+        param_values = set(sample_info[param].dropna())
+        if len(param_values) == 1 or len(param_values) == len(sample_info):
             LOGGER.warning(f'Parameter {param} has no effect, skipping')
             continue
 
-        # if param is a category param with a different value for each sample, calculating the association is pointless
-        if len(design_matrix.columns) == len(sample_info):
+        # the design matrix removes the NaN values
+        design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
+        if design_matrix.empty:
             LOGGER.warning(f'Parameter {param} has no effect, skipping')
             continue
 
@@ -422,8 +423,10 @@ def pc_association_heatmap(samples: Samples, params: list[str] | None = None, nb
                 break
 
             fitted_ols = OLS(reduced_data[design_matrix.index, i], design_matrix, missing='drop').fit()
-            result.loc[str(i), param] = fitted_ols.f_pvalue
-            result.loc[str(i), 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
+            result.loc[i, param] = fitted_ols.f_pvalue
+            result.loc[i, 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
+
+    result = result.sort_index()
 
     # drop columns with only NA values (eg Sample Ids that are unique per sample)
     result = result.set_index('principal component').dropna(axis=1, how='all')
@@ -506,14 +509,15 @@ def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb
             LOGGER.warning(f'Parameter {param} not found in the sample sheet, skipping')
             continue
 
-        # the design matrix removes the NaN values
-        design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
-        if design_matrix.empty:
+        # skip parameters with only one value
+        param_values = set(sample_info[param].dropna())
+        if len(param_values) == 1 or len(param_values) == len(sample_info):
             LOGGER.warning(f'Parameter {param} has no effect, skipping')
             continue
 
-        # if param is a category param with a different value for each sample, calculating the association is pointless
-        if len(design_matrix.columns) == len(sample_info):
+        # the design matrix removes the NaN values
+        design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
+        if design_matrix.empty:
             LOGGER.warning(f'Parameter {param} has no effect, skipping')
             continue
 
@@ -525,14 +529,16 @@ def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb
             # only report correlation if the association is significant
             if sig_threshold is not None and fitted_ols.f_pvalue > sig_threshold:
                 continue
-            result.loc[str(i), param] = np.sqrt(fitted_ols.rsquared)
+            result.loc[i, param] = np.sqrt(fitted_ols.rsquared)
             if not abs_corr and fitted_ols.params.iloc[1] < 0:
-                result.loc[str(i), param] *= -1
-            result.loc[str(i), 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
+                result.loc[i, param] *= -1
+            result.loc[i, 'principal component'] = f'{int(i+1)} ({fitted_model.explained_variance_ratio_[i]*100:.2f}%) '
 
     if result.empty:
         LOGGER.warning('No significant correlation found')
         return
+    
+    result = result.sort_index()
     
     # drop columns with only NA values (eg Sample Ids that are unique per sample)
     result = result.set_index('principal component').dropna(axis=1, how='all')
@@ -546,6 +552,7 @@ def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb
     plot = sns.heatmap(result, annot=True, fmt=".2f", vmax=1, vmin=vmin, cmap=cmap)
 
     if save_path is not None:
+        plt.tight_layout()
         plot.get_figure().savefig(os.path.expanduser(save_path))
 
 
