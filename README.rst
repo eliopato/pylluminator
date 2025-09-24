@@ -96,13 +96,19 @@ You can install Pylluminator directly with:
 
     pip install pylluminator
 
+Or, if you want to use the GSEA functionalities, you will need to install the additional dependencies using this command:
+
+.. code-block:: shell
+
+    pip install pylluminator[gsea]
+
+
 From source
 ~~~~~~~~~~~
 
 We recommend using a virtual environment with Python 3.13 or 3.12 to build pylluminator from source. Here is an example using Conda.
 
-Setup the virtual environment (optional)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+**Setup the virtual environment (optional)**
 
 If you don't have Conda installed yet, here are the instructions depending on your OS : `Windows <https://docs.conda.io/projects/conda/en/latest/user-guide/install/windows.html>`_ | `Linux <https://docs.conda.io/projects/conda/en/latest/user-guide/install/linux.html>`_ | `MacOS <https://docs.conda.io/projects/conda/en/latest/user-guide/install/macos.html>`_.
 After installing it, make sure you have Pip installed by running the following command in the terminal:
@@ -119,8 +125,7 @@ Now you can create a Conda environment named "pylluminator" and activate it. You
     conda activate pylluminator
 
 
-Install pylluminator
-^^^^^^^^^^^^^^^^^^^^^
+**Install pylluminator**
 
 You can download the latest source from github, or clone the repository with this command:
 
@@ -133,8 +138,9 @@ Your are now ready to install the dependencies and the package :
 .. code-block:: shell
 
     cd pylluminator
-    pip install -r requirements.txt
+    pip install .
 
+Or, as mentionned above, `pip install .[gsea]` if you want to use the GSEA functionalities.
 
 Usage
 -----
@@ -149,6 +155,8 @@ We welcome contributions! If you'd like to help improve the package, please foll
 2. Create a new branch for your feature or bugfix.
 3. Make your changes and test them.
 4. Submit a pull request describing your changes.
+
+The packages used for development (testing, packaging and building the documentation) can be installed with `pip install pylluminator[dev]`.
 
 Bug reports / new features suggestion
 -------------------------------------
