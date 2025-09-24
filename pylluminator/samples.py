@@ -1606,7 +1606,8 @@ class Samples:
     def batch_correction(self, batch:list|str, apply_mask:bool=True, covariates:str|list[str]|None=None,
                          par_prior=True, mean_only=False, ref_batch=None, precision=None, na_cov_action='raise') -> None:
         """Applies ComBat algorithm for batch correction. To correct the beta values while staying in the [0:1] range, 
-        the algorithm is applied on M-values, that are converted back to beta values
+        the algorithm is applied on M-values, that are converted back to beta values. If the batch correction fails,
+        the beta values are reset to None.
 
         :param batch: If a string is provided, it's interpreted as the name of the column in the sample sheet that
             contains the batch information. If a list is provided, it should contain the batch indices, with as many
@@ -1650,15 +1651,18 @@ class Samples:
         if isinstance(batch, str):
             if batch not in sheet.columns:
                 LOGGER.error(f'Batch column {batch} not found in sample sheet')
+                self.reset_betas()
                 return
             batch = sheet[batch].values
 
         if np.any(pd.isnull(batch)) or np.any(batch == ''):
             LOGGER.error('Batch column contains NaN or empty values')
+            self.reset_betas()
             return
 
         if len(batch) != len(self._betas.columns):
-            LOGGER.error('Batch column length does not match the number of samples')
+            LOGGER.error('Batch column length does not match the number of samples. This can happen if some samples have duplicate names.')
+            self.reset_betas()
             return
 
         # if any covariates are specified, check that they exist in the sample sheet and have the right type
@@ -1691,6 +1695,7 @@ class Samples:
         except np.linalg.LinAlgError as e:
             LOGGER.error(f'Batch correction failed due to {e}. This is most likely due to the experiment design leading to' \
                           'linear dependencies. Please check your data and/or try to run with different or no covariates.')
+            self.reset_betas()
         
     def get_nb_probes_per_chr_and_type(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Count the number of probes covered by the sample-s per chromosome and design type

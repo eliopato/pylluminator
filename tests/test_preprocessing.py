@@ -218,27 +218,27 @@ def test_batch_correction(test_samples, caplog):
     # test column with na values
     test_samples.sample_sheet['sentrix_id'] = pd.NA
 
-    test_samples.batch_correction('sentrix_id', covariates='sample_type')
+    test_samples.copy().batch_correction('sentrix_id', covariates='sample_type')
     assert 'Batch column contains NaN or empty values' in caplog.text
     assert 'ERROR' in caplog.text
     caplog.clear()
 
     # test wrong number of batch values
-    test_samples.batch_correction([1, 2, 1], covariates='sample_type')
+    test_samples.copy().batch_correction([1, 2, 1], covariates='sample_type')
     assert 'Batch column length does not match the number of samples' in caplog.text
     assert 'ERROR' in caplog.text
     caplog.clear()
 
     # everything OK
-    test_samples.batch_correction('sample_number', covariates='sample_type')
+    test_samples.copy().batch_correction('sample_number', covariates='sample_type')
     assert 'ERROR' not in caplog.text
 
     # wrong batch column
-    test_samples.batch_correction('wrongcolumn')
+    test_samples.copy().batch_correction('wrongcolumn')
     assert 'Batch column wrongcolumn not found' in caplog.text
 
     # wrong covariates column
-    test_samples.batch_correction('sample_number', covariates=['wrongcolumn', 'sample_number'])
+    test_samples.copy().batch_correction('sample_number', covariates=['wrongcolumn', 'sample_number'])
     assert 'Covariate wrongcolumn not found' in caplog.text
     assert 'Covariate sample_number must be a string' in caplog.text
     assert 'No valid covariates' in caplog.text
