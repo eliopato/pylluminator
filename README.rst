@@ -156,7 +156,7 @@ We welcome contributions! If you'd like to help improve the package, please foll
 3. Make your changes and test them.
 4. Submit a pull request describing your changes.
 
-The packages used for development (testing, packaging and building the documentation) can be installed with `pip install pylluminator[dev]`.
+The packages used for development (testing, packaging and building the documentation) can be installed with `pip install pylluminator[dev,docs]`.
 
 Bug reports / new features suggestion
 -------------------------------------
