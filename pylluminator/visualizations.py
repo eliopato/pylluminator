@@ -30,7 +30,8 @@ from pylluminator.utils import merge_dataframe_by, merge_series_values
 LOGGER = get_logger()
 
 def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
-                color_column: str | None, group_column: str | list[str] | None = None, cmap_name: str = 'Spectral_r') -> tuple[list, dict | None]:
+                color_column: str | list[str] | None, group_column: str | list[str] | None = None, 
+                cmap_name: str = 'Spectral_r', na_color='darkgrey') -> tuple[list, dict | None]:
     """Define the colors to use for each sample, depending on the columns used to categorized them.
 
     :param sheet: sample sheet data frame
@@ -42,12 +43,38 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
     :param color_column: name of the column of the sample sheet to use for color. If None, the function will return empty objects.
     :type color_column: str | None
 
+    :param group_column: name of the column of the sample sheet to use for grouping samples. If not None, samples from the same group will have the same color.
+    :type group_column: str | list[str] | None
+
     :param cmap_name: name of the matplotlib color map to use. Default: Spectral_r
     :type cmap_name: str
+
+    :param na_color: color for NA values. Default: darkgrey
+    :type na_color: str
 
     :return: the list of legend handles and a dict of color categories, with keys being the values of color_column
     :rtype: tuple[list,dict | None]"""
 
+    # check input parameters (the columns must exist in the sample sheet)
+        
+    if group_column is not None:
+        group_column = group_column if isinstance(group_column, list) else [group_column]
+        for col in group_column:
+            if col is not None and col not in sheet.columns:
+                LOGGER.warning(f'Group column {col} not found in the sample sheet, ignoring it')
+        group_column = [col for col in group_column if col in sheet.columns]
+        if len(group_column) == 0:
+            group_column = None
+    
+    if color_column is not None:
+        color_column = color_column if isinstance(color_column, list) else [color_column]
+        for col in color_column:
+            if col is not None and col not in sheet.columns:
+                LOGGER.warning(f'Color column {col} not found in the sample sheet, ignoring it')
+        color_column = [col for col in color_column if col in sheet.columns]
+        if len(color_column) == 0:
+            color_column = None
+        
     if color_column is None and group_column is None:
         return [], None
 
@@ -55,25 +82,41 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
     color_categories = dict()
     cmap = colormaps[cmap_name]
 
-    if group_column is not None:
-        grouped_sheet = sheet.groupby(group_column, observed=True)
-        nb_colors = len(grouped_sheet)
-        for i, (group_name, group) in enumerate(grouped_sheet):
-            color_categories[str(group_name).replace("'", "")] = cmap(i / max(1, nb_colors - 1))
     # if there is one sample per color, avoid creating one category per sample
-    elif sample_label_name is not None and color_column == sample_label_name:
+    if group_column is None and sample_label_name is not None and color_column == [sample_label_name]:
         color_categories = {name: cmap(i / len(sheet)) for i, name in enumerate(sheet[sample_label_name])}
         legend_handles += [Line2D([0], [0], color=color, label=label) for label, color in color_categories.items()]
     else:
-        grouped_sheet = sheet.groupby(color_column, dropna=False, observed=True)
-        nb_colors = grouped_sheet.ngroups
-        legend_handles += [Line2D([0], [0], color='black', linestyle='', label=color_column)]
+        groupby_cols = group_column if group_column is not None else color_column
+        grouped_sheet = sheet.groupby(groupby_cols, dropna=False, observed=True)
+
+        def get_group_color(group, value_idx: int | float):
+            # more than one column, or non numeric column
+            if len(groupby_cols) > 1 or not is_numeric_dtype(sheet[groupby_cols[0]]):
+                nb_colors = max(1, grouped_sheet.ngroups - 1)
+                return cmap(value_idx / nb_colors)
+            # if one numeric column, get proportional colors
+            min_val = sheet[groupby_cols[0]].min()
+            max_val = sheet[groupby_cols[0]].max()
+            value = group[groupby_cols[0]].values[0]            
+            if min_val == max_val:
+                return cmap(0)
+            return cmap((value - min_val) / (max_val - min_val))            
+        
+        if group_column is None:
+            legend_handles += [Line2D([0], [0], color='black', linestyle='', label=", ".join(color_column))]
+        
         for i, (group_name, group) in enumerate(grouped_sheet):
-            color = cmap(i / max(1, nb_colors - 1))
-            for name in group[sample_label_name]:
-                color_categories[name] = color
-            group_name = str(group_name).replace("'", "").replace('(','').replace(')','')
-            legend_handles += [mpatches.Patch(color=color, label=group_name)]
+            group_name = list(group_name)  # convert tuple to list
+            color = na_color if pd.isna(group_name).all() else get_group_color(group, i)
+            group_name = ', '.join([str(gn) for gn in group_name])#.replace("'", "").replace('(','').replace(')','')
+            if group_column is None:
+                for name in group[sample_label_name]:
+                    color_categories[name] = color
+                legend_handles += [mpatches.Patch(color=color, label=group_name)]
+            else:
+                color_categories[group_name] = color
+                
     return legend_handles, color_categories
 
 
@@ -107,7 +150,7 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> tuple[list, dict
 
 
 def betas_density(samples: Samples, title: None | str = None, group_column: None | str | list[str] = None,
-               color_column: str | None = None,  linestyle_column=None, figsize=(10, 7),
+               color_column: str | None = None,  linestyle_column=None, figsize=(10, 7), cmap_name: str = 'Spectral_r',
                custom_sheet: None | pd.DataFrame = None, apply_mask=True, save_path: None | str=None) -> None:
     """Plot beta values density for each sample
 
@@ -118,7 +161,7 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
     :type title: str | None
 
     :param color_column: name of a Sample Sheet column to define which samples get the same color. Default: None
-    :type color_column: str
+    :type color_column: str | None
 
     :param group_column: compute the average beta values per group of samples. Default: None
     :type group_column: str | list[str] | None
@@ -135,6 +178,8 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
     :param apply_mask: true removes masked probes from betas, False keeps them. Default: True
     :type apply_mask: bool
 
+    :param cmap_name: name of the matplotlib color map to use. Default: Spectral_r
+    :type cmap_name: str
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str
 
@@ -165,7 +210,7 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
         betas.columns = group_names
 
     # define the color and line style of each sample
-    c_legend_handles, colors = _get_colors(sheet, samples.sample_label_name, color_column, group_column)
+    c_legend_handles, colors = _get_colors(sheet, samples.sample_label_name, color_column, group_column, cmap_name=cmap_name)
     ls_legend_handles, linestyles = _get_linestyles(sheet, linestyle_column)
     legend_handles = c_legend_handles + ls_legend_handles
 
@@ -228,9 +273,10 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
 #     plt.show()
 
 
-def betas_2D(samples: Samples, label_column: str | None=None, color_column: str | None=None,
-              nb_probes: int | None=None, title: None | str = None, apply_mask=True, figsize: tuple[float, float]|None=(10, 7),
-              custom_sheet: None | pd.DataFrame = None, save_path: None | str=None, model='PCA', show_labels=True, plot_kwargs: dict|None=None, **kwargs) -> None:
+def betas_2D(samples: Samples, label_column: str | None=None, color_column: str | list[str] | None=None,dims_to_plot:list[int]=[1, 2],
+             nb_probes: int | None=None, title: None | str = None, apply_mask=True, figsize: tuple[float, float]|None=(10, 7),
+             cmap_name: str = 'Spectral_r', na_color: str|None='darkgrey',
+             custom_sheet: None | pd.DataFrame = None, save_path: None | str=None, model='PCA', show_labels=True, plot_kwargs: dict|None=None, **kwargs) -> None:
     """Plot samples in 2D space according to their beta distances.
 
     :param samples : samples to plot
@@ -240,7 +286,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     :type label_column: str | None
 
     :param color_column: name of a Sample Sheet column used to give samples from the same group the same color. Default: None
-    :type color_column: str
+    :type color_column: str | list[str]| None
 
     :param nb_probes: number of probes to use for the model, selected from the probes with the most beta variance.
         If None, use all the probes. Default: None
@@ -268,6 +314,12 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         'SPCA': SparsePCA, 'TSVD': TruncatedSVD. Default: 'PCA'
     :type model: str
 
+    :param cmap_name: name of the matplotlib color map to use. Default: Spectral_r
+    :type cmap_name: str
+
+    :param na_color: color for NaN values
+    :type na_color: str
+
     :param show_labels: if True, show the sample names on the plot. Default: True
     :type show_labels: bool
 
@@ -284,12 +336,12 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
 
     if color_column is None:
         color_column = samples.sample_label_name
-    if color_column not in samples.sample_sheet.columns:
-        LOGGER.warning(f'Color column {color_column} not found in the sample sheet, setting it to default')
-        color_column = samples.sample_label_name
 
     if 'n_components' not in kwargs:
-        kwargs['n_components'] = 2
+        kwargs['n_components'] = max(dims_to_plot)
+    elif kwargs['n_components'] < max(dims_to_plot):
+        LOGGER.warning(f'n_components is set to {kwargs["n_components"]}, but dims_to_plot contains {max(dims_to_plot)}. Setting n_components to {max(dims_to_plot)}')
+        kwargs['n_components'] = max(dims_to_plot)
     if 'random_state' not in kwargs and model not in ['IPCA']:
         kwargs['random_state'] = 42
 
@@ -299,7 +351,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         return
 
     sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
-    legend_handles, colors_dict = _get_colors(sheet, label_column, color_column)
+    legend_handles, colors_dict = _get_colors(sheet, label_column, color_column, cmap_name=cmap_name, na_color=na_color)
     if label_column != samples.sample_label_name:
         labels = [sheet[sheet[samples.sample_label_name] == label][label_column].values[0] for label in labels]
 
@@ -307,16 +359,17 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     plt.figure(figsize=figsize)
     if plot_kwargs is None:
         plot_kwargs =  {}
-    plt.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], label=labels, c=[colors_dict[label] for label in labels], **plot_kwargs)
+    colors = [colors_dict[label] for label in labels] if colors_dict is not None else None
+    plt.scatter(x=reduced_data[:, dims_to_plot[0]-1], y=reduced_data[:, dims_to_plot[1]-1], label=labels, c=colors, **plot_kwargs)
 
     if model in ['PCA', 'ICPA', 'TSVD']:
     # if hasattr(model_ini, 'explained_variance_ratio_'):
-        plt.xlabel('1st component :{0:.2f}%'.format(fitted_model.explained_variance_ratio_[0]*100))
-        plt.ylabel('2nd component :{0:.2f}%'.format(fitted_model.explained_variance_ratio_[1]*100))
+        plt.xlabel(f'component {dims_to_plot[0]}:{fitted_model.explained_variance_ratio_[dims_to_plot[0]-1]*100:.2f}%' )
+        plt.ylabel(f'component {dims_to_plot[1]}:{fitted_model.explained_variance_ratio_[dims_to_plot[1]-1]*100:.2f}%' )
 
     if show_labels:
         for index, name in enumerate(labels):
-            plt.annotate(name, (reduced_data[index, 0], reduced_data[index, 1]), fontsize=9)
+            plt.annotate(name, (reduced_data[index, dims_to_plot[0]-1], reduced_data[index, dims_to_plot[1]-1]), fontsize=9)
 
     if title is None:
         if nb_probes is None:
@@ -337,9 +390,9 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
         plt.savefig(os.path.expanduser(save_path))
 
 def _pc_heatmap(samples: Samples, type:str, params: list[str] | None = None, nb_probes: int | None = None,
-                           apply_mask=True, vmax=0.05, custom_sheet: None | pd.DataFrame = None,
-                            abs_corr=None, sig_threshold=None,
-                           save_path: None | str = None, model='PCA',  orientation='v', **kwargs):
+                apply_mask=True, vmax=0.05, custom_sheet: None | pd.DataFrame = None,
+                abs_corr=None, sig_threshold=None,
+                save_path: None | str = None, model='PCA',  orientation='v', **kwargs):
     """ Heatmap of the p-values for the association of principal components and the parameters in the sample sheet.
 
     :param samples: samples to plot
@@ -568,7 +621,7 @@ def pc_correlation_heatmap(samples: Samples, params: list[str] | None = None, nb
 
 
 def betas_dendrogram(samples: Samples, title: None | str = None, color_column: str|None=None,
-                     figsize:tuple[float, float]=(10, 7),
+                     figsize:tuple[float, float]=(10, 7), cmap_name: str = 'Spectral_r',
                      custom_sheet: pd.DataFrame | None = None, apply_mask: bool = True, save_path: None | str=None) -> None:
     """Plot dendrogram of samples according to their beta values distances.
 
@@ -591,6 +644,9 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
         samples to display. Default: None
     :type custom_sheet: pandas.DataFrame | None
 
+    :param cmap_name: name of the matplotlib color map to use. Default: Spectral_r
+    :type cmap_name: str
+
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
@@ -609,7 +665,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
 
     if color_column is not None:
-        legend_handles, label_colors = _get_colors(sheet, samples.sample_label_name, color_column=color_column)
+        legend_handles, label_colors = _get_colors(sheet, samples.sample_label_name, color_column=color_column, cmap_name=cmap_name)
 
         for lbl in plt.gca().get_ymajorticklabels():
             lbl.set_color(label_colors[lbl.get_text()])
