@@ -36,7 +36,7 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
 
     :param kwargs: parameters passed to the model
 
-    :return: scikit learn model, the fitted model, the samples' names, the number of probes used"""
+    :return: fitted model, reduced data, samples' names, number of probes used"""
 
     models = {'PCA': PCA, 'MDS': MDS, 'DL': DictionaryLearning, 'FA': FactorAnalysis, 'FICA': FastICA,
               'IPCA': IncrementalPCA, 'KPCA': KernelPCA, 'LDA': LatentDirichletAllocation,

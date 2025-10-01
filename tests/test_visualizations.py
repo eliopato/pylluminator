@@ -181,7 +181,7 @@ def test_visualize_gene(test_samples):
     os.remove('gene_plot.png')
 
     visualize_gene(test_samples, 'DUX4', padding=50, save_path='gene_plot.png', custom_sheet=pd.DataFrame())
-    assert not os.path.exists('gene_plot.png')
+    assert os.path.exists('gene_plot.png')
 
     visualize_gene(test_samples, 'DUX4', save_path='gene_plot.png', keep_na=True, var='sample_type', row_factors=['sample_type'], row_legends=['sample_type'])
     assert os.path.exists('gene_plot.png')

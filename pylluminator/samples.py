@@ -1133,7 +1133,7 @@ class Samples:
         :type drop_na: bool
         :param custom_sheet: a custom sample sheet to filter samples. Ignored if sample_label is provided. Default: None
         :type custom_sheet: pandas.DataFrame | None
-        :param apply_mask: set to False if you don't want any mask to be applied. Default: False
+        :param apply_mask: set to False if you don't want any mask to be applied. Default: True
         :type apply_mask: bool
         :param probe_ids: the IDs of the probes to select
         :type probe_ids: list[str]

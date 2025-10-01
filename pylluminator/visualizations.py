@@ -796,7 +796,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
         if input_df[col].dtype in ['object', 'category']:
             # convert string category codes to easily get a color index for each string
             color_df[col] = pd.Categorical(input_df[col]).codes
-            color_df[col] = color_df[col].apply(get_string_color, args=(len(set(input_df[col])),))
+            color_df[col] = color_df[col].apply(get_string_color, args=(color_df[col].max()+1,))
             string_cmap_index += 1
         elif np.issubdtype(input_df[col].dtype, np.number):
             color_df[col] = input_df[col].apply(get_numeric_color, args=(input_df[col].min(), input_df[col].max()))
@@ -1433,127 +1433,224 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
     :return: None
     """
 
+    gene_data = samples.annotation.genome_info.transcripts_exons[samples.annotation.genome_info.transcripts_exons.gene_name == gene_name]
+
+    # if the gene is not found in the transcripts file, get the position of the probes associated with the gene from the probe_info df
+    if len(gene_data) == 0:
+        LOGGER.warning(f'Gene {gene_name} not found in the transcript annotation data. Fetching probes in the region')
+        regex = f'^(?:.*;)?(?:{gene_name})(?:;.*)?$'
+        gene_data = samples.annotation.probe_infos[samples.annotation.probe_infos.genes.str.contains(regex) == True]  
+        if len(gene_data) == 0:
+            LOGGER.error(f'No probes associated with gene {gene_name} found')
+            return
+        start_pos = int(gene_data.start.min())
+        end_pos = int(gene_data.end.max())
+        LOGGER.info(f'Found {len(gene_data)} probes in the region, between pos {start_pos} and {end_pos}')
+    else:
+        start_pos = int(gene_data.transcript_start.min())
+        end_pos = int(gene_data.transcript_end.max())
+
+    start_pos -= padding
+    end_pos += padding
+
+    chromosome = gene_data.chromosome.drop_duplicates()
+
+    if len(chromosome) > 1:
+        LOGGER.error(f'This gene is associated with several chromosomes ({chromosome}).')
+        return
+
+    chromosome = str(chromosome.values[0])
+    
+    visualize_chromosome_region(samples, chromosome, start_pos, end_pos, apply_mask=apply_mask, keep_na=keep_na,
+                                protein_coding_only=protein_coding_only, custom_sheet=custom_sheet, figsize=figsize,
+                                save_path=save_path, var=var, gene_name=gene_name, padding=0, row_factors=row_factors,
+                                row_legends=row_legends)
+
+def _get_overlapping_rows(input_df: pd.DataFrame, start_pos:int, end_pos: int, start_col:str='start', end_col:str='end',
+                          chr_col:str='chromosome', chromosome:str|int|None=None) -> pd.DataFrame | None:
+    if start_col not in input_df.columns:
+        LOGGER.error(f'Start column {start_col} not found in the dataframe')
+        return None
+    
+    if end_col not in input_df.columns:
+        LOGGER.error(f'End column {end_col} not found in the dataframe')
+        return None
+    
+    if chromosome is not None and chr_col not in input_df.columns:
+        LOGGER.error(f'Chromosome column {chr_col} not found in the dataframe')
+        return None
+    
+    if chromosome is not None:
+        if isinstance(chromosome, int):
+            chromosome = str(chromosome)
+        input_df = input_df[input_df[chr_col] == chromosome]
+        if len(input_df) == 0:
+            LOGGER.warning(f'Chromosome {chromosome} not found in the dataframe')
+            return input_df
+    
+    return input_df[(input_df[start_col] <= end_pos) & (input_df[end_col] >= start_pos)]
+
+def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_pos: int, end_pos: int, apply_mask: bool=True, 
+                                keep_na: bool=False, protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, 
+                                figsize:tuple[float, float]=(15, 10), save_path: None | str=None,
+                                var: None | str | list[str] = None, gene_name: str|None = None, padding=0,
+                                row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
+    """Show the beta values of a gene for all probes and samples in its transcription zone.
+
+    :param samples: samples with beta values already calculated
+    :type samples: Samples
+    
+    :param apply_mask: True removes masked probes from betas, False keeps them. Default: True
+    :type apply_mask: bool
+    
+    :param keep_na: set to True to only output probes with no NA value for any sample. Default: False
+    :type keep_na: bool
+    :param protein_coding_only: limit displayed transcripts to protein coding ones. Default: True
+    :type protein_coding_only: bool
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
+        samples to display
+    :type custom_sheet: pandas.DataFrame
+    :param var: a column name or list of column names from the samplesheet to add to the heatmap labels. Default: None
+    :type var: None | str | list[str]
+    :param figsize: size of the whole plot. Default: (15, 15)
+    :type figsize: tuple[float, float]
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+    :param row_factors: list of columns to show as color categories on the side of the heatmap. Must correspond to
+        columns of the sample sheet. Default: None
+    :type row_factors: str | list[str] | None
+    :param row_legends: list of columns to generate a legend for. Set to None for no legends. Only work for columns also
+        specified in row_factors. Default: '' (generate all legends)
+    :type row_legends: str | list[str] | None
+    :param padding: length in kb pairs to add at the end and beginning of the transcription zone. Default: 0
+    :type: int
+    :param gene_name: name of the gene, if applicable, to output in the title. Default: None
+    :type gene_name: str | None
+    :return: None
+    """
+
     color_map = {'gneg': 'lightgrey', 'gpos25': 'lightblue', 'gpos50': 'blue', 'gpos75': 'darkblue', 'gpos100': 'purple',
                  'gvar': 'lightgreen', 'acen': 'yellow', 'stalk': 'pink'}
 
     links_args = {'color': 'red', 'alpha': 0.3}
 
     ################## DATA PREP
-    genome_info = samples.annotation.genome_info
 
-    transcript_data = genome_info.transcripts_exons
-    gene_data = transcript_data[transcript_data.gene_name == gene_name]
-    if protein_coding_only:
-        gene_data = gene_data[gene_data.transcript_type == 'protein_coding']
+    # select chromosome information
+    chromosome = str(chromosome_id).replace('chr', '')
+    chr_df = samples.annotation.genome_info.chromosome_regions.loc[chromosome]
 
-    if len(gene_data) == 0:
-        LOGGER.error(f'Gene {gene_name} not found in the annotation data.')
-        return
+    # select transcripts information (transcripts that overlap with the selected region)
+    gene_data = _get_overlapping_rows(samples.annotation.genome_info.transcripts_exons, start_pos, end_pos,
+                                      start_col='transcript_start', end_col='transcript_end', chromosome=chromosome)    
+    if gene_data is None or len(gene_data) == 0:
+        LOGGER.warning(f'Found no transcript in region {start_pos} - {end_pos} for chromosome {chromosome}')
+    else:
+        if protein_coding_only:
+            non_prot_coding = gene_data.transcript_type != 'protein_coding'
+            if sum(non_prot_coding) > 0:
+                LOGGER.info(f'Dropping {sum(non_prot_coding)} non protein coding transcripts')
+                gene_data = gene_data[~non_prot_coding]
+            if len(gene_data) == 0:
+                LOGGER.warning(f'No transcripts left in region {start_pos} - {end_pos} for chromosome {chromosome}')
+            else:
+                gene_data = gene_data.sort_values('transcript_start')
 
-    chromosome = str(gene_data.iloc[0].chromosome)
-    chr_df = genome_info.chromosome_regions.loc[chromosome]
-    gene_transcript_start = gene_data.transcript_start.min() - padding
-    gene_transcript_end = gene_data.transcript_end.max() + padding
-    gene_transcript_length = gene_transcript_end - gene_transcript_start
-
-    txns = genome_info.transcripts_exons
-    gene_data = txns[(txns.chromosome == chromosome)
-                     &
-                     (((txns.transcript_start >= gene_transcript_start) & (txns.transcript_start <= gene_transcript_end))
-                      | ((txns.transcript_end >= gene_transcript_start) & (txns.transcript_end <= gene_transcript_end)))
-                     & (txns.transcript_type == 'protein_coding')]
-
-    gene_data = gene_data.sort_values('transcript_start')
-
-    probe_info_df = samples.annotation.probe_infos
-    is_gene_in_interval = probe_info_df.chromosome == chromosome.replace('chr', '')
-    is_gene_in_interval &= (probe_info_df.start >= gene_transcript_start) & (probe_info_df.start <= gene_transcript_end)
-    is_gene_in_interval &= (probe_info_df.end >= gene_transcript_start) & (probe_info_df.end <= gene_transcript_end)
-    gene_probes = probe_info_df[is_gene_in_interval][['probe_id', 'start', 'end']].drop_duplicates().set_index('probe_id')
+    # select probes information (probes that overlap with the selected region)
+    probes_data = _get_overlapping_rows(samples.annotation.probe_infos, start_pos, end_pos, chromosome=chromosome)
+    if probes_data is None or len(probes_data) == 0:
+        LOGGER.warning(f'No probes found in the interval {start_pos} - {end_pos} on chromosome {chromosome}')
+    probes_data = probes_data[['probe_id', 'start', 'end']].drop_duplicates().set_index('probe_id')
     gene_betas = samples.get_betas(apply_mask=apply_mask, custom_sheet=custom_sheet)
 
     if gene_betas is None or len(gene_betas) == 0:
         LOGGER.error('No betas to plot')
-        return
+        nb_probes = 0
+        nb_samples = 0
+        heatmap_data = None
+    else:
+        gene_betas = set_level_as_index(gene_betas, 'probe_id', drop_others=True)
+        betas_location = gene_betas.join(probes_data, how='inner').sort_values('start')
+        betas_data = betas_location if keep_na else betas_location.dropna()
+        heatmap_data = betas_data.drop(columns=['start', 'end']).T
+        nb_probes = len(betas_data)
+        nb_samples = len(gene_betas.columns)
 
-    gene_betas = set_level_as_index(gene_betas, 'probe_id', drop_others=True)
-    betas_location = gene_betas.join(gene_probes, how='inner').sort_values('start')
-
-
-    ################## PLOT LINKS BETWEEN TRANSCRIPTS AND BETAS
+    ################## plot beta values heatmap (clustermap if no NA, heatmap otherwise)
 
     # chromosome, chr-transcript links, transcripts, transcript-betas links, betas heatmap
     nb_transcripts = len(set(gene_data.index))
-    height_ratios = [0.02, 0.05, max(0.02, 0.02*nb_transcripts), 0.05, max(0.02, 0.02*len(gene_betas.columns))]
+    height_ratios = [0.02, 0.05, max(0.02, 0.02*nb_transcripts), 0.05, max(0.02, 0.02*nb_samples)]
     nb_plots = len(height_ratios)
 
-    betas_data = betas_location if keep_na else betas_location.dropna()
-
-    heatmap_data = betas_data.drop(columns=['start', 'end']).T
-
-    if heatmap_data.empty:
+    if heatmap_data is None or heatmap_data.empty:
         LOGGER.error('no beta data to plot')
-        return
-
-    label = samples.sample_label_name
-    sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
-    sheet = sheet.copy()[sheet[label].isin(heatmap_data.index)]  #  get intersection of the two dfs
-    sheet = sheet.set_index(label)
-
-    # add variable values to the column names
-    if var is not None:
-        if isinstance(var, str):
-            var = [var]
-        # update heatmap indexes names and sheet labels by adding values of 'var' columns after the sample names
-        new_labels = [f'{c} ({",".join([str(sheet.loc[c, v]) for v in var])})' for c in heatmap_data.index]
-        sheet = sheet.loc[heatmap_data.index,]  # sort sheet like headmap data
-        sheet.index = new_labels  # update sheet index values
-        sheet.index.name = label
-        heatmap_data.index = new_labels
-
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
-
-    if keep_na:
+        nb_plots -= 2
+        height_ratios = height_ratios[:-2]
         _, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
-        sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, **heatmap_params)
-        if row_factors is not None:
-            LOGGER.warning('Parameter row_factors is ignored when keep_na is True')
-            row_factors = None        
     else:
-        handles, labels = [], []
-        # convert categories to colors and get legends if specified
-        if row_factors is not None:
-            row_factors = [row_factors] if isinstance(row_factors, str) else row_factors
-            if row_legends == '':
-                row_legends = row_factors
-            elif isinstance(row_legends, str):
-                row_legends = [row_legends]
-            subset = sheet[row_factors]
-            row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
-        dendrogram_ratio = 0.05
-        g = sns.clustermap(heatmap_data, cbar_pos=None, figsize=figsize,  col_cluster=False, row_colors=row_factors,
-                           dendrogram_ratio=(dendrogram_ratio, 0), **heatmap_params)
-        if len(handles) > 0 and len(labels) > 0:
-            plt.legend(handles=handles, labels=labels, handler_map={str: _LegendTitle({'fontweight': 'bold'})},
-                       loc='upper left', bbox_to_anchor=(-0.1 * len(row_factors.columns), 1))
-        shift_ratio = 1-(np.sum(height_ratios[:-1]) / np.sum(height_ratios))
-        g.gs.update(top=shift_ratio, bottom=0)  # shift the heatmap to the bottom of the figure
-        gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio,
-                                height_ratios=height_ratios[:-1])
-        axes = [g.fig.add_subplot(gs) for gs in gs2]
-        cbar_ax = axes[-1].inset_axes([-0.2, -0.7, 0.03, 0.6])
+        label = samples.sample_label_name
+        sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
+        sheet = sheet.copy()[sheet[label].isin(heatmap_data.index)]  #  get intersection of the two dfs
+        sheet = sheet.set_index(label)
 
-        # add a colorbar for the heatmap on the left of the heatmap
+        # add variable values to the column names
+        if var is not None:
+            if isinstance(var, str):
+                var = [var]
+            # update heatmap indexes names and sheet labels by adding values of 'var' columns after the sample names
+            new_labels = [f'{c} ({",".join([str(sheet.loc[c, v]) for v in var])})' for c in heatmap_data.index]
+            sheet = sheet.loc[heatmap_data.index,]  # sort sheet like headmap data
+            sheet.index = new_labels  # update sheet index values
+            sheet.index.name = label
+            heatmap_data.index = new_labels
+
+        heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
         norm = plt.Normalize(vmin=0, vmax=1)
-        sm = plt.cm.ScalarMappable(cmap='Spectral_r', norm=norm)
+        sm = plt.cm.ScalarMappable(cmap=heatmap_params['cmap'], norm=norm)
         sm.set_array([])
-        cbar = g.fig.colorbar(sm, cax=cbar_ax)
-        cbar.set_label('beta value', rotation=270, labelpad=15)
 
-    ################## plot chromosome and chromosome-transcript links
+        if keep_na:
+            _, axes = plt.subplots(figsize=figsize, nrows=nb_plots, height_ratios=height_ratios)
+            sns.heatmap(heatmap_data, ax=axes[-1], cbar=False, **heatmap_params)
+            if row_factors is not None:
+                LOGGER.warning('Parameter row_factors is ignored when keep_na is True')
+                row_factors = None        
+        else:
+            handles, labels = [], []
+            # convert categories to colors and get legends if specified
+            if row_factors is not None:
+                row_factors = [row_factors] if isinstance(row_factors, str) else row_factors
+                if row_legends == '':
+                    row_legends = row_factors
+                elif isinstance(row_legends, str):
+                    row_legends = [row_legends]
+                subset = sheet[row_factors]
+                row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
+            dendrogram_ratio = 0.05
+            g = sns.clustermap(heatmap_data, cbar_pos=None, figsize=figsize,  col_cluster=False, row_colors=row_factors,
+                            dendrogram_ratio=(dendrogram_ratio, 0), **heatmap_params)
+            if len(handles) > 0 and len(labels) > 0:
+                plt.legend(handles=handles, labels=labels, handler_map={str: _LegendTitle({'fontweight': 'bold'})},
+                        loc='upper left', bbox_to_anchor=(-0.1 * len(row_factors.columns), 1))
+            shift_ratio = 1-(np.sum(height_ratios[:-1]) / np.sum(height_ratios))
+            g.gs.update(top=shift_ratio, bottom=0)  # shift the heatmap to the bottom of the figure
+            gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio,
+                                    height_ratios=height_ratios[:-1])
+            axes = [g.figure.add_subplot(gs) for gs in gs2]
+            cbar_ax = axes[-1].inset_axes([-0.2, -0.7, 0.03, 0.6])
+
+            # add a colorbar for the heatmap on the left of the heatmap
+            cbar = g.figure.colorbar(sm, cax=cbar_ax)
+            cbar.set_label('beta value', rotation=270, labelpad=15)
+
+    ################## plot chromosome 
 
     chr_ax = axes[0]
-    chr_ax.set_title(f'gene {gene_name} - chromosome {chromosome}, pos {gene_transcript_start:,} - {gene_transcript_end:,}')
+    title = f'chromosome {chromosome}, pos {start_pos:,} - {end_pos:,}'
+    if gene_name is not None:
+        title = f'gene {gene_name} - ' + title
+    chr_ax.set_title(title)
 
     # make rectangles of different colors depending on the chromosome region
     for _, row in chr_df.iterrows():
@@ -1570,15 +1667,15 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
             chr_ax.add_patch(mpatches.Rectangle((row.start, 0), row.end - row.start, 0.5, color=curr_color))
 
     # red lines showing the beginning and end of the gene region
-    chr_ax.plot([gene_transcript_start, gene_transcript_start], [-1, 1], **links_args)
-    chr_ax.plot([gene_transcript_end, gene_transcript_end], [-1, 1], **links_args)
+    chr_ax.plot([start_pos, start_pos], [-1, 1], **links_args)
+    chr_ax.plot([end_pos, end_pos], [-1, 1], **links_args)
 
     chr_length = chr_df['end'].max()
     chr_ax.set_xlim(0, chr_length)
     chr_ax.set_ylim(0, 0.5)
     chr_ax.axis('off')
 
-    ################## PLOT TRANSCRIPTS
+    ################## plot transcripts
 
     trans_ax = axes[2]
     y_labels = []
@@ -1619,46 +1716,56 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
             #         rec_coords = (beta_row.start, i*3+0.2), beta_row.end - beta_row.start
             #         trans_ax.add_patch(mpatches.Rectangle(*rec_coords, 0.6, color='limegreen', zorder=2))
 
-
+    # transcript links
     chr_trans_link_ax = axes[1]
 
-    for beta_row in betas_data.itertuples():
-        rec_coords = (beta_row.start, 0), beta_row.end - beta_row.start, transcript_index * 2 + 1
-        trans_ax.add_patch(mpatches.Rectangle(*rec_coords, zorder=2, **links_args))
-        # draw link between chromosome and transcript
-        trans_position = beta_row.start + (beta_row.end - beta_row.start) / 2
-        trans_position_in_chr = trans_position / chr_length
-        trans_position_in_trans = (trans_position - gene_transcript_start) / gene_transcript_length
-        chr_trans_link_ax.plot([trans_position_in_trans, trans_position_in_chr, trans_position_in_chr], [0, 0.8, 1], **links_args)
+    if nb_probes > 0:
+        for beta_row in betas_data.itertuples():
+            rec_coords = (beta_row.start, 0), beta_row.end - beta_row.start, transcript_index * 2 + 1
+            trans_ax.add_patch(mpatches.Rectangle(*rec_coords, zorder=2, **links_args))
+            # draw link between chromosome and transcript
+            trans_position = beta_row.start + (beta_row.end - beta_row.start) / 2
+            trans_position_in_chr = trans_position / chr_length
+            trans_position_in_trans = (trans_position - start_pos) / (end_pos - start_pos)
+            chr_trans_link_ax.plot([trans_position_in_trans, trans_position_in_chr, trans_position_in_chr], [0, 0.8, 1], **links_args)
+    else:
+        # no beta data, draw the start and the end of the region
+        position_in_chr = start_pos / chr_length
+        position_in_trans = 0
+        chr_trans_link_ax.plot([position_in_trans, position_in_chr, position_in_chr], [0, 0.8, 1], **links_args)
+        position_in_chr = end_pos / chr_length
+        position_in_trans = 1
+        chr_trans_link_ax.plot([position_in_trans, position_in_chr, position_in_chr], [0, 0.8, 1], **links_args)
 
     # hide all axes but keep the y labels (transcript names)
     [trans_ax.spines[pos].set_visible(False) for pos in ['top', 'right', 'bottom', 'left']]
     trans_ax.set_yticks(y_positions, y_labels)
     trans_ax.set_xticks([])
-    trans_ax.set_xlim(gene_transcript_start, gene_transcript_end)
+    trans_ax.set_xlim(start_pos, end_pos)
     trans_ax.set_ylim(0, transcript_index * 2 + 1)
 
     chr_trans_link_ax.set_xlim(0, 1)
     chr_trans_link_ax.set_ylim(0, 1)
     chr_trans_link_ax.axis('off')
 
-    ################## PLOT LINKS
+    ### plot transcript - beta values links
 
-    lin_ax = axes[3]
+    if nb_probes > 0:
+        lin_ax = axes[3]
 
-    nb_factors = len(row_factors.columns) if row_factors is not None else 0
-    nb_probes = len(betas_data)
-    probe_shift = nb_factors*0.03 + (1 - nb_factors*0.03) / (2 * nb_probes)
+        nb_factors = len(row_factors.columns) if row_factors is not None else 0
 
-    for i, beta_row in enumerate(betas_data.itertuples()):
-        probe_loc = beta_row.start - gene_transcript_start + (beta_row.end - beta_row.start) / 2
-        x_transcript = probe_loc / gene_transcript_length
-        x_beta = (1 - nb_factors * 0.03) * i / nb_probes + probe_shift
-        lin_ax.plot([x_beta, x_transcript, x_transcript], [0, 1.5, 2], **links_args)
+        probe_shift = nb_factors*0.03 + (1 - nb_factors*0.03) / (2 * nb_probes)
 
-    lin_ax.set_xlim(0, 1)
-    lin_ax.set_ylim(0, 2)
-    lin_ax.axis('off')
+        for i, beta_row in enumerate(betas_data.itertuples()):
+            probe_loc = beta_row.start - start_pos + (beta_row.end - beta_row.start) / 2
+            x_transcript = probe_loc / (end_pos - start_pos)
+            x_beta = (1 - nb_factors * 0.03) * i / nb_probes + probe_shift
+            lin_ax.plot([x_beta, x_transcript, x_transcript], [0, 1.5, 2], **links_args)
+
+        lin_ax.set_xlim(0, 1)
+        lin_ax.set_ylim(0, 2)
+        lin_ax.axis('off')
 
     plt.subplots_adjust(wspace=0, hspace=0)
     if save_path is not None:

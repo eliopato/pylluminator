@@ -109,7 +109,7 @@ class DM:
         :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
         :type formula: str
         :param reference_value: reference value for each predictor. Dictionary where keys are the predictor names, and values are
-            their reference value. Default: None
+            their reference value. For example, {'sex': 'female'} to set females as the refence. Default: None
         :type reference_value: dict | None
         :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
             samples to display
@@ -232,7 +232,7 @@ class DM:
         :param formula: R-like formula used in the design matrix to describe the statistical model. e.g. '~age + sex'
         :type formula: str
         :param reference_value: reference value for each predicto. Dictionary where keys are the predictor names, and values are
-            their reference value. Default: None
+            their reference value. For example, {'sex': 'female'} to set females as the refence. Default: None
         :type reference_value: dict | None
         :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
         :type custom_sheet: pandas.DataFrame

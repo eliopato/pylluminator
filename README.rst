@@ -147,6 +147,14 @@ Usage
 
 Refer to https://pylluminator.readthedocs.io/ for step-by-step tutorials and detailed documentation.
 
+Citing
+-------
+
+Pylluminator is described in detail in: 
+*Pylluminator: fast and scalable analysis of DNA methylation data in Python*, available on `BioRxiv <https://www.biorxiv.org/content/10.1101/2025.09.16.676547v1>`_
+
+If you use this package in your research, please cite our work.
+
 Contributing
 ------------
 We welcome contributions! If you'd like to help improve the package, please follow these steps:
