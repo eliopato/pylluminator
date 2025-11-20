@@ -1837,7 +1837,8 @@ def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3)
     # add CGI annotations to betas
     cgis = samples.annotation.probe_infos.set_index('probe_id')[annotation_column].dropna()
     cgi_betas = set_level_as_index(diff_beta_btw_group, 'probe_id', drop_others=True).join(cgis, how='inner')
-    cgi_betas[annotation_column] = cgi_betas[annotation_column].apply(lambda x: x.split(';'))
+    if cgi_betas[annotation_column].dtype == 'object':
+        cgi_betas[annotation_column] = cgi_betas[annotation_column].apply(lambda x: x.split(';'))
     cgi_betas = cgi_betas.explode(annotation_column)
 
     # define aggregation functions
@@ -1847,7 +1848,7 @@ def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3)
     def hyper(x):
         return 100 * sum(x > delta_beta_threshold) / len(x)
     
-    meth_prop = cgi_betas.groupby(annotation_column).agg([hypo, hyper])
+    meth_prop = cgi_betas.groupby(annotation_column, observed=True).agg([hypo, hyper])
     meth_prop = meth_prop.droplevel(0, axis=1)
     meth_prop.columns = [f'hypomethylated probes ({sample_metadata_values[0]} < {sample_metadata_values[1]})',
                          f'hypermethylated probes ({sample_metadata_values[0]} > {sample_metadata_values[1]})',]
