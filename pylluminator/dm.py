@@ -320,6 +320,8 @@ class DM:
                     return None, None
         try:
             design_matrix = dmatrix(formula, sample_info, return_type='dataframe')
+            # remove columns that contain only 0 (due to absent categories e.g)
+            design_matrix = design_matrix[[c for c in design_matrix.columns if ~(design_matrix[c].values == 0).all()]]
         except:
             design_matrix = pd.DataFrame()
 

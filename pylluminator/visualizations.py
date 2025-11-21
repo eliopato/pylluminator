@@ -478,6 +478,8 @@ def _pc_heatmap(samples: Samples, type:str, params: list[str] | None = None, nb_
 
         # the design matrix removes the NaN values
         design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
+        # remove columns that contain only 0 (due to absent categories e.g)
+        design_matrix = design_matrix[[c for c in design_matrix.columns if ~(design_matrix[c].values == 0).all()]]
         if design_matrix.empty:
             skipped_params.append(param)
             continue
@@ -917,7 +919,7 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
                      sort_by = 'pvalue', pval_threshold: float | None = None, effect_size_threshold: float | None = None,
-                     row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
+                     row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '', xticklabels=True) -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
 
@@ -1036,7 +1038,7 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
     betas = betas.loc[sorted_probe_idxs].T
     
     # common parameters to clustermap and heatmap
-    heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1, 'cbar_kws': {'label': 'Beta value'}}
+    heatmap_params = {'yticklabels': True, 'xticklabels': xticklabels, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1, 'cbar_kws': {'label': 'Beta value'}}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
 
     if figsize is None:
