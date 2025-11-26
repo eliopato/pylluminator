@@ -713,6 +713,9 @@ class Samples:
             self._betas = self._betas.drop(columns=sample_labels, errors='ignore')
         self.masks.remove_masks(sample_label=sample_labels)
         self.sample_sheet = self.sample_sheet[~self.sample_sheet[self.sample_label_name].isin(sample_labels)]
+        # remove unused categories from sample sheet
+        for c in self.sample_sheet.select_dtypes('category').columns:
+            self.sample_sheet[c] = self.sample_sheet[c].cat.remove_unused_categories()
 
     def subset(self, sample_labels: str | list[str]) -> None:
         """Keep only the specified samples. Delete the signal information, beta values, sample sheet rows and masks of
