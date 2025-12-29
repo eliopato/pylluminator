@@ -151,7 +151,7 @@ def _get_linestyles(sheet: pd.DataFrame, column: str | None) -> tuple[list, dict
 
 def betas_density(samples: Samples, title: None | str = None, group_column: None | str | list[str] = None,
                color_column: str | None = None,  linestyle_column=None, figsize=(10, 7), cmap_name: str = 'Spectral_r',
-               custom_sheet: None | pd.DataFrame = None, apply_mask=True, save_path: None | str=None) -> None:
+               custom_sheet: None | pd.DataFrame = None, apply_mask=True, alpha=0.8, save_path: None | str=None) -> None:
     """Plot beta values density for each sample
 
     :param samples: with beta values already calculated
@@ -180,6 +180,10 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
 
     :param cmap_name: name of the matplotlib color map to use. Default: Spectral_r
     :type cmap_name: str
+
+    :param alpha: transparence of the lines. Float between 0 and 1. Default: 0.8
+    :type alpha: float
+    
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str
 
@@ -215,10 +219,10 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
     legend_handles = c_legend_handles + ls_legend_handles
 
     for c in betas.columns:
-        x, y = FFTKDE(kernel="gaussian", bw="silverman").fit(betas[c].values).evaluate()
+        x, y = FFTKDE(kernel='gaussian', bw='silverman').fit(betas[c].values).evaluate()
         ls = '-' if linestyles is None else linestyles[c]
         col = None if colors is None else colors[c]
-        plt.plot(x, y, label=c, color=col, linestyle=ls, alpha=0.8)
+        plt.plot(x, y, label=c, color=col, linestyle=ls, alpha=alpha)
 
     if title is None:
         if group_column is None:
@@ -778,9 +782,13 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
     number_cmaps = ['viridis', 'plasma', 'cool', 'spring']
 
     def get_string_color(val, nb_cats):
-        return sns.color_palette(string_cmaps[string_cmap_index % len(string_cmaps)], nb_cats)[val]
+        if pd.isna(val):
+            return (1, 1, 1, 1)
+        return sns.color_palette(string_cmaps[string_cmap_index % len(string_cmaps)], int(nb_cats))[int(val)]
 
     def get_numeric_color(val, cmin, cmax):
+        if pd.isna(val):
+            return (1, 1, 1, 1)
         norm = plt.Normalize(cmin, cmax)
         return colormaps.get_cmap(number_cmaps[number_cmap_index % len(number_cmaps)])(norm(val))
 
@@ -798,6 +806,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
         if input_df[col].dtype in ['object', 'category']:
             # convert string category codes to easily get a color index for each string
             color_df[col] = pd.Categorical(input_df[col]).codes
+            color_df.loc[color_df[col] == -1, col] = None
             color_df[col] = color_df[col].apply(get_string_color, args=(color_df[col].max()+1,))
             string_cmap_index += 1
         elif np.issubdtype(input_df[col].dtype, np.number):
@@ -2067,7 +2076,7 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
 
     # plot
     plt.style.use('ggplot')
-    g = sns.catplot(long_df, kind='violin', hue='Replicate', y='channel', x='Value', height=figsize[0], aspect=figsize[0]/figsize[1], **kwargs)
+    g = sns.catplot(long_df, kind='violin', hue='Replicate', y='channel', x='Value', height=figsize[1], aspect=figsize[0]/figsize[1], **kwargs)
     g.set_axis_labels('beta values standard deviation', 'probes channel')
 
     if xlim is not None:

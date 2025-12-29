@@ -712,7 +712,7 @@ class Samples:
         if self._betas is not None:
             self._betas = self._betas.drop(columns=sample_labels, errors='ignore')
         self.masks.remove_masks(sample_label=sample_labels)
-        self.sample_sheet = self.sample_sheet[~self.sample_sheet[self.sample_label_name].isin(sample_labels)]
+        self.sample_sheet = self.sample_sheet[~self.sample_sheet[self.sample_label_name].isin(sample_labels)].copy()
         # remove unused categories from sample sheet
         for c in self.sample_sheet.select_dtypes('category').columns:
             self.sample_sheet[c] = self.sample_sheet[c].cat.remove_unused_categories()
