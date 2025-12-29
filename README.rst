@@ -155,6 +155,9 @@ Pylluminator is described in detail in:
 
 If you use this package in your research, please cite our work.
 
+If you use the updated version of the EPICv2/hg38 annotations, please cite *Re-annotating the EPICv2 manifest with genes, intragenic features, and regulatory elements*, `(BioRxiv link)<https://www.biorxiv.org/content/10.1101/2025.03.12.642895v2>`_
+
+
 Contributing
 ------------
 We welcome contributions! If you'd like to help improve the package, please follow these steps:

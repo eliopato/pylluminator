@@ -918,7 +918,8 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
                      nb_probes: int = 100, figsize: tuple[float, float] | None = None,
                      var: str | None | list[str] = None, custom_sheet: pd.DataFrame | None = None,
                      drop_na=True, save_path: None | str = None,
-                     sort_by = 'pvalue', pval_threshold: float | None = None, effect_size_threshold: float | None = None,
+                     sort_by = 'effect_size', ascending = False,
+                     pval_threshold: float | None = 0.05, effect_size_threshold: float | None = None,
                      row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '', xticklabels=True) -> None:
     """Plot a heatmap of the probes that are the most differentially methylated, showing hierarchical clustering of the
     probes with dendrograms on the sides.
@@ -948,10 +949,13 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
 
-    :param sort_by: column to order dmps by. Can be pvalue, effect_size, or any dmp column name. Default: pvalue
+    :param sort_by: column to order dmps by. Can be pvalue, effect_size, or any dmp column name. Default: effect_size
     :type sort_by: str
 
-    :param pval_threshold: maximum DMPs p-value, float between 0 and 1. If None, no filter is applied on pvalues. Default: None
+    :param ascending: sorting order. Default: False
+    :type ascending: bool
+
+    :param pval_threshold: maximum DMPs p-value, float between 0 and 1. If None, no filter is applied on pvalues. Default: 0.05
     :type pval_threshold: float | None
 
     :param effect_size_threshold: minimum DMPs effect size, float between 0 and 1. If None, no filter is applied on effect size. Default: None
@@ -1005,13 +1009,12 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
     # sort the DMPs
     if sort_by == 'pvalue':
         sort_by = pval_column
-    sorted_probe_idxs = dmp.sort_values(sort_by).index.intersection(betas.index)
+    sorted_probe_idxs = dmp.sort_values(sort_by, ascending=ascending).index.intersection(betas.index)
 
     nb_probes = min(nb_probes, len(sorted_probe_idxs))
 
     if nb_probes == 0:
-        LOGGER.error(f'No significant probes found, consider increasing the p-value threshold (current threshold: {pval_threshold}) \
-                     or decreasing the effect size threshold (current threshold: {effect_size_threshold}))')
+        LOGGER.error(f'No significant probes found, consider increasing the p-value threshold (current threshold: {pval_threshold}) or decreasing the effect size threshold (current threshold: {effect_size_threshold}))')
         return
 
     sorted_probe_idxs = sorted_probe_idxs[:nb_probes]
@@ -1044,7 +1047,7 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
     if figsize is None:
         figsize = (3 + 0.15 * nb_probes, 3 + 0.2 * len(betas))
 
-    if drop_na:
+    if drop_na and min(betas.shape) > 1:
         handles, labels = [], []
         # convert categories to colors and get legends if specified
         if row_factors is not None:
@@ -1075,8 +1078,8 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
 
 
 def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame = None, chromosome_col='chromosome',
-                    x_col='start', y_col='p_value', log10=False, figsize:tuple[float, float]=(10,8),
-                    annotation: Annotations | None = None, annotation_col: str = 'genes', nb_annotated_probes: int = 100,
+                    x_col='start', y_col='p_value', pval_col:str|None=None, log10=False, figsize:tuple[float, float]=(10,8),
+                    annotation: Annotations | None = None, annotation_col: str = 'genes', nb_annotated_probes: int = 50,
                     sig_threshold: float | None = None, 
                     title: None | str = None, save_path: None | str=None) -> None:
     """Display a Manhattan plot of the given data.
@@ -1131,6 +1134,13 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         LOGGER.error(f'Columns {x_col}, {y_col} and {chromosome_col} must be in the dataframe')
         return
 
+    # remove non significant dots if specified
+    if sig_threshold is not None:
+        if pval_col is not None:
+            data_to_plot = data_to_plot[data_to_plot[pval_col] < sig_threshold]
+        else:
+            LOGGER.warning('Cant find pvalue column to apply pvalue threshold on, drawing all DMRs')
+
     cols_to_keep = [x_col, y_col, chromosome_col]
     for col in ['probe_id', 'segment_id']:
         if col in data_to_plot.columns:
@@ -1138,6 +1148,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
 
     data_to_plot = data_to_plot[cols_to_keep]
     data_to_plot = data_to_plot.dropna(subset=y_col)
+    
     data_to_plot['merged_chr'] = merge_alt_chromosomes(data_to_plot[chromosome_col])
     # convert the chromosome column to int values
     if data_to_plot.dtypes[chromosome_col] is not int:
@@ -1162,10 +1173,6 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
     # apply -log10 to p-values if needed
     if log10:
         data_to_plot[y_col] = -np.log10(data_to_plot[y_col])
-        if sig_threshold is not None:
-            sig_threshold = -np.log10(sig_threshold)
-    # get the value of the 100th most significant probe
-    annotation_threshold = data_to_plot[y_col].sort_values().iloc[-nb_annotated_probes]
 
     # define colormap and limits
     v_max = np.max(data_to_plot[y_col])
@@ -1186,8 +1193,7 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             LOGGER.error(f'{annotation_col} was not found in the annotation dataframe. '
                          f'Available columns : {annotation.probe_infos.columns}.')
         else:
-            gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates()
-            gene_info.loc[gene_info[annotation_col].isna(), annotation_col] = ''
+            gene_info = annotation.probe_infos[['probe_id', annotation_col]].drop_duplicates().dropna()
             if data_to_plot.index.name == 'segment_id':
                 data_to_plot = merge_dataframe_by(data_to_plot.merge(gene_info, on='probe_id').drop(columns='probe_id'),
                                                   ['start', 'chromosome'], observed=True)
@@ -1196,11 +1202,16 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
             else:
                 data_to_plot = data_to_plot.join(gene_info.set_index('probe_id'))
             
-
     data_to_plot = data_to_plot.reset_index(drop=True).drop_duplicates()
     # sort by chromosome and make the column a category
     data_to_plot = data_to_plot.sort_values(['chr_id', x_col]).astype({'chr_id': 'category'})
 
+    # annotate the beta values with the biggest variation (negative or positive if beta)
+    vals_to_sort = abs(data_to_plot[y_col]) if 'avg_beta' in y_col else data_to_plot[y_col]
+    indexes_to_annotate = vals_to_sort.sort_values(ascending=False)[:nb_annotated_probes].index
+    data_to_plot['annotate'] = False
+    data_to_plot.loc[indexes_to_annotate, 'annotate'] = True
+    
     # make indices for plotting
     data_to_plot_grouped = data_to_plot.groupby('chr_id', observed=True)
 
@@ -1230,28 +1241,21 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
                              linewidth=2,
                              alpha=1)
 
-        # draw annotations for probes that are over the threshold, if annotation_col is set
+        # draw annotations for the first N dots, if annotation_col is set
         if annotation_col in group.columns:
-            indexes_to_annotate = group[y_col] > annotation_threshold if log10 else group[y_col] < annotation_threshold
             annot_col_idx = group.columns.get_loc(annotation_col)
             x_col_idx = group.columns.get_loc(x_col)
             y_col_idx = group.columns.get_loc(y_col)
             # shorten annotations that are too long
             long_anno_idxs = group[annotation_col].str.len() > 50
             group.loc[long_anno_idxs, annotation_col] = group.loc[long_anno_idxs, annotation_col].str.slice(0, 47) + '...'
-            for row in group[indexes_to_annotate].itertuples(index=False):
-                plt.annotate(' ' + row[annot_col_idx], (row[x_col_idx], row[y_col_idx]), c=curr_cmap(row[y_col_idx] / v_max), annotation_clip=True)
+            for row in group[group.annotate == True].itertuples(index=False):
+                plt.annotate(' ' + row[annot_col_idx], (row[x_col_idx], row[y_col_idx]), c='black', annotation_clip=True)
 
         chrom_start = chrom_end
 
     ax.set_facecolor('#EBEBEB')  # set background color to grey
     [ax.spines[side].set_visible(False) for side in ax.spines]  # hide plot frame
-
-    # add lines of significance threshold
-    if sig_threshold is not None:
-        x_start = 0 - margin
-        x_end =  chrom_end + margin
-        plt.plot([x_start, x_end], [sig_threshold, sig_threshold], ls=':', c='black', alpha=0.5)
 
     # grids style and plot limits
     ax.xaxis.grid(True, which='minor', color='white', linestyle='--')
@@ -1283,8 +1287,8 @@ def _manhattan_plot(data_to_plot: pd.DataFrame, segments_to_plot: pd.DataFrame =
         plt.savefig(os.path.expanduser(save_path))
 
 
-def dmr_manhattan_plot(dm: DM, contrast: str,
-                       chromosome_col='chromosome', x_col='start', y_col='p_value',
+def dmr_manhattan_plot(dm: DM, contrast: str | None = None,
+                       chromosome_col='chromosome', x_col='start', y_col='p_value_adjusted',
                        annotation_col='genes', nb_annotated_probes: int=100, log10=True,
                        figsize:tuple[float, float]=(10, 8),
                        sig_threshold: float | None = 0.05, 
@@ -1303,7 +1307,7 @@ def dmr_manhattan_plot(dm: DM, contrast: str,
     :param x_col: name of the column to use for X axis, start position of the probe/bin. Default: start
     :type x_col: str
 
-    :param y_col: the name of the value column in the `data_to_plot` dataframe. Default: p_value
+    :param y_col: the name of the value column in the DMR dataframe. Default: p_value
     :type y_col: str
 
     :param annotation_col: the name of a column used to write annotation on the plots. Must be a column 
@@ -1313,7 +1317,7 @@ def dmr_manhattan_plot(dm: DM, contrast: str,
     :param nb_annotated_probes: the number of probes to annotate (if annotation_col is provided). Defaul: 100
     :type nb_annotated_probes: int
 
-    :param sig_threshold: Threshold to draw the significance line. Set to None to ignore the line. Default: 0.05
+    :param sig_threshold: Plot only DMRs below this significance threshold. Set to None to draw all DMRs. Default: 0.05
     :type sig_threshold: float | None
 
     :param log10: apply -log10 on the value column. Default: True
@@ -1335,10 +1339,27 @@ def dmr_manhattan_plot(dm: DM, contrast: str,
     if dm.samples is None:
         LOGGER.error('No samples found in DM object')
         return None
+    
+    # get default contrast if none is specifier (works only if there is one contrast)
+    if contrast is None:
+        contrast = dm._get_default_contrast()
+        if contrast is None:
+            return
+
+    pval_col = f'{contrast}_p_value_adjusted'
 
     data = dm.dmr.join(dm.segments.reset_index().set_index('segment_id'))
-    return _manhattan_plot(data_to_plot=data, chromosome_col=chromosome_col, y_col=f'{contrast}_{y_col}_adjusted',
-                           x_col=x_col, annotation=dm.samples.annotation, nb_annotated_probes=nb_annotated_probes,
+
+    if y_col not in data.columns:
+        if f'{contrast}_{y_col}' not in data.columns:
+            LOGGER.error(f'Column {y_col} not found in dmr dataframe. Existing columns : {data.columns}')
+            return
+        else:
+            y_col = f'{contrast}_{y_col}'
+
+    return _manhattan_plot(data_to_plot=data, chromosome_col=chromosome_col, y_col=y_col,
+                           x_col=x_col, pval_col=pval_col, annotation=dm.samples.annotation, 
+                           nb_annotated_probes=nb_annotated_probes,
                            annotation_col=annotation_col, sig_threshold=sig_threshold,
                            figsize=figsize, log10=log10, title=title, save_path=save_path)
 
@@ -1493,7 +1514,7 @@ def _get_overlapping_rows(input_df: pd.DataFrame, start_pos:int, end_pos: int, s
     return input_df[(input_df[start_col] <= end_pos) & (input_df[end_col] >= start_pos)]
 
 def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_pos: int, end_pos: int, apply_mask: bool=True, 
-                                keep_na: bool=False, protein_coding_only=True, custom_sheet: pd.DataFrame | None=None, 
+                                keep_na: bool=False, protein_coding_only=False, custom_sheet: pd.DataFrame | None=None, 
                                 figsize:tuple[float, float]=(15, 10), save_path: None | str=None,
                                 var: None | str | list[str] = None, gene_name: str|None = None, padding=0,
                                 row_factors: str | list[str] | None = None, row_legends: str | list[str] | None = '') -> None:
@@ -1507,7 +1528,7 @@ def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_
     
     :param keep_na: set to True to only output probes with no NA value for any sample. Default: False
     :type keep_na: bool
-    :param protein_coding_only: limit displayed transcripts to protein coding ones. Default: True
+    :param protein_coding_only: limit displayed transcripts to protein coding ones. Default: False
     :type protein_coding_only: bool
     :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the
         samples to display
@@ -1549,14 +1570,17 @@ def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_
         LOGGER.warning(f'Found no transcript in region {start_pos} - {end_pos} for chromosome {chromosome}')
     else:
         if protein_coding_only:
-            non_prot_coding = gene_data.transcript_type != 'protein_coding'
-            if sum(non_prot_coding) > 0:
-                LOGGER.info(f'Dropping {sum(non_prot_coding)} non protein coding transcripts')
-                gene_data = gene_data[~non_prot_coding]
-            if len(gene_data) == 0:
-                LOGGER.warning(f'No transcripts left in region {start_pos} - {end_pos} for chromosome {chromosome}')
+            if 'transcript_type' not in gene_data.columns:
+                LOGGER.info('Transcript type information not available, the protein_coding_only option is ignored')
             else:
-                gene_data = gene_data.sort_values('transcript_start')
+                non_prot_coding = gene_data['transcript_type'] != 'protein_coding'
+                if sum(non_prot_coding) > 0:
+                    LOGGER.info(f'Dropping {sum(non_prot_coding)} non protein coding transcripts')
+                    gene_data = gene_data[~non_prot_coding]
+                if len(gene_data) == 0:
+                    LOGGER.warning(f'No transcripts left in region {start_pos} - {end_pos} for chromosome {chromosome}')
+                else:
+                    gene_data = gene_data.sort_values('transcript_start')
 
     # select probes information (probes that overlap with the selected region)
     probes_data = _get_overlapping_rows(samples.annotation.probe_infos, start_pos, end_pos, chromosome=chromosome)
@@ -1694,18 +1718,19 @@ def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_
         transcript_start = transcript_data.transcript_start.min()
         transcript_end = transcript_data.transcript_end.max()
 
-        if transcript_data.iloc[0].transcript_strand == '-':
-            arrow_coords = (transcript_start, y_position, -padding, 0)
-            transcript_end += padding
-        else:
-            arrow_coords = (transcript_end, y_position, padding, 0)
-            transcript_start -= padding
+        if 'transcript_strand' in transcript_data.columns:
+            if transcript_data.iloc[0].transcript_strand == '-':
+                arrow_coords = (transcript_start, y_position, -padding, 0)
+                transcript_end += padding
+            else:
+                arrow_coords = (transcript_end, y_position, padding, 0)
+                transcript_start -= padding
+            # arrow at the end of the line to show the strand direction
+            trans_ax.arrow(*arrow_coords, shape='full', fill=True, color='black', head_width=0.75, length_includes_head=True,
+                        head_length=int(padding / 3), width=0, alpha=0.3)
 
         # line of the full transcript length
         trans_ax.plot([transcript_start, transcript_end], [y_position, y_position], color='black', alpha=0.3, zorder=1)
-        # arrow at the end of the line to show the strand direction
-        trans_ax.arrow(*arrow_coords, shape='full', fill=True, color='black', head_width=0.75, length_includes_head=True,
-                    head_length=int(padding / 3), width=0, alpha=0.3)
 
         # draw the patches for each transcript location
         for row in transcript_data.itertuples():
@@ -1774,9 +1799,135 @@ def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_
         plt.savefig(os.path.expanduser(save_path))
 
 
-def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3),
-                             annotation_column:str='cgi', custom_sheet: pd.DataFrame|None = None,
-                             delta_beta_threshold:float=0.2, save_path: None | str=None) -> None:
+def plot_betas_distribution(samples: Samples, group_column: str| None=None, what: list[str] | str = 'hyper',
+                            annotation_column:str='cgi', orientation: str|None='h', custom_sheet:pd.DataFrame|None=None,
+                            hypo_threshold:float=0.4, hyper_threshold:float=0.6,
+                            save_path: None | str=None) -> None:
+    """
+    Plot the distribution of hyper (beta > 0.6) / hypo (beta < 0.4) methylated probes in the samples.
+
+    :param samples: samples with beta values already calculated
+    :type samples: Samples
+
+    :param group_column: column name in the sample sheet to categorize the data vertically. Default: None
+    :type group_column: str | None
+
+    :param what: the metric to plot. Can be 'hypo', 'hyper', 'mid', 'nas' or 'all' for the 3 of them. Default: 'hyper'
+    :type what: list[str] | str
+
+    :param annotation_column: column name of the probe_infos dataframe to use to annotation probes (cgi, promoter_or_body..). Default: 'cgi'
+    :type annotation_column: str
+
+    :param orientation: 'h' or 'v', orientation of the plot. Default: 'h'
+    :type orientation: str | None
+
+    :param custom_sheet: a sample sheet to use. By default, use the samples' sheet. Useful if you want to filter the samples to display
+    :type custom_sheet: pandas.DataFrame | None
+
+    :param hypo_threshold: max beta value to consider a probe hypo methylated. Default: 0.4
+    :type hypo_threshold: float
+
+    :param hyper_threshold: min beta value to consider a probe hyper methylated. Default: 0.6
+    :type hyper_threshold: float
+
+    :param save_path: if set, save the graph to save_path. Default: None
+    :type save_path: str | None
+    
+    :return: None
+    """
+    # add CGI annotations to betas
+    betas = samples.get_betas(custom_sheet=custom_sheet)
+    if betas is None or len(betas) == 0:
+        return None
+
+    if annotation_column not in samples.annotation.probe_infos.columns:
+        LOGGER.error('No CGI annotations found in the annotation data')
+        return
+
+    cgis = samples.annotation.probe_infos.set_index('probe_id')[annotation_column].dropna()
+    cgi_betas = set_level_as_index(betas, 'probe_id', drop_others=True).join(cgis, how='inner')
+    cgi_betas[annotation_column] = cgi_betas[annotation_column].apply(lambda x: x.split(';'))
+    cgi_betas = cgi_betas.explode(annotation_column)
+
+    # define aggregation functions
+    def hypo(x):
+        return 100 * sum(x < hypo_threshold) / len(x)
+
+    def hyper(x):
+        return 100 * sum(x > hyper_threshold) / len(x)
+
+    def mid(x):
+        return 100 * sum((hypo_threshold < x ) & (x < hyper_threshold)) / len(x)
+    
+    def nas(x):
+        return 100 * np.count_nonzero(np.isnan(x)) / len(x)
+
+    functions = {'hypo': hypo, 'hyper': hyper, 'mid': mid, 'nas': nas}
+    if isinstance(what, str):
+        what = functions.keys() if what == 'all' else [what]
+
+    meth_prop = cgi_betas.groupby(annotation_column, observed=True).agg([functions[f] for f in what])
+    meth_prop = pd.DataFrame(meth_prop.unstack()).reset_index()
+    meth_prop.columns = [samples.sample_label_name, 'metric', annotation_column, 'proportion']
+
+    if group_column is not None:
+        if group_column not in samples.sample_sheet.columns:
+            LOGGER.error(f'Column {group_column} not found in the sample sheet - ignoring parameter')
+            return
+        else:
+            annot = samples.sample_sheet[[samples.sample_label_name, group_column]].drop_duplicates()
+            meth_prop = meth_prop.merge(annot, on=samples.sample_label_name)
+
+    hue = group_column if group_column is not None else 'metric'
+
+    def rescale_axis(g: sns.FacetGrid, x_or_y = 'x'):
+        # don't share the axis, but make them a bit more readable by having the same scale, and putting the dots 
+        # on the left when mean % < 40 methylated probes, and on the right when mean % > 60
+        axes = g.axes
+        max_range =  0
+        for ax_r in axes:
+            for ax in ax_r:
+                lims = ax.get_xlim() if x_or_y == 'x' else ax.get_ylim()
+                max_range = max(max_range, lims[1] - lims[0])
+        mid_range = 2 * max_range / 3
+        
+        for ax_r in axes:
+            for ax in ax_r:
+                lims = ax.get_xlim() if x_or_y == 'x' else ax.get_ylim()
+                mean_axis = lims[1] - (lims[1] - lims[0])/2
+                if mean_axis < 40:
+                    new_lims = [lims[0],  lims[0] + 2 * mid_range]
+                elif mean_axis > 60:
+                    new_lims = [lims[1] - 2 * mid_range, lims[1]]
+                else:
+                    new_lims = [mean_axis - mid_range, mean_axis + mid_range]
+                if x_or_y == 'x':
+                    ax.set_xlim(new_lims)
+                else:
+                    ax.set_ylim(new_lims)
+
+    if orientation == 'v':
+        g = sns.catplot(data=meth_prop, x='proportion', y=group_column, row=annotation_column, col='metric', hue=hue,
+                        kind='violin', fill=False, linewidth=1, inner='stick', density_norm='count',
+                        sharex=False, height=2, aspect=2, orient='h', margin_titles=True, inner_kws={'alpha': 0.7})
+        rescale_axis(g, 'x')
+        g.set_axis_labels('', '')
+        g.set_titles(row_template="{row_name}", col_template='Proportion of {col_name} methylated probes (%)')
+    else:
+        g = sns.catplot(data=meth_prop, y='proportion', x=group_column, col=annotation_column, row='metric', hue=hue,
+                        kind='violin', fill=False, linewidth=1, inner='stick', density_norm='count',
+                        sharey=False, height=4, aspect=1, orient='v', margin_titles=True, inner_kws={'alpha': 0.7})
+        rescale_axis(g, 'y')
+        g.set_axis_labels('', '')
+        g.fig.suptitle(f'Proportion of {", ".join(what)} methylated probes (%)', y=1.05)
+        g.set_titles(col_template="{col_name}", row_template='{row_name} methylated probes proportion (%)')
+
+    if save_path is not None:
+        plt.savefig(os.path.expanduser(save_path))
+
+def plot_mean_beta_diff_per_group(samples: Samples, group_column: str, figsize=(5, 3),
+                                  annotation_column:str='cgi', custom_sheet: pd.DataFrame|None = None,
+                                  delta_beta_threshold:float=0.2, save_path: None | str=None) -> None:
     
     """Plot the distribution of hyper- and hypo- methylated probes in the samples. Compute the average beta values within each group of samples,
     and calculates the proportion of probes that have a significant methylation difference.
@@ -1785,7 +1936,7 @@ def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3)
     :type samples: Samples
 
     :param group_column: column name of the sample metadata from the sample sheet used to categorize the data, e.g. Phenotype.
-      It only work with metadata that has 2 possibles values (e.g. Control vs Patients)
+      It only works with metadata that has 2 possible values (e.g. Control vs Patients)
     :type group_column: str
 
     :param annotation_column: column name of the probe_infos dataframe to use to annotation probes (cgi, promoter_or_body..). Default: 'cgi'
@@ -1809,8 +1960,7 @@ def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3)
         return None
 
     if annotation_column not in samples.annotation.probe_infos.columns:
-        LOGGER.error(f'Column {annotation_column} not found in the annotation data. ' \
-        'Available columns: {samples.annotation.probe_infos.columns}')
+        LOGGER.error(f'Column {annotation_column} not found in the annotation data. Available columns: {samples.annotation.probe_infos.columns}')
         return
 
     if group_column not in samples.sample_sheet.columns:
@@ -1828,7 +1978,7 @@ def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3)
         LOGGER.error(f'you need exactly two groups (e.g. control vs patients). Detected groups: {sample_metadata_values}')
         return
     
-    #replace samples labels by their respective group
+    # replace samples labels by their respective group
     betas.columns = [sample_metadata.loc[c, group_column] for c in betas.columns]
     betas.columns.name = group_column
     
@@ -1857,7 +2007,8 @@ def methylation_distribution(samples: Samples, group_column: str, figsize=(5, 3)
     
     y_lim = [0, meth_prop.max(axis=None)*1.2]
     g = meth_prop.plot.bar(ylabel='% probes', ylim=y_lim, figsize=figsize, color=[ '#F8766D', '#1f77b4'] )
-    g.set_title(f'Proportion of hypo/hyper methylated probes (delta beta threshold : {delta_beta_threshold})')
+    g.set_title(f'Proportion of differentially methylated probes (mean delta beta threshold : {delta_beta_threshold})')
+    sns.move_legend(g.axes, 'upper left', bbox_to_anchor=(1, 1))
 
     if save_path is not None:
         plt.savefig(os.path.expanduser(save_path))

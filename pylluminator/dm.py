@@ -142,15 +142,142 @@ class DM:
 
         self.compute_dmp(samples, formula, reference_value, custom_sheet, drop_na, apply_mask, probe_ids, group_column)
 
-    def get_top(self, dm_type: DM_TYPE | str, contrast:str, chromosome_col='chromosome', annotation_col: str = 'genes',
-                n_dms=10, columns_to_keep: list[str] = None) -> pd.DataFrame | None:
-        """Get the top DMPs or DMRs, ranked by the p-value of the given contrast. By default, the results will be annotated with 
-        the genes associated with the probes in the DMPs/DMRs. You can control the annotation information with the `annotation_col` parameter.
+    def _get_default_contrast(self) -> str | None:
+        if self.contrasts is None:
+            LOGGER.error(f'No contrasts defined')
+            return None
+        
+        if len(self.contrasts) > 1:
+            LOGGER.error(f'More than one contrast available, please specify one ({self.contrasts})')
+            return None
+        return self.contrasts[0]
+    
+    def _get_top(self, dm_type: DM_TYPE, contrast:str|None, chromosome_col:str|None, annotation_col:str,
+                    sort_by:str, ascending:bool, pval_threshold:str, effect_size_threshold:float|None,
+                    n_dms:int, columns_to_keep: list[str]) -> pd.DataFrame:
+        
+        # check if the input parameters are correct
+        if contrast is None:
+            contrast = self._get_default_contrast()
+            if contrast is None:
+                return None
+            
+        # select columns to keep for output dataframe
+        columns_to_keep = [] if columns_to_keep is None else columns_to_keep
 
-        :param dm_type: type of Differentially Methylated object to get (DMRs or DMPs).
-        :type dm_type: DM_TYPE | str
+        # check if the input parameters are correct
+        if dm_type == DM_TYPE.DMP:
+            if self.samples is None or self.dmp is None or len(self.dmp) == 0:
+                LOGGER.error('Please calculate DMPs first')
+                return  
+            if len(self.dmp) == 0:
+                LOGGER.error('No DMPs found.')
+                return None            
+            top_dm = self.dmp      
+            es_col = 'effect_size'
+        elif dm_type == DM_TYPE.DMR:
+            if self.samples is None or self.dmr is None or self.segments is None:
+                LOGGER.error('Please calculate DMRs first')
+                return
+            if len(self.dmr) == 0 or len(self.segments) == 0:
+                LOGGER.error('No DMRs or segments found.')
+                return None
+            top_dm = self.dmr
+            # check chromosome col        
+            if chromosome_col not in top_dm.columns:
+                LOGGER.error(f'Chromosome column {chromosome_col} was not found in the dataframe')
+                return None
+            top_dm[chromosome_col] = merge_alt_chromosomes(top_dm[chromosome_col])
+            columns_to_keep.extend([chromosome_col])
+            es_col = f'{contrast}_avg_beta_delta'
 
-        :param contrast: contrast to use for ranking the DMRs
+        # check annotation parameter
+        probe_infos = self.samples.annotation.probe_infos
+        if annotation_col not in probe_infos.columns:
+            LOGGER.error(f'{annotation_col} was not found in the annotation dataframe. Available columns : {list(probe_infos.columns)}.')
+            return 
+            
+        # get p-value column
+        pval_col = f'{contrast}_p_value_adjusted'
+
+        # get sorting column
+        if sort_by in ['pvalue', 'p_value', 'pval']:
+            sort_column =  f'{contrast}_p_value_adjusted'
+        elif sort_by == 'effect_size':
+            sort_column = es_col
+        elif sort_by in top_dm.columns:
+            sort_column = sort_by
+        else:
+            LOGGER.error(f'Unknown argument {sort_by}')
+            return None
+        
+        for colname in [pval_col, es_col, sort_column]:
+            if colname not in top_dm.columns:
+                LOGGER.error(f'Column {colname} for contrast {contrast} wasn\'t found in {list(top_dm.columns)}')
+                return None
+        
+        columns_to_keep.extend([pval_col, es_col, sort_column])
+        columns_to_keep = list(set(columns_to_keep))
+
+        # filter by significance and effect size if specified
+        if pval_threshold is not None:
+            top_dm = top_dm[top_dm[pval_col] < pval_threshold]
+            if len(top_dm) == 0:
+                LOGGER.warning(f'No DMs left after p-values filtering. Consider changing the threshold (current threshold {pval_threshold}).')
+                return 
+        
+        if effect_size_threshold is not None:
+            top_dm = top_dm[abs(top_dm[es_col]) > effect_size_threshold]
+            if len(top_dm) == 0:
+                LOGGER.warning(f'No DMs left after effect size filtering. Consider changing the threshold (current threshold {effect_size_threshold}).')
+                return 
+        
+        top_dm = top_dm[columns_to_keep].dropna(subset=sort_column)
+        if len(top_dm) == 0:
+            LOGGER.warning(f'No DMs left after dropping rows with NA values.')
+            return 
+
+        # select top N values. For effect size, use absolute value for sorting
+        if sort_column == es_col:
+            top_dm = top_dm.loc[abs(top_dm[sort_column]).sort_values(ascending=False).index[:n_dms]]
+        else:
+            top_dm = top_dm.sort_values(sort_column, ascending=ascending).iloc[:n_dms]
+        
+        # add probes list per segment
+        if dm_type == DM_TYPE.DMR:
+            top_dm = top_dm.join(self.segments.reset_index().set_index('segment_id'))  
+
+        # select and clean up annotation if defined
+        gene_info = probe_infos[['probe_id', annotation_col]].drop_duplicates().dropna()
+
+        # add gene info to each probe
+        top_dm = top_dm.reset_index().merge(gene_info, how='left', on='probe_id')
+
+        # for DMRs, remove probe_id to be able to merge genes per segment
+        if dm_type == DM_TYPE.DMR:
+            top_dm = top_dm.drop(columns='probe_id')
+
+        # merge genes per segment/probes
+        group_columns = top_dm.columns.tolist()
+        group_columns.remove(annotation_col)        
+        top_dm = merge_dataframe_by(top_dm.reset_index(drop=True).drop_duplicates(), group_columns)
+        top_dm[annotation_col] = top_dm[annotation_col].apply(lambda x: ';'.join(set(x.split(';')) if not pd.isna(x) else ''))
+        top_dm = top_dm.reset_index()
+
+        # sort again.
+        if sort_column == es_col:
+            return top_dm.loc[abs(top_dm[sort_column]).sort_values(ascending=False).index]
+        return top_dm.sort_values(sort_column, ascending=ascending)
+
+
+    
+    def get_top_dmr(self, contrast:str|None=None, chromosome_col='chromosome', annotation_col:str='genes',
+                    sort_by:str='effect_size', ascending=False, pval_threshold=0.05, effect_size_threshold:float|None=None,
+                    n_dms=10, columns_to_keep: list[str] = None) -> pd.DataFrame | None:
+        """Get the top DMRs, ranked by the p-value of the given contrast. By default, the results will be annotated with 
+        the genes associated with the probes in the DMRs. You can control the annotation information with the `annotation_col` parameter.
+
+        :param contrast: contrast to use for ranking the DMRs. None works only if there is only one possible contrast. Default: None.
         :type contrast: str
 
         :param chromosome_col: name of the column holding the chromosome information. Default: 'chromosome'
@@ -159,7 +286,7 @@ class DM:
         :param annotation_col: name of the column holding the annotation information. Default: 'genes'
         :type annotation_col: str
 
-        :param n_dms: number of DM probes/segments to return. Default: 10
+        :param n_dms: number of DMRs to return. Default: 10
         :type n_dms: int
 
         :param columns_to_keep: list of columns to keep in the output dataframe. Default: None
@@ -168,51 +295,36 @@ class DM:
         :return: dataframe with the top DMRs
         :rtype: pandas.DataFrame | None
         """
-        # check if the input parameters are correct
-        if self.samples is None or self.dmp is None or len(self.dmp) == 0:
-            LOGGER.error('Please calculate DMPs first')
-            return
+        return self._get_top(dm_type=DM_TYPE.DMR, contrast=contrast, chromosome_col=chromosome_col,
+                             annotation_col=annotation_col, sort_by=sort_by, ascending=ascending, pval_threshold=pval_threshold,
+                             effect_size_threshold=effect_size_threshold, n_dms=n_dms, columns_to_keep=columns_to_keep)
 
-        sort_column =  f'{contrast}_p_value_adjusted'
-        columns_to_keep = [] if columns_to_keep is None else columns_to_keep
 
-        if dm_type in [DM_TYPE.DMR, 'DMR']:
-            if self.dmr is None or self.segments is None:
-                LOGGER.error('Please calculate DMRs first')
-                return None
-            top_dm = self.dmr.join(self.segments.reset_index().set_index('segment_id'))
-            if chromosome_col not in top_dm.columns:
-                LOGGER.error(f'Chromosome column {chromosome_col} was not found in the dataframe')
-                return None
-            columns_to_keep += [chromosome_col, 'probe_id']
-            top_dm[chromosome_col] = merge_alt_chromosomes(top_dm[chromosome_col])
-        else:
-            top_dm = self.dmp
 
-        if sort_column not in top_dm.columns:
-            LOGGER.error(f'The column {sort_column} for contrast {contrast} was not found in the dataframe. '
-                         f'Available contrasts: {self.contrasts}')
-            return None
+    def get_top_dmp(self, contrast:str|None=None, annotation_col: str = 'genes',
+                sort_by:str='effect_size', ascending=False, pval_threshold=0.05, effect_size_threshold:float|None=None,
+                n_dms=10, columns_to_keep: list[str] = None) -> pd.DataFrame | None:
+        """Get the top DMPs, ranked by the p-value of the given contrast. By default, the results will be annotated with 
+        the genes associated with the probes in the DMPs/DMRs. You can control the annotation information with the `annotation_col` parameter.
 
-        top_dm = top_dm[[sort_column] + columns_to_keep].dropna(subset=sort_column)
+        :param contrast: contrast to use for ranking the DMPs.
+        :type contrast: str
 
-        # check annotation parameter, and select and clean up annotation if defined
-        probe_infos = self.samples.annotation.probe_infos
-        if annotation_col not in probe_infos.columns:
-            LOGGER.warning(f'{annotation_col} was not found in the annotation dataframe. '
-                         f'Available columns : {probe_infos.columns}.')
-        else:
-            gene_info = probe_infos[['probe_id', annotation_col]].drop_duplicates().set_index('probe_id')
-            gene_info = gene_info.dropna().reset_index()
-            top_dm = top_dm.reset_index().merge(gene_info, how='inner', on='probe_id').drop(columns='probe_id')
+        :param annotation_col: name of the column holding the annotation information. Default: 'genes'
+        :type annotation_col: str
 
-            # todo time optimization: filter with the first N probes/segments then do that
-            group_columns = top_dm.columns.tolist()
-            group_columns.remove(annotation_col)
-            top_dm = merge_dataframe_by(top_dm.reset_index(drop=True).drop_duplicates(), group_columns)
-            top_dm[annotation_col] = top_dm[annotation_col].apply(lambda x: ';'.join(set(x.split(';'))))
+        :param n_dms: number of DMPs to return. Default: 10
+        :type n_dms: int
 
-        return top_dm.sort_values(sort_column).iloc[:n_dms]
+        :param columns_to_keep: list of columns to keep in the output dataframe. Default: None
+        :type columns_to_keep: list[str] | None
+
+        :return: dataframe with the top DMPs
+        :rtype: pandas.DataFrame | None
+        """        
+        return self._get_top(dm_type=DM_TYPE.DMP, contrast=contrast, chromosome_col=None,
+                             annotation_col=annotation_col, sort_by=sort_by, ascending=ascending, pval_threshold=pval_threshold,
+                             effect_size_threshold=effect_size_threshold, n_dms=n_dms, columns_to_keep=columns_to_keep)
 
 
     def compute_dmp(self, samples: Samples, formula: str, reference_value: dict | None = None,
@@ -350,13 +462,14 @@ class DM:
         # get column names used in the formula that are categories or string
         cat_column_names = [c for c in factor_columns if sample_info.dtypes[c] in ['category', 'object']]
         for col in cat_column_names:
-            first_factor = None
+            ref_factor = None
             for name, group in sample_info.groupby(col, observed=True):
-                dmps[f'avg_beta_{col}_{name}'] = betas.loc[:, group.index].mean(axis=1)
-                if first_factor is None:
-                    first_factor = name
-                else:
-                    dmps[f'avg_beta_delta_{col}_{first_factor}_vs_{name}'] = dmps[f'avg_beta_{col}_{first_factor}'] - dmps[f'avg_beta_{col}_{name}']
+                current_factor = f'{col}[T.{name}]'
+                if ref_factor is None:
+                    ref_factor = current_factor
+                dmps[f'{current_factor}_avg_beta'] = betas.loc[:, group.index].mean(axis=1)
+                if current_factor != ref_factor:
+                    dmps[f'{current_factor}_avg_beta_delta'] = dmps[f'{ref_factor}_avg_beta'] - dmps[f'{current_factor}_avg_beta'] 
 
         # adjust p-values
         for f in factor_names:
@@ -523,7 +636,7 @@ class DM:
 
         # calculate estimates' means for each factor
         for c in self.dmp.columns:
-            if c.endswith('estimate') or c.startswith('avg_beta_'):
+            if c.endswith('estimate') or 'avg_beta_' in c:
                 seg_dmr[c] = segments_grouped[c].mean()
 
         self.segments = segments[['segment_id']]

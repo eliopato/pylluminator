@@ -1,9 +1,10 @@
 Annotations
 ===========
 
-Manifests and other annotation files are built from the `SeSAMe package <https://zwdzwd.github.io/InfiniumAnnotation>`_ and illumina (cf `illumina docs <https://support.illumina.com.cn/downloads/infinium-methylationepic-v2-0-product-files.html>`_)
+Manifests and other annotation files are built from the `SeSAMe package <https://zwdzwd.github.io/InfiniumAnnotation>`_ and illumina (cf `illumina docs <https://support.illumina.com.cn/downloads/infinium-methylationepic-v2-0-product-files.html>`_) for all genome versions and array type.
+An updated version of the manifest is also available for EPICv2/hg38, as defined by `<https://www.biorxiv.org/content/10.1101/2025.03.12.642895v2>`_
 
-They are stored and versioned in the `pylluminator-data GitHub repository <https://github.com/eliopato/pylluminator-data/raw/main/>`_
+All the files, restructured to be used with pylluminator, are stored and versioned in the `pylluminator-data GitHub repository <https://github.com/eliopato/pylluminator-data/raw/main/>`_
 
 Manifest (probe_infos)
 ----------------------
@@ -35,9 +36,10 @@ Description of the columns of the `probe_infos.csv` file. If you want to use a c
 
 ``genes``: genes encoded by this sequence. Multiple gene names are separated by semicolons.
 
-``promoter_or_body``: ``b`` for body, ``p`` for promoter
+``promoter_or_body``: ``b`` for body, ``p`` or ``Promoter`` for promoter
 
 ``cgi``: position of the probe regarding the CpG island. Possible values: ``Island``, ``Shelf``, ``Shore``, ``OpenSea``
+
 
 Masks
 ^^^^^

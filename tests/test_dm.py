@@ -23,10 +23,10 @@ def test_dmp_ols(test_samples):
     assert my_dms.dmp.loc['cg00000029_TC21', 'sample_number_p_value'] == pytest.approx(0.30724222260281375) # Pval_sample_typeP
     assert my_dms.dmp.loc['cg00000029_TC21', 'effect_size'] == pytest.approx(0.7096783705055711)  # Eff_sample_type
 
-    top_10_dmrs = my_dms.get_top('DMP','sample_type[T.PREC]')
-    assert len(top_10_dmrs) == 10
-    assert 'BRWD1P2' in top_10_dmrs.iloc[0].genes
-    assert 'ENSG00000258216' in top_10_dmrs.iloc[0].genes
+    top_10_dmps = my_dms.get_top_dmp('sample_type[T.PREC]')    
+    assert len(top_10_dmps) == 10
+    assert 'CCDC181' in top_10_dmps.iloc[0].genes
+    assert 'ENSG00000285535' in top_10_dmps.iloc[1].genes
 
 
 def test_dmp_mixedmodel(test_samples, caplog):
@@ -115,15 +115,10 @@ def test_ols_na():
     assert len(params) == 2 + nb_factors * 4
     assert np.isnan(params).all()
 
-def test_dmr(test_samples, caplog):
+def test_dmr(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     # probe_ids.extend(['cg14515812_TC11', 'cg14515812_TC12'])
     my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
-
-    # test get_top function before compute DMRs = bug
-    caplog.clear()
-    my_dms.get_top('DMR','sample_type[T.PREC]')
-    assert 'Please calculate DMRs first' in caplog.text
 
     my_dms.compute_dmr()
 
@@ -134,27 +129,54 @@ def test_dmr(test_samples, caplog):
 
     # check DMRs values
     expected_values = [151960303, 153792416, 'X', 0.04285787432065091, 0.06373101772177485, 0.7505345278316073,
-                       0.055821167098151304, 0.75053453, 0.80635566, -0.05582112]
+                       0.055821167098151304, -0.05582112]
+    print(my_dms.dmr.loc[515, ])
     assert my_dms.dmr.loc[515, ].values.tolist() == pytest.approx(expected_values)
 
-    # test get_top function
-    top_10_dmrs = my_dms.get_top('DMR','sample_type[T.PREC]')
+
+def test_get_top(test_samples, caplog):
+    probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
+    my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
+
+    # test get_top function before compute DMRs = bug
+    caplog.clear()
+    my_dms.get_top_dmr('sample_type[T.PREC]')
+    assert 'Please calculate DMRs first' in caplog.text
+
+    my_dms.compute_dmr()
+
+    # OK
+    caplog.clear()
+    top_10_dmrs = my_dms.get_top_dmr('sample_type[T.PREC]')
     assert len(top_10_dmrs) == 10
-    assert "MIR34AHG" in top_10_dmrs.iloc[0].genes
-    assert "CASZ1" in top_10_dmrs.iloc[0].genes
+    assert 'CCDC181' in top_10_dmrs.iloc[0].genes
+    assert 'ERROR' not in caplog.text
+    assert 'WARNING' not in caplog.text
 
-    # test input parameters get_top
+    # NOK
     caplog.clear()
-    top_10_dmrs = my_dms.get_top('DMR','sample_type[T.PREC]', chromosome_col='unknown')
+    top_10_dmrs = my_dms.get_top_dmr('sample_type[T.PREC]', chromosome_col='unknown')
     assert 'Chromosome column unknown was not found in the dataframe'
+    assert top_10_dmrs is None
 
     caplog.clear()
-    top_10_dmrs = my_dms.get_top('DMR', 'unknown')
-    assert 'The column unknown_p_value_adjusted for contrast unknown was not found in the dataframe.'
+    top_10_dmrs = my_dms.get_top_dmr(contrast='unknown')
+    assert 'Column unknown_p_value_adjusted for contrast unknown wasn\'t found in'
+    assert top_10_dmrs is None
     
     caplog.clear()
-    top_10_dmrs = my_dms.get_top('DMR','sample_type[T.PREC]', annotation_col='unknown')
+    top_10_dmrs = my_dms.get_top_dmr('sample_type[T.PREC]', annotation_col='unknown')
     assert 'annotation_col was not found in the annotation dataframe.'
+    assert top_10_dmrs is None
+
+    # more than 2 contrasts
+    my_dms = DM(test_samples, '~ sample_number + sample_type', probe_ids=probe_ids)
+    my_dms.compute_dmr()
+
+    caplog.clear()
+    top_10_dmrs = my_dms.get_top_dmr()
+    assert 'More than one contrast available'
+    assert top_10_dmrs is None
 
 def test_select_dmp(test_samples):
     my_dms = DM(test_samples, '~ sample_type')

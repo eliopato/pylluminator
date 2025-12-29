@@ -1627,7 +1627,7 @@ class Samples:
         :param par_prior: False for non-parametric estimation of batch effects. Default: True
         :type par_prior: bool
 
-        :param mean_only: True iff just adjusting the means and not individual batch effects Default: False
+        :param mean_only: True iff just adjusting the means and not individual batch effects. Default: False
         :type mean_only: bool
 
         :param ref_batch: batch id of the batch to use as reference. Default: None

@@ -21,7 +21,7 @@ def get_or_download_annotation_data(annotation_name: str, data_type:str,  output
     Read the file as a pandas dataframe, with the first column being the index, and return it.
     Return None if no file was found
 
-    :param annotation_name: custom annotation name or 'default' for pylluminator-data annotations
+    :param annotation_name: custom annotation name, 'illumina' for pylluminator-data annotations, or 'updated' for the updated annotations (EPICv2 only)
     :type annotation_name: str
 
     :param data_type: data to download (probe_infos, seq_length...). Must match the file name
@@ -36,23 +36,23 @@ def get_or_download_annotation_data(annotation_name: str, data_type:str,  output
     :return: a dataframe or None if no file was downloaded
     :rtype: pandas.DataFrame | None """
 
-    filename = f'{data_type}.csv'
+    filename = f'{data_type}.csv' if annotation_name == 'illumina' else f'{data_type}.{annotation_name}.csv'
     filepath = convert_to_path(output_folder).joinpath(filename)
 
     if not filepath.exists():
 
-        filename = f'{data_type}.csv.zip'
+        filename = filename + '.zip'
         filepath = convert_to_path(output_folder).joinpath(filename)
 
-        if not filepath.exists():
-            if annotation_name == 'default':
+        # only two kind of annotations exist in pylluminator-data
+        if not filepath.exists() and annotation_name in ['illumina', 'updated']:
                 download_from_link(dl_link + filename, output_folder)
 
     # download failed
     if not filepath.exists():
         LOGGER.error(f"File {filepath} doesn't exist for {annotation_name} annotation info, please add it manually")
         return None
-
+    
     return pd.read_csv(str(filepath), dtype={'chromosome': 'category'})
 
 
@@ -149,8 +149,8 @@ class GenomeInfo:
     def __init__(self, name: str, genome_version: GenomeVersion):
         """Load the files corresponding to the given genome version, and structure the information.
 
-        :param name: Name of the genome you want to load. Set to 'default' for Illumina default version, otherwise must
-            correspond to the folder name containing you custom data
+        :param name: Name of the genome you want to load. Set to 'illumina' for Illumina default version, to 'updated'
+          for the updated annotation defined by DOI:10.1101/2025.03.12.642895 (EPICv2 only), otherwise must correspond to the folder name containing you custom data
         :type name: str
         :param genome_version: genome version to load (hg32, mm10...)
         :type genome_version: GenomeVersion"""
@@ -218,7 +218,8 @@ class Annotations:
     :ivar genome_version: version of the genome (HG38, MM10...)
     :vartype genome_version: GenomeVersion
 
-    :ivar name: name of the annotation: default for pylluminator-data annotations, or the name of your custom data.
+    :ivar name: name of the annotation: 'illumina' for pylluminator-data annotations, 'updated' for the updated annotation 
+        defined by DOI:10.1101/2025.03.12.642895 (EPICv2 only),or the name of your custom data.
     :vartype name: str
 
     :ivar genome_info: genome metadata for the given genome version
@@ -231,15 +232,15 @@ class Annotations:
     :vartype genomic_ranges: pyranges.PyRanges
     """
 
-    def __init__(self, array_type: ArrayType, genome_version: GenomeVersion, name='default'):
+    def __init__(self, array_type: ArrayType, genome_version: GenomeVersion, name='illumina'):
         """Get annotation corresponding to the array type and genome version
 
         :param array_type: illumina array type (EPIC, MSA...)
         :type array_type: ArrayType
         :param genome_version: genome version to load (hg32, mm10...)
         :type genome_version: GenomeVersion
-        :param name: Name of the genome you want to load. Set to 'default' for Illumina default version, otherwise must
-            correspond to the folder name containing you custom data
+        :param name: Name of the genome you want to load. Set to 'illumina' for Illumina default version, to 'updated'
+          for the updated annotation defined by DOI:10.1101/2025.03.12.642895, otherwise must correspond to the folder name containing you custom data
         :type name: str
         """
         # parameters
@@ -273,6 +274,8 @@ class Annotations:
         # in case channel are encoded Grn and Red instead of G and R
         df['channel'] = df.channel.str[0]
 
+        df.loc[pd.isna(df.cgi), 'cgi'] = 'NA'
+        df.loc[pd.isna(df.promoter_or_body), 'promoter_or_body'] = 'NA'
         categories_columns = ['type', 'probe_type', 'channel', 'chromosome']
         df[categories_columns] = df[categories_columns].astype('category')
         if 'mask_info' not in df.columns:
@@ -329,8 +332,6 @@ class Annotations:
         return '|'.join(names)
 
     def __str__(self):
-        if self.name == 'default':
-            return f'{self.array_type} array - genome version {self.genome_version}\n'
         return f'{self.name} annotation - {self.array_type} array - genome version {self.genome_version}\n'
 
     def __repr__(self):

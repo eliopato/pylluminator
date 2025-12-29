@@ -8,6 +8,7 @@ import urllib.request
 import traceback
 from pathlib import Path, PosixPath
 import zipfile
+import gzip
 from importlib.resources import files
 from importlib.resources.readers import MultiplexedPath
 
@@ -289,6 +290,8 @@ def merge_alt_chromosomes(chromosome_id: str | int | list | pd.Series) -> list[s
 
     # if the remaining string only contains digits, we're good !
     if trimmed_str.isdigit():
+        if int(trimmed_str) == 0:
+            return '*'
         return trimmed_str
 
     if trimmed_str in ['x', 'y', '*']:
@@ -472,7 +475,7 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
                 tar_ref.extractall(output_folder, filter='data')
             if delete_archive:
                 os.remove(target_filepath)  # remove archive
-
+                
     return 1
 
 
@@ -546,7 +549,7 @@ def merge_series_values(items: pd.Series, how:str='any'):
     item_type = items.dtype
     
     if item_type in ['object', 'category']: 
-        return ';'.join(items.astype('str').unique())
+        return ';'.join(items[items != ''].dropna().astype('str').unique())
 
     if len(items) == 1:        
         return items.iloc[0]

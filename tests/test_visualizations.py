@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from pylluminator.visualizations import (betas_2D, betas_density, dmp_heatmap, nb_probes_per_chr_and_type_hist,
                                          dmr_manhattan_plot, cns_manhattan_plot, visualize_gene, betas_dendrogram,
-                                         pc_association_heatmap, pc_correlation_heatmap, methylation_distribution,
+                                         pc_association_heatmap, pc_correlation_heatmap, plot_mean_beta_diff_per_group,
                                          betas_heatmap, analyze_replicates, metadata_correlation, metadata_pairplot)
 
 from pylluminator.dm import DM
@@ -114,6 +114,11 @@ def test_dmp_heatmap_mixed_model(test_samples, caplog):
 
     caplog.clear()
     dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'])
+    assert not os.path.exists('dmp_heatmap.png')
+    assert 'No significant probes found, consider increasing' in caplog.text
+
+    caplog.clear()
+    dmp_heatmap(my_dms, contrast=my_dms.contrasts[0], save_path='dmp_heatmap.png', row_factors=['sample_type'], pval_threshold=None)
     assert os.path.exists('dmp_heatmap.png')
     assert 'ERROR' not in caplog.text
     os.remove('dmp_heatmap.png')
@@ -240,37 +245,37 @@ def test_pc_correlation_heatmap(test_samples, caplog):
     plt.close('all')
 
 
-def test_methylation_distribution(test_samples, caplog):
+def test_plot_mean_beta_diff_per_group(test_samples, caplog):
     
     # OK
     caplog.clear()
-    methylation_distribution(test_samples, group_column='sample_type', save_path='methylation_distribution.png')
-    assert os.path.exists('methylation_distribution.png')
+    plot_mean_beta_diff_per_group(test_samples, group_column='sample_type', save_path='plot_mean_beta_diff_per_group.png')
+    assert os.path.exists('plot_mean_beta_diff_per_group.png')
     assert 'ERROR' not in caplog.text
-    os.remove('methylation_distribution.png')
+    os.remove('plot_mean_beta_diff_per_group.png')
 
     # NOK
     caplog.clear()
-    methylation_distribution(test_samples, group_column='wrong_col', save_path='methylation_distribution.png')
-    assert not os.path.exists('methylation_distribution.png')
+    plot_mean_beta_diff_per_group(test_samples, group_column='wrong_col', save_path='plot_mean_beta_diff_per_group.png')
+    assert not os.path.exists('plot_mean_beta_diff_per_group.png')
     assert 'Column wrong_col not found in the sample sheet' in caplog.text
 
     # NOK
     caplog.clear()
-    methylation_distribution(test_samples, group_column='sample_type', annotation_column='wrong_col', save_path='methylation_distribution.png')
-    assert not os.path.exists('methylation_distribution.png')
+    plot_mean_beta_diff_per_group(test_samples, group_column='sample_type', annotation_column='wrong_col', save_path='plot_mean_beta_diff_per_group.png')
+    assert not os.path.exists('plot_mean_beta_diff_per_group.png')
     assert 'Column wrong_col not found in the annotation data.' in caplog.text
 
     # NOK
     caplog.clear()
-    methylation_distribution(test_samples, group_column='sample_type', delta_beta_threshold=-2, save_path='methylation_distribution.png')
-    assert not os.path.exists('methylation_distribution.png')
+    plot_mean_beta_diff_per_group(test_samples, group_column='sample_type', delta_beta_threshold=-2, save_path='plot_mean_beta_diff_per_group.png')
+    assert not os.path.exists('plot_mean_beta_diff_per_group.png')
     assert 'delta_beta_threshold must be betweend 0 and 1' in caplog.text
     caplog.clear()
 
     # NOK
-    methylation_distribution(test_samples, group_column='sample_type', delta_beta_threshold=2, save_path='methylation_distribution.png')
-    assert not os.path.exists('methylation_distribution.png')
+    plot_mean_beta_diff_per_group(test_samples, group_column='sample_type', delta_beta_threshold=2, save_path='plot_mean_beta_diff_per_group.png')
+    assert not os.path.exists('plot_mean_beta_diff_per_group.png')
     assert 'delta_beta_threshold must be betweend 0 and 1' in caplog.text
 
     plt.close('all')

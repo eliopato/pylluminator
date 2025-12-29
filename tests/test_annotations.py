@@ -30,10 +30,11 @@ def test_genome_info():
         GenomeInfo('name', None)
     with pytest.raises(ValueError):
         GenomeInfo('name', GenomeVersion('hg19'))
-    GenomeInfo('default', GenomeVersion('hg19'))
-    GenomeInfo('default', GenomeVersion('hg38'))
-    GenomeInfo('default', GenomeVersion('mm10'))
-    GenomeInfo('default', GenomeVersion('mm39'))
+    GenomeInfo('illumina', GenomeVersion('hg19'))
+    GenomeInfo('illumina', GenomeVersion('hg38'))
+    GenomeInfo('updated', GenomeVersion('hg38'))
+    GenomeInfo('illumina', GenomeVersion('mm10'))
+    GenomeInfo('illumina', GenomeVersion('mm39'))
 
 def test_failed_annotation():
     with pytest.raises(ValueError):
