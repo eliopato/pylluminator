@@ -130,7 +130,6 @@ def test_dmr(test_samples):
     # check DMRs values
     expected_values = [151960303, 153792416, 'X', 0.04285787432065091, 0.06373101772177485, 0.7505345278316073,
                        0.055821167098151304, -0.05582112]
-    print(my_dms.dmr.loc[515, ])
     assert my_dms.dmr.loc[515, ].values.tolist() == pytest.approx(expected_values)
 
 

@@ -710,8 +710,6 @@ class DM:
             LOGGER.warning('No filter applied')
             filtered_df = self.dmp
         else:
-            print('filter_query')
-            print(filter_query)
             filtered_df = self.dmp.query(' & '.join(filter_query))
 
         if sort_by is None:

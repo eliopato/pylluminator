@@ -219,7 +219,7 @@ class Annotations:
     :vartype genome_version: GenomeVersion
 
     :ivar name: name of the annotation: 'illumina' for pylluminator-data annotations, 'updated' for the updated annotation 
-        defined by DOI:10.1101/2025.03.12.642895 (EPICv2 only),or the name of your custom data.
+        defined by DOI:10.1101/2025.03.12.642895 (EPICv2 only),or the name of your custom data. Default: 'illumina'
     :vartype name: str
 
     :ivar genome_info: genome metadata for the given genome version
@@ -274,8 +274,16 @@ class Annotations:
         # in case channel are encoded Grn and Red instead of G and R
         df['channel'] = df.channel.str[0]
 
-        df.loc[pd.isna(df.cgi), 'cgi'] = 'NA'
-        df.loc[pd.isna(df.promoter_or_body), 'promoter_or_body'] = 'NA'
+        if 'cgi' in df.columns:
+            df.loc[pd.isna(df.cgi), 'cgi'] = 'NA'
+        else:
+            df['cgi'] = 'NA'
+
+        if 'promoter_or_body' in df.columns:
+            df.loc[pd.isna(df.promoter_or_body), 'promoter_or_body'] = 'NA'
+        else:
+            df['promoter_or_body'] = 'NA'
+        
         categories_columns = ['type', 'probe_type', 'channel', 'chromosome']
         df[categories_columns] = df[categories_columns].astype('category')
         if 'mask_info' not in df.columns:

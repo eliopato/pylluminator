@@ -79,7 +79,7 @@ def copy_number_variation(samples: Samples,
         normal_samples = get_normalization_samples(samples.annotation)
 
         if normal_samples is None:
-            print('Please provide samples to use as normalization')
+            LOGGER.error('Please provide samples to use as normalization')
             return None
 
         norm_intensities = normal_samples.get_total_ib_intensity()

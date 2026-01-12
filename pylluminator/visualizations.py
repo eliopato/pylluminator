@@ -800,6 +800,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
 
     handles = []
     labels = []
+    colormaps_list = []
 
     for col in input_df.columns:
         # get colors
@@ -817,10 +818,17 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
             legend_df = pd.concat([color_df[col], input_df[col]], axis=1).drop_duplicates()
             legend_df.columns = ['color', 'name']
             legend_df = legend_df.sort_values('name')
-            handles += [col] + legend_df.color.apply(lambda x: Patch(color=x)).tolist()
-            labels += [''] + legend_df.name.values.tolist()
+            if input_df[col].dtype in ['object', 'category']:
+                handles += [col] + legend_df.color.apply(lambda x: Patch(color=x)).tolist()
+                labels += [''] + legend_df.name.values.tolist()
+            else:
+                # for numeric columns, create a colorbar instead of individual patches
+                sm = plt.cm.ScalarMappable(cmap=number_cmaps[(number_cmap_index-1) % len(number_cmaps)],
+                                           norm=plt.Normalize(vmin=input_df[col].min(), vmax=input_df[col].max()))
+                sm.set_array([])
+                colormaps_list.append([col, sm])
 
-    return color_df, handles, labels
+    return color_df, handles, labels, colormaps_list
 
 
 def betas_heatmap(samples: Samples, apply_mask:bool=True,
@@ -888,6 +896,7 @@ def betas_heatmap(samples: Samples, apply_mask:bool=True,
         betas.columns = new_labels
 
     # common parameters to clustermap and heatmap
+    colormaps_list = []
     heatmap_params = {'yticklabels': True, 'xticklabels': True, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right',
                      'bbox_to_anchor': (0, 1)}
@@ -903,12 +912,25 @@ def betas_heatmap(samples: Samples, apply_mask:bool=True,
             elif isinstance(row_legends, str):
                 row_legends = [row_legends]
             subset = sheet[row_factors]
-            row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
+            row_factors, handles, labels, colormaps_list = _convert_df_values_to_colors(subset, row_legends)
+
         # plot the heatmap
         plot = sns.clustermap(betas, row_colors=row_factors, figsize=figsize, **heatmap_params)
+        # reshape colorbar to be horizontal
+        x0, _, _, _ = plot.cbar_pos
+        plot.ax_cbar.set_position([x0, 0.9, plot.ax_row_dendrogram.get_position().width, 0.02])
         # add the legends if they exist
+        leg_margin = 0
         if len(handles) > 0 and len(labels) > 0:
             plt.legend(handles=handles, labels=labels, **legend_params)
+            leg_margin = -0.15
+
+        if len(colormaps_list) > 0:
+            fig = plot.fig       
+            for i, (label, sm) in enumerate(colormaps_list):
+                cbar_ax = fig.add_axes([-0.1+leg_margin, 0.9-(i+1)*0.23, 0.02, 0.2])  # [left, bottom, width, height]
+                fig.colorbar(sm, cax=cbar_ax, label=label)
+
         # save plot
         if save_path is not None:
             plot.savefig(os.path.expanduser(save_path))
@@ -1050,8 +1072,9 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
     betas = betas.loc[sorted_probe_idxs].T
     
     # common parameters to clustermap and heatmap
-    heatmap_params = {'yticklabels': True, 'xticklabels': xticklabels, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1, 'cbar_kws': {'label': 'Beta value'}}
+    heatmap_params = {'yticklabels': True, 'xticklabels': xticklabels, 'cmap': 'Spectral_r', 'vmin': 0, 'vmax': 1, 'cbar_kws': {'label': 'Beta value', 'orientation': 'horizontal'}}
     legend_params = {'handler_map': {str: _LegendTitle({'fontweight': 'bold'})}, 'loc': 'upper right', 'bbox_to_anchor': (0, 1)}
+    colormaps_list = []
 
     if figsize is None:
         figsize = (3 + 0.15 * nb_probes, 3 + 0.2 * len(betas))
@@ -1066,12 +1089,24 @@ def dmp_heatmap(dm: DM, contrast: str | None = None,
             elif isinstance(row_legends, str):
                 row_legends = [row_legends]
             subset = sheet[row_factors]
-            row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
+            row_factors, handles, labels, colormaps_list = _convert_df_values_to_colors(subset, row_legends)
         # plot the heatmap
         plot = sns.clustermap(betas, row_colors=row_factors, figsize=figsize, **heatmap_params)
+        # reshape colorbar to be horizontal
+        x0, _, _, _ = plot.cbar_pos
+        plot.ax_cbar.set_position([x0, 0.9, plot.ax_row_dendrogram.get_position().width, 0.02])
         # add the legends if they exist
+        leg_margin = 0
         if len(handles) > 0 and len(labels) > 0:
             plt.legend(handles=handles, labels=labels, **legend_params)
+            leg_margin = -0.15
+
+        if len(colormaps_list) > 0:
+            fig = plot.fig       
+            for i, (label, sm) in enumerate(colormaps_list):
+                cbar_ax = fig.add_axes([-0.1+leg_margin, 0.9-(i+1)*0.23, 0.02, 0.2])  # [left, bottom, width, height]
+                fig.colorbar(sm, cax=cbar_ax, label=label)
+
         # save plot
         if save_path is not None:
             plot.savefig(os.path.expanduser(save_path))
@@ -1565,6 +1600,7 @@ def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_
                  'gvar': 'lightgreen', 'acen': 'yellow', 'stalk': 'pink'}
 
     links_args = {'color': 'red', 'alpha': 0.3}
+    colormaps_list = []
 
     ################## DATA PREP
 
@@ -1661,13 +1697,21 @@ def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_
                 elif isinstance(row_legends, str):
                     row_legends = [row_legends]
                 subset = sheet[row_factors]
-                row_factors, handles, labels = _convert_df_values_to_colors(subset, row_legends)
+                row_factors, handles, labels, colormaps_list = _convert_df_values_to_colors(subset, row_legends) 
             dendrogram_ratio = 0.05
             g = sns.clustermap(heatmap_data, cbar_pos=None, figsize=figsize,  col_cluster=False, row_colors=row_factors,
                             dendrogram_ratio=(dendrogram_ratio, 0), **heatmap_params)
+            # add the legends if they exist TODO recheck ca
+            leg_margin = 0
             if len(handles) > 0 and len(labels) > 0:
+                leg_margin = -0.15
                 plt.legend(handles=handles, labels=labels, handler_map={str: _LegendTitle({'fontweight': 'bold'})},
                         loc='upper left', bbox_to_anchor=(-0.1 * len(row_factors.columns), 1))
+            if len(colormaps_list) > 0:
+                fig = g.fig       
+                for i, (label, sm) in enumerate(colormaps_list):
+                    cbar_ax = fig.add_axes([-0.1+leg_margin, 0.9-(i+1)*0.23, 0.02, 0.2])  # [left, bottom, width, height]
+                    fig.colorbar(sm, cax=cbar_ax, label=label)
             shift_ratio = 1-(np.sum(height_ratios[:-1]) / np.sum(height_ratios))
             g.gs.update(top=shift_ratio, bottom=0)  # shift the heatmap to the bottom of the figure
             gs2 = gridspec.GridSpec(nb_plots - 1, 1, left=dendrogram_ratio + 0.005, bottom=shift_ratio,
