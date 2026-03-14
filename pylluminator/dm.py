@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import pyranges as pr
+import pyranges1 as pr
 
 from patsy import dmatrix
 from scipy.stats import combine_pvalues

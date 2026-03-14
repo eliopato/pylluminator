@@ -58,7 +58,7 @@ def test_dmp_mixedmodel(test_samples, caplog):
 def test_dmp_bad_sample_sheet(test_samples, caplog):
     # test missing value in factor column
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
-    test_samples.sample_sheet.loc[3, 'sample_type'] = np.NAN
+    test_samples.sample_sheet.loc[3, 'sample_type'] = np.nan
     caplog.clear()
     my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
     assert 'NA values where found in the sample_type column of the sample sheet' in caplog.text
@@ -67,7 +67,7 @@ def test_dmp_bad_sample_sheet(test_samples, caplog):
 
     # test missing value in group column
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
-    test_samples.sample_sheet.loc[2, 'sample_number'] = np.NAN
+    test_samples.sample_sheet.loc[2, 'sample_number'] = np.nan
     caplog.clear()
     my_dms = DM(test_samples, '~ sample_type', group_column='sample_number', probe_ids=probe_ids)
     assert 'The group column sample_number has NA values' in caplog.text

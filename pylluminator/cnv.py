@@ -3,11 +3,11 @@ region of the genome, and splits the genome in segments with similar CNV.
 """
 
 import pandas as pd
-import pyranges as pr
+import pyranges1 as pr
 import numpy as np
-import linear_segment
 from sklearn.linear_model import LinearRegression
 
+from pylluminator.cbs import segment as cbs_segment
 from pylluminator.samples import Samples, read_samples, from_sesame
 from pylluminator.annotations import ArrayType, Annotations, PYLLUMINA_DATA_LINK
 from pylluminator.utils import get_resource_folder, download_from_geo, download_from_link
@@ -187,10 +187,9 @@ def copy_number_segmentation(samples: Samples,
     signal_bins = joined_pr.groupby(['chromosome', 'start_bin', 'end_bin'])['cnv'].median().reset_index()
     signal_bins['map_loc'] = ((signal_bins['start_bin'] + signal_bins['end_bin']) / 2).astype(int)
 
-    # todo : improve this method (and optimize : 15sec)
-    cn_seg = linear_segment.segment(signal_bins.cnv.values.astype('double'),
-                                    labels=signal_bins.chromosome.astype(str).values,
-                                    method='cbs', shuffles=10000, p=0.0001)
+    cn_seg = cbs_segment(signal_bins.cnv.values.astype('double'),
+                         labels=signal_bins.chromosome.astype(str).values,
+                         method='cbs', shuffles=10000, p=0.0001)
 
     # merge the segmentation information with the signal info
     df_seg = pd.DataFrame(zip(cn_seg.starts, cn_seg.ends, cn_seg.labels), columns=['start', 'end', 'chromosome'])

@@ -96,51 +96,65 @@ You can install Pylluminator directly with:
 
     pip install pylluminator
 
-Or, if you want to use the GSEA functionalities, you will need to install the additional dependencies using this command:
+Or, if you want to use the GSEA functionalities, install the additional dependencies with:
 
 .. code-block:: shell
 
     pip install pylluminator[gsea]
 
+With uv (recommended)
+~~~~~~~~~~~~~~~~~~~~~
+
+`uv <https://docs.astral.sh/uv/>`_ is a fast Python package manager. If you don't have it yet, install it with:
+
+.. code-block:: shell
+
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+Then install Pylluminator into a uv-managed project:
+
+.. code-block:: shell
+
+    uv add pylluminator
+
+Or with the optional GSEA extras:
+
+.. code-block:: shell
+
+    uv add "pylluminator[gsea]"
 
 From source
 ~~~~~~~~~~~
 
-We recommend using a virtual environment with Python 3.13 or 3.12 to build pylluminator from source. Here is an example using Conda.
+We recommend using `uv <https://docs.astral.sh/uv/>`_ to build pylluminator from source. The project requires Python 3.12 or later.
 
-**Setup the virtual environment (optional)**
-
-If you don't have Conda installed yet, here are the instructions depending on your OS : `Windows <https://docs.conda.io/projects/conda/en/latest/user-guide/install/windows.html>`_ | `Linux <https://docs.conda.io/projects/conda/en/latest/user-guide/install/linux.html>`_ | `MacOS <https://docs.conda.io/projects/conda/en/latest/user-guide/install/macos.html>`_.
-After installing it, make sure you have Pip installed by running the following command in the terminal:
+**Install uv (if needed)**
 
 .. code-block:: shell
 
-    conda install anaconda::pip
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 
-Now you can create a Conda environment named "pylluminator" and activate it. You can change the name to your liking ;)
-
-.. code-block:: shell
-
-    conda create -n pylluminator python=3.13
-    conda activate pylluminator
-
-
-**Install pylluminator**
-
-You can download the latest source from github, or clone the repository with this command:
+**Clone and install**
 
 .. code-block:: shell
 
     git clone https://github.com/eliopato/pylluminator.git
+    cd pylluminator
+    uv sync
 
-Your are now ready to install the dependencies and the package :
+This creates a virtual environment and installs all dependencies automatically. To include optional extras:
 
 .. code-block:: shell
 
-    cd pylluminator
-    pip install .
+    uv sync --extra gsea
+    uv sync --extra dev
+    uv sync --extra docs
 
-Or, as mentionned above, `pip install .[gsea]` if you want to use the GSEA functionalities.
+Run scripts or tests within the project environment using ``uv run``:
+
+.. code-block:: shell
+
+    uv run pytest
 
 Usage
 -----
@@ -167,7 +181,11 @@ We welcome contributions! If you'd like to help improve the package, please foll
 3. Make your changes and test them.
 4. Submit a pull request describing your changes.
 
-The packages used for development (testing, packaging and building the documentation) can be installed with `pip install pylluminator[dev,docs]`.
+The packages used for development (testing, packaging and building the documentation) can be installed with:
+
+.. code-block:: shell
+
+    uv sync --extra dev --extra docs
 
 Bug reports / new features suggestion
 -------------------------------------

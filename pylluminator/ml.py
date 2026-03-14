@@ -78,6 +78,11 @@ def dimensionality_reduction(samples: Samples,  model='PCA', nb_probes: int | No
             return x - x.mean()
         betas = center_function(betas)
 
+    # set MDS defaults to avoid FutureWarning about changing defaults in sklearn 1.9/1.10
+    if model == 'MDS':
+        kwargs.setdefault('n_init', 4)
+        kwargs.setdefault('init', 'random')
+
     # fit the model
     fitted_model = sk_model(**kwargs)
     # betas : shape (N samples, M features/probes)
