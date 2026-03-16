@@ -87,21 +87,6 @@ Visualization examples:
 Installation
 ------------
 
-With pip
-~~~~~~~~
-
-You can install Pylluminator directly with:
-
-.. code-block:: shell
-
-    pip install pylluminator
-
-Or, if you want to use the GSEA functionalities, install the additional dependencies with:
-
-.. code-block:: shell
-
-    pip install pylluminator[gsea]
-
 With uv (recommended)
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -122,6 +107,22 @@ Or with the optional GSEA extras:
 .. code-block:: shell
 
     uv add "pylluminator[gsea]"
+    
+With pip
+~~~~~~~~
+
+You can install Pylluminator directly with:
+
+.. code-block:: shell
+
+    pip install pylluminator
+
+Or, if you want to use the GSEA functionalities, install the additional dependencies with:
+
+.. code-block:: shell
+
+    pip install pylluminator[gsea]
+
 
 From source
 ~~~~~~~~~~~
