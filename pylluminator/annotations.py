@@ -5,7 +5,7 @@ The default annotation data is read from pylluminator-data package, but you can 
 """
 from enum import Enum, unique
 import pandas as pd
-import pyranges as pr
+import pyranges1 as pr
 from importlib.resources.readers import MultiplexedPath
 import os
 from pylluminator.utils import get_resource_folder, get_logger, convert_to_path, download_from_link

@@ -37,3 +37,5 @@ eggs/
 wheels/
 dist/
 build/
+
+.cursor/
