@@ -223,8 +223,8 @@ def betas_stats(samples: Samples, sample_label: str, apply_mask=False) -> None:
     samples = samples.copy()   # we don't want changes from processing to change the samples object
 
     samples.dye_bias_correction_nl(sample_label, apply_mask)
-    samples.noob_background_correction(sample_label, apply_mask)
     samples.poobah(sample_label, apply_mask)
+    samples.noob_background_correction(sample_label, apply_mask)
     samples.calculate_betas()
     betas = samples.get_betas(sample_label, apply_mask) # get betas as a pd.Series
     if betas is None or len(betas) == 0:

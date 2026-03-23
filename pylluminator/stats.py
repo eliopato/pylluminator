@@ -26,7 +26,7 @@ def iqr(data: np.array) -> float:
     return quartile_3 - quartile_1
 
 
-def huber(values: np.array, k=1.5, tol=1e-6) -> (float, float):
+def huber(values: np.array, k=1.5, tol=1e-6) -> tuple[float, float]:
     """Perform Huber's M-estimator for robust estimation of mean and scale.
 
     :param values: Array of data points.
