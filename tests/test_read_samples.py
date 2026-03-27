@@ -109,13 +109,13 @@ def test_read_samples(data_path):
     # test type 1 out of band
     oob_probes = my_samples.oob()['PREC_500_3']
     assert len(oob_probes) == 128295
-    oob_r = oob_probes.xs('cg00001261_BC11', level='probe_id').values[0]
+    oob_r = oob_probes.xs('cg00001261_BC11', level='probe_id').to_numpy()[0]
     assert len(oob_r) == 4
     assert oob_r[0] == 305
     assert oob_r[1] == 346
     assert np.isnan(oob_r[2])
     assert np.isnan(oob_r[3])
-    oob_g = oob_probes.xs('rs1414097_BC11', level='probe_id').values[0]
+    oob_g = oob_probes.xs('rs1414097_BC11', level='probe_id').to_numpy()[0]
     assert len(oob_g) == 4
     assert np.isnan(oob_g[0])
     assert np.isnan(oob_g[1])
@@ -124,14 +124,14 @@ def test_read_samples(data_path):
 
     # out of band red
     assert len(my_samples.oob_red()) == 45685
-    oob_r = my_samples.oob_red().xs('rs1414097_BC11', level='probe_id')['PREC_500_3'].values[0]
+    oob_r = my_samples.oob_red().xs('rs1414097_BC11', level='probe_id')['PREC_500_3'].to_numpy()[0]
     assert len(oob_r) == 2
     assert oob_r[0] == 277
     assert oob_r[1] == 241
 
     # out of band green
     assert len(my_samples.oob_green()) == 82610
-    oob_g = my_samples.oob_green().xs('cg00001261_BC11', level='probe_id')['PREC_500_3'].values[0]
+    oob_g = my_samples.oob_green().xs('cg00001261_BC11', level='probe_id')['PREC_500_3'].to_numpy()[0]
     assert len(oob_g) == 2
     assert oob_g[0] == 305
     assert oob_g[1] == 346
@@ -141,13 +141,13 @@ def test_read_samples(data_path):
     # test type 1 in band
     ib_probes = my_samples.ib()['PREC_500_3']
     assert len(ib_probes) == 128295
-    ib_r = ib_probes.xs('cg00001261_BC11', level='probe_id').values[0]
+    ib_r = ib_probes.xs('cg00001261_BC11', level='probe_id').to_numpy()[0]
     assert len(ib_r) == 4
     assert np.isnan(ib_r[0])
     assert np.isnan(ib_r[1])
     assert ib_r[2] == 5396
     assert ib_r[3] == 11840
-    ib_g = ib_probes.xs('rs1414097_BC11', level='probe_id').values[0]
+    ib_g = ib_probes.xs('rs1414097_BC11', level='probe_id').to_numpy()[0]
     assert len(ib_g) == 4
     assert ib_g[0] == 636
     assert ib_g[1] == 687
@@ -155,13 +155,13 @@ def test_read_samples(data_path):
     assert np.isnan(ib_g[3])
     # in band red
     assert len(my_samples.ib_red()) == 82610
-    ib_r = my_samples.ib_red().xs('cg00001261_BC11', level='probe_id')['PREC_500_3'].values[0]
+    ib_r = my_samples.ib_red().xs('cg00001261_BC11', level='probe_id')['PREC_500_3'].to_numpy()[0]
     assert len(ib_r) == 2
     assert ib_r[0] == 5396
     assert ib_r[1] == 11840
     # in band green
     assert len(my_samples.ib_green()) == 45685
-    ib_g = my_samples.ib_green().xs('rs1414097_BC11', level='probe_id')['PREC_500_3'].values[0]
+    ib_g = my_samples.ib_green().xs('rs1414097_BC11', level='probe_id')['PREC_500_3'].to_numpy()[0]
     assert len(ib_g) == 2
     assert ib_g[0] == 636
     assert ib_g[1] == 687
@@ -170,22 +170,22 @@ def test_read_samples(data_path):
 
     # check values for a probe of each type (Type I green, type I red, type II)
     probe_tI_r = my_samples._signal_df.xs('cg00003555_BC11', level='probe_id')['PREC_500_3']
-    assert probe_tI_r[('R', 'U')].values == 7861.0
-    assert probe_tI_r[('R', 'M')].values == 209.0
-    assert probe_tI_r[('G', 'U')].values == 294.0
-    assert probe_tI_r[('G', 'M')].values == 104.0
+    assert probe_tI_r[('R', 'U')].to_numpy() == 7861.0
+    assert probe_tI_r[('R', 'M')].to_numpy() == 209.0
+    assert probe_tI_r[('G', 'U')].to_numpy() == 294.0
+    assert probe_tI_r[('G', 'M')].to_numpy() == 104.0
 
     probe_tII = my_samples._signal_df.xs('cg00003622_BC21', level='probe_id')['PREC_500_3']
-    assert probe_tII[('R', 'U')].values == 360.0
-    assert np.isnan(probe_tII[('R', 'M')].values)
-    assert np.isnan(probe_tII[('G', 'U')].values)
-    assert probe_tII[('G', 'M')].values == 636.0
+    assert probe_tII[('R', 'U')].to_numpy() == 360.0
+    assert np.isnan(probe_tII[('R', 'M')].to_numpy())
+    assert np.isnan(probe_tII[('G', 'U')].to_numpy())
+    assert probe_tII[('G', 'M')].to_numpy() == 636.0
 
     probe_tII_g = my_samples._signal_df.xs('cg00003625_TC11', level='probe_id')['PREC_500_3']
-    assert probe_tII_g[('R', 'U')].values == 445.0
-    assert probe_tII_g[('R', 'M')].values == 319.0
-    assert probe_tII_g[('G', 'U')].values == 2827.0
-    assert probe_tII_g[('G', 'M')].values == 1522.0
+    assert probe_tII_g[('R', 'U')].to_numpy() == 445.0
+    assert probe_tII_g[('R', 'M')].to_numpy() == 319.0
+    assert probe_tII_g[('G', 'U')].to_numpy() == 2827.0
+    assert probe_tII_g[('G', 'M')].to_numpy() == 1522.0
 
 def test_read_sample_wrong_input(data_path):
     assert read_samples(data_path, sample_sheet_df=pd.DataFrame(), sample_sheet_name='sample.csv') is None

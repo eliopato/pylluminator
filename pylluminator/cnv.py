@@ -124,8 +124,8 @@ def copy_number_variation(samples: Samples,
 
         LOGGER.info(f'Fitting the linear regression on normalization intensities for {name}')
 
-        X = sample_norm_intensities.values
-        y = target_intensity.values
+        X = sample_norm_intensities.to_numpy()
+        y = target_intensity.to_numpy()
         fitted_model = LinearRegression().fit(X, y)
         predicted = np.maximum(fitted_model.predict(X), 1)
         cnv_series.append(pd.Series(np.log2(target_intensity / predicted),
@@ -187,8 +187,8 @@ def copy_number_segmentation(samples: Samples,
     signal_bins = joined_pr.groupby(['chromosome', 'start_bin', 'end_bin'])['cnv'].median().reset_index()
     signal_bins['map_loc'] = ((signal_bins['start_bin'] + signal_bins['end_bin']) / 2).astype(int)
 
-    cn_seg = cbs_segment(signal_bins.cnv.values.astype('double'),
-                         labels=signal_bins.chromosome.astype(str).values,
+    cn_seg = cbs_segment(signal_bins.cnv.to_numpy().astype('double'),
+                         labels=signal_bins.chromosome.astype(str).to_numpy(),
                          method='cbs', shuffles=10000, p=0.0001)
 
     # merge the segmentation information with the signal info

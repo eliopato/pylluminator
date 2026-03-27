@@ -62,7 +62,7 @@ def test_cns_default(test_samples):
     assert segments_df is not None
     # hard to really test the values as there is randomness in the results
     chr14 = segments_df[segments_df.chromosome == '14']
-    assert chr14.values[0].tolist() == pytest.approx(['14', 19187179, 106866859, 726, -0.012314], rel=1e-4)
+    assert chr14.to_numpy()[0].tolist() == pytest.approx(['14', 19187179, 106866859, 726, -0.012314], rel=1e-4)
 
 def test_cns_control(test_samples):
     normalization_samples = ['LNCAP_500_1', 'LNCAP_500_2', 'LNCAP_500_3']
@@ -73,7 +73,7 @@ def test_cns_control(test_samples):
     assert segments_df is not None
     # hard to really test the values as there is randomness in the results
     chr3 = segments_df[segments_df.chromosome == '3']
-    assert chr3.values[0].tolist() == pytest.approx(['3', 180000, 198092780, 1320, -0.091685], rel=1e-4)
+    assert chr3.to_numpy()[0].tolist() == pytest.approx(['3', 180000, 198092780, 1320, -0.091685], rel=1e-4)
 
 def test_cns_single_control(test_samples):
     cnv_df = copy_number_variation(test_samples, sample_labels='PREC_500_3', normalization_labels='LNCAP_500_2')

@@ -387,7 +387,7 @@ class IdatDataset:
         :return: True if an overflow was detected in any value
         :rtype: bool"""
         if hasattr(self, 'probes_df'):
-            if (self.probes_df.values < 0).any():
+            if (self.probes_df.to_numpy() < 0).any():
                 return False
         return True
 

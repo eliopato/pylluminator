@@ -98,7 +98,7 @@ def _get_colors(sheet: pd.DataFrame, sample_label_name: str,
             # if one numeric column, get proportional colors
             min_val = sheet[groupby_cols[0]].min()
             max_val = sheet[groupby_cols[0]].max()
-            value = group[groupby_cols[0]].values[0]            
+            value = group[groupby_cols[0]].to_numpy()[0]            
             if min_val == max_val:
                 return cmap(0)
             return cmap((value - min_val) / (max_val - min_val))            
@@ -219,7 +219,7 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
     legend_handles = c_legend_handles + ls_legend_handles
 
     for c in betas.columns:
-        x, y = FFTKDE(kernel='gaussian', bw='silverman').fit(betas[c].values).evaluate()
+        x, y = FFTKDE(kernel='gaussian', bw='silverman').fit(betas[c].to_numpy()).evaluate()
         ls = '-' if linestyles is None else linestyles[c]
         col = None if colors is None else colors[c]
         plt.plot(x, y, label=c, color=col, linestyle=ls, alpha=alpha)
@@ -264,7 +264,7 @@ def betas_density(samples: Samples, title: None | str = None, group_column: None
 #     for design_type in ['I', 'II']:
 #         betas_to_plot = betas.loc[design_type].transpose()
 #         for index, row in betas_to_plot.iterrows():
-#             histogram_values = np.histogram(row.dropna().values, bins=n_bins, density=False)
+#             histogram_values = np.histogram(row.dropna().to_numpy(), bins=n_bins, density=False)
 #             plt.plot(histogram_values[1][:-1], histogram_values[0], label=index, linewidth=1)
 #
 #     title = title if title is not None else f'Beta values per design type on {len(betas):,} probes'
@@ -357,7 +357,7 @@ def betas_2D(samples: Samples, label_column: str | None=None, color_column: str 
     sheet = custom_sheet if custom_sheet is not None else samples.sample_sheet
     legend_handles, colors_dict = _get_colors(sheet, label_column, color_column, cmap_name=cmap_name, na_color=na_color)
     if label_column != samples.sample_label_name:
-        labels = [sheet[sheet[samples.sample_label_name] == label][label_column].values[0] for label in labels]
+        labels = [sheet[sheet[samples.sample_label_name] == label][label_column].to_numpy()[0] for label in labels]
 
     plt.style.use('ggplot')
     plt.figure(figsize=figsize)
@@ -483,7 +483,7 @@ def _pc_heatmap(samples: Samples, type:str, params: list[str] | None = None, nb_
         # the design matrix removes the NaN values
         design_matrix = dmatrix(f'~ {param}', sample_info, return_type='dataframe')
         # remove columns that contain only 0 (due to absent categories e.g)
-        design_matrix = design_matrix[[c for c in design_matrix.columns if ~(design_matrix[c].values == 0).all()]]
+        design_matrix = design_matrix[[c for c in design_matrix.columns if ~(design_matrix[c].to_numpy() == 0).all()]]
         if design_matrix.empty:
             skipped_params.append(param)
             continue
@@ -667,7 +667,7 @@ def betas_dendrogram(samples: Samples, title: None | str = None, color_column: s
 
     sheet = samples.sample_sheet[samples.sample_sheet[samples.sample_label_name].isin(betas.columns)]
 
-    linkage_matrix = linkage(betas.T.values, optimal_ordering=True, method='complete')
+    linkage_matrix = linkage(betas.T.to_numpy(), optimal_ordering=True, method='complete')
     dendrogram(linkage_matrix, labels=betas.columns, orientation='left')
 
     if color_column is not None:
@@ -820,7 +820,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
             legend_df = legend_df.sort_values('name')
             if input_df[col].dtype in ['object', 'category']:
                 handles += [col] + legend_df.color.apply(lambda x: Patch(color=x)).tolist()
-                labels += [''] + legend_df.name.values.tolist()
+                labels += [''] + legend_df.name.to_numpy().tolist()
             else:
                 # for numeric columns, create a colorbar instead of individual patches
                 sm = plt.cm.ScalarMappable(cmap=number_cmaps[(number_cmap_index-1) % len(number_cmaps)],
@@ -1526,7 +1526,7 @@ def visualize_gene(samples: Samples, gene_name: str, apply_mask: bool=True, padd
         LOGGER.error(f'This gene is associated with several chromosomes ({chromosome}).')
         return
 
-    chromosome = str(chromosome.values[0])
+    chromosome = str(chromosome.to_numpy()[0])
     
     visualize_chromosome_region(samples, chromosome, start_pos, end_pos, apply_mask=apply_mask, keep_na=keep_na,
                                 protein_coding_only=protein_coding_only, custom_sheet=custom_sheet, figsize=figsize,
@@ -2107,7 +2107,7 @@ def analyze_replicates(samples: Samples, sample_id_column: str, replicate_names:
     beta_df = samples.get_betas()
     beta_std_df_list = {}
     for name, group in sheet.groupby(sample_id_column):
-        replicate_names = group[samples.sample_label_name].values.tolist()
+        replicate_names = group[samples.sample_label_name].to_numpy().tolist()
         beta_std_df_list[name] = beta_df[replicate_names].std(axis=1)
     beta_std_df = pd.concat(beta_std_df_list, axis=1)
 

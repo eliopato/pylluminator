@@ -117,7 +117,7 @@ def get_column_as_flat_array(df: pd.DataFrame, column: str | list, remove_na: bo
 
      :return: the values as a flat list
      :rtype: list"""
-    values = df[[column]].values
+    values = df[[column]].to_numpy(copy=True)
     if remove_na:
         return values[~np.isnan(values)]
     return values.flatten()

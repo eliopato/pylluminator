@@ -5,15 +5,15 @@ import pandas as pd
 def test_calculate_betas(test_samples):
     test_samples.calculate_betas(include_out_of_band=False)
     betas = test_samples.get_betas()['PREC_500_3']
-    assert betas.xs('cg00002033_TC12', level="probe_id").values == 0.04825291  # Type I green
-    assert betas.xs('rs6991394_BC11', level="probe_id").values == 0.50999004  # Type I red
-    assert betas.xs('rs9363764_BC21', level="probe_id").values == 0.373386 # Type II
+    assert betas.xs('cg00002033_TC12', level="probe_id").to_numpy() == 0.04825291  # Type I green
+    assert betas.xs('rs6991394_BC11', level="probe_id").to_numpy() == 0.50999004  # Type I red
+    assert betas.xs('rs9363764_BC21', level="probe_id").to_numpy() == 0.373386 # Type II
 
     test_samples.calculate_betas(include_out_of_band=True)
     betas = test_samples.get_betas()['PREC_500_3']
-    assert betas.xs('cg00002033_TC12', level="probe_id").values == 0.07827754  # Type I green
-    assert betas.xs('rs6991394_BC11', level="probe_id").values ==  0.51002073  # Type I red
-    assert betas.xs('rs9363764_BC21', level="probe_id").values == 0.373386 # Type II
+    assert betas.xs('cg00002033_TC12', level="probe_id").to_numpy() == 0.07827754  # Type I green
+    assert betas.xs('rs6991394_BC11', level="probe_id").to_numpy() ==  0.51002073  # Type I red
+    assert betas.xs('rs9363764_BC21', level="probe_id").to_numpy() == 0.373386 # Type II
 
 def test_betas_options(test_samples):
     # test sample_label and custom_sheet options

@@ -120,15 +120,15 @@ def intensity_stats(samples: Samples, sample_label: str, apply_mask=False) -> No
     _print_value('Mean out-of-band type I Red signal intensity ', samples.oob_red(apply_mask)[sample_label].mean(axis=None, skipna=True))
     _print_value('Mean out-of-band type I Green signal intensity ', samples.oob_green(apply_mask)[sample_label].mean(axis=None, skipna=True))
 
-    type_i_m_na = pd.isna(samples.meth(apply_mask).loc['I', sample_label]).values.sum()
-    type_ii_m_na = pd.isna(samples.meth(apply_mask).loc['II', sample_label]['G']).values.sum()
+    type_i_m_na = pd.isna(samples.meth(apply_mask).loc['I', sample_label]).to_numpy().sum()
+    type_ii_m_na = pd.isna(samples.meth(apply_mask).loc['II', sample_label]['G']).to_numpy().sum()
     _print_value('Number of NAs in Methylated signal', type_i_m_na + type_ii_m_na)
-    type_i_u_na = pd.isna(samples.unmeth(apply_mask).loc['I', sample_label]).values.sum()
-    type_ii_u_na = pd.isna(samples.unmeth(apply_mask).loc['II', sample_label]['R']).values.sum()
+    type_i_u_na = pd.isna(samples.unmeth(apply_mask).loc['I', sample_label]).to_numpy().sum()
+    type_ii_u_na = pd.isna(samples.unmeth(apply_mask).loc['II', sample_label]['R']).to_numpy().sum()
     _print_value('Number of NAs in Unmethylated signal', type_ii_u_na + type_i_u_na)
-    _print_value('Number of NAs in Type 1 Red signal', samples.type1_red(apply_mask)[sample_label].isna().values.sum())
-    _print_value('Number of NAs in Type 1 Green signal', samples.type1_green(apply_mask)[sample_label].isna().values.sum())
-    _print_value('Number of NAs in Type 2 signal', samples.type2(apply_mask)[sample_label].isna().values.sum())
+    _print_value('Number of NAs in Type 1 Red signal', samples.type1_red(apply_mask)[sample_label].isna().to_numpy().sum())
+    _print_value('Number of NAs in Type 1 Green signal', samples.type1_green(apply_mask)[sample_label].isna().to_numpy().sum())
+    _print_value('Number of NAs in Type 2 signal', samples.type2(apply_mask)[sample_label].isna().to_numpy().sum())
     print('-- note : these NA values don\'t count probes that don\'t appear in .idat files; these are only counted in '
           'the `Detection - missing raw intensity` QC line')
 

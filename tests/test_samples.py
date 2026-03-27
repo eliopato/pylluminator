@@ -83,7 +83,7 @@ def test_drop_samples(test_samples):
     assert 'PREC_500_3' not in test_samples._signal_df.columns
     assert 'PREC_500_3' not in test_samples._betas.columns
     assert len(test_samples.masks.get_mask_names('PREC_500_3')) == 0
-    assert 'PREC_500_3' not in test_samples.sample_sheet[test_samples.sample_label_name].values
+    assert 'PREC_500_3' not in test_samples.sample_sheet[test_samples.sample_label_name].to_numpy()
     assert 'PREC_500_3' not in test_samples.sample_labels
     test_samples.drop_samples(['PREC_500_3', 'unexistent'])
 
@@ -94,8 +94,8 @@ def test_subset_samples(test_samples):
     assert 'LNCAP_500_3' not in test_samples._signal_df.columns
     assert 'LNCAP_500_3' not in test_samples._betas.columns
     assert len(test_samples.masks.get_mask_names('PREC_500_3')) > 0
-    assert 'PREC_500_3' in test_samples.sample_sheet[test_samples.sample_label_name].values
+    assert 'PREC_500_3' in test_samples.sample_sheet[test_samples.sample_label_name].to_numpy()
     assert 'PREC_500_3' in test_samples.sample_labels
     assert 'LNCAP_500_3' not in test_samples.sample_labels
-    assert 'LNCAP_500_3' not in test_samples.sample_sheet[test_samples.sample_label_name].values
+    assert 'LNCAP_500_3' not in test_samples.sample_sheet[test_samples.sample_label_name].to_numpy()
     test_samples.subset(['PREC_500_3', 'unexistent'])

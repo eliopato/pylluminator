@@ -84,7 +84,7 @@ class Samples:
         if level_name_ini not in self.sample_sheet.columns:
             LOGGER.warning(f'Signal dataframe level {level_name_ini} not found in sample sheet columns')
             return list(samples_signal_df)
-        samples_in_sheet = set(self.sample_sheet[level_name_ini].values.tolist())
+        samples_in_sheet = set(self.sample_sheet[level_name_ini].to_numpy().tolist())
         return list(samples_in_sheet & samples_signal_df)
 
     @property
@@ -555,10 +555,10 @@ class Samples:
 
         # index column 'channel' corresponds by default to the manifest channel. But it could change by calling
         # 'infer_type_i_channel()' e.g., so we need to keep track of the manifest_channel in another column
-        # self._signal_df['manifest_channel'] = self._signal_df.index.get_level_values('channel').values
+        # self._signal_df['manifest_channel'] = self._signal_df.index.get_level_values('channel').to_numpy()
 
         # make mask_info a column, not an index - and set NaN values to empty string to allow string search on it
-        sample_df['mask_info'] = sample_df.index.get_level_values('mask_info').fillna('').values
+        sample_df['mask_info'] = sample_df.index.get_level_values('mask_info').fillna('').to_numpy()
         sample_df = sample_df.reset_index(level='mask_info', drop=True)
         sample_df = sample_df.sort_index(axis=1)
         sample_df.columns = sample_df.columns.rename(label_column, level=0)
@@ -634,7 +634,7 @@ class Samples:
         beta_df_list = {}
         for new_name, group in sheet.groupby(by):
             # # update masks
-            old_names = group[level_name_ini].values.tolist()
+            old_names = group[level_name_ini].to_numpy().tolist()
             # for mask_name in self.masks.get_mask_names(sample_label=old_names):
             #     mask = self.masks.get_mask(mask_name=mask_name, sample_label=old_names)
             #     self.masks.remove_masks(mask_name=mask_name, sample_label=old_names)
@@ -970,7 +970,7 @@ class Samples:
         type1_df = self._signal_df.loc[non_na_t1_indexes, sample_labels].droplevel('methylation_state', axis=1)
 
         # get the channel (provided by the index) where the signal is at its max for each probe
-        type1_df['inferred_channel'] = type1_df.droplevel(0, axis=1).idxmax(axis=1, numeric_only=True).values
+        type1_df['inferred_channel'] = type1_df.droplevel(0, axis=1).idxmax(axis=1, numeric_only=True).to_numpy()
         type1_df = type1_df.sort_index(axis=1)
 
         # handle failed probes
@@ -997,7 +997,7 @@ class Samples:
         # set the inferred channel as the new 'channel' index
         if not summary_only:
             # propagate the inferred channel to the signal dataframe
-            self._signal_df.loc[non_na_t1_indexes, 'inferred_channel'] = type1_df['inferred_channel'].values
+            self._signal_df.loc[non_na_t1_indexes, 'inferred_channel'] = type1_df['inferred_channel'].to_numpy()
             self._signal_df = set_channel_index_as(self._signal_df, 'inferred_channel', drop=True)  # make the inferred channel the new channel index
             self._signal_df = self._signal_df.sort_index(axis=1)
 
@@ -1173,7 +1173,7 @@ class Samples:
                 return None
 
             # keep only samples that are both in sample sheet and beta columns
-            filtered_samples = [col for col in custom_sheet[self.sample_label_name].values if col in betas.columns]
+            filtered_samples = [col for col in custom_sheet[self.sample_label_name].to_numpy() if col in betas.columns]
             if len(filtered_samples) == 0:
                 LOGGER.error('No samples found')
                 return None
@@ -1207,7 +1207,7 @@ class Samples:
         :rtype: pd.DataFrame
         """
         epsilon = 1e-8  # add a small epsilon to avoid log2(0) or division by zero
-        x = beta_df.values + epsilon  # convert to NumPy array for speed
+        x = beta_df.to_numpy() + epsilon  # convert to NumPy array for speed
         m_values = np.log2((x) / (1 - x))
         return pd.DataFrame(m_values, index=beta_df.index, columns=beta_df.columns)
 
@@ -1220,7 +1220,7 @@ class Samples:
         :return: beta values in [0, 1]
         :rtype: pd.DataFrame
         """
-        m = m_df.values if isinstance(m_df, pd.DataFrame) else m_df
+        m = m_df.to_numpy() if isinstance(m_df, pd.DataFrame) else m_df
         beta = 1 / (1 + 2**(-m))
         if isinstance(m_df, pd.DataFrame):
             return pd.DataFrame(beta, index=m_df.index, columns=m_df.columns)
@@ -1423,8 +1423,8 @@ class Samples:
                         data[below_range] = data[below_range] * (min_midpoint_intensity / min_intensity)
                     return data
 
-                self._signal_df.loc[:, [(sample_label, channel, 'M')]] = fit_function(self._signal_df[[(sample_label, channel, 'M')]].values)
-                self._signal_df.loc[:, [(sample_label, channel, 'U')]] = fit_function(self._signal_df[[(sample_label, channel, 'U')]].values)
+                self._signal_df.loc[:, [(sample_label, channel, 'M')]] = fit_function(self._signal_df[[(sample_label, channel, 'M')]].to_numpy(copy=True))
+                self._signal_df.loc[:, [(sample_label, channel, 'U')]] = fit_function(self._signal_df[[(sample_label, channel, 'U')]].to_numpy(copy=True))
 
     def noob_background_correction(self, sample_labels: str | list[str] | None = None, apply_mask: bool = True, use_negative_controls=True, offset=15) -> None:
         """Subtract the background for a sample.
@@ -1462,13 +1462,13 @@ class Samples:
             self.masks.reset_masks()
         self.mask_probes_by_names(self.annotation.non_unique_mask_names)
 
-        # Background = out-of-band type 1 probes + (optionally) negative controls
+        # Background = out-of-band type I probes + (optionally) negative controls
         background_df = self.oob(True)
         if use_negative_controls:
             neg_controls = self.get_negative_controls(True)
             background_df = pd.concat([background_df, neg_controls])
 
-        # Foreground = in-band type I probes + type 2 probes
+        # Foreground = in-band type I probes + type II probes
         foreground_df = pd.concat([self.ib(True), self.type2(True)])
 
         # reset apply_mask
@@ -1495,8 +1495,8 @@ class Samples:
 
                 mu, sigma, alpha = background_correction_noob_fit(fg[channel], bg[channel])
                 sample_df = self._signal_df[sample_label, channel]
-                meth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, sample_df['M'].values, offset)
-                unmeth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, sample_df['U'].values, offset)
+                meth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, sample_df['M'].to_numpy(), offset)
+                unmeth_corrected_signal = norm_exp_convolution(mu, sigma, alpha, sample_df['U'].to_numpy(), offset)
 
                 self._signal_df.loc[:, [[sample_label, channel, 'M']]] = meth_corrected_signal
                 self._signal_df.loc[:, [[sample_label, channel, 'U']]] = unmeth_corrected_signal
@@ -1559,7 +1559,7 @@ class Samples:
 
         self.mask_non_unique_probes()
 
-        # Background = out-of-band type 1 probes + (optionally) negative controls
+        # Background = out-of-band type I probes + (optionally) negative controls
         masked_sigdf = self.get_signal_df(True)
         background_df = self.oob(sigdf=masked_sigdf)
         if use_negative_controls:
@@ -1656,7 +1656,7 @@ class Samples:
                 LOGGER.error(f'Batch column {batch} not found in sample sheet')
                 self.reset_betas()
                 return
-            batch = sheet[batch].values
+            batch = sheet[batch].to_numpy()
 
         if np.any(pd.isnull(batch)) or np.any(batch == ''):
             LOGGER.error('Batch column contains NaN or empty values')
