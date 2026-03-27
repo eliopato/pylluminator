@@ -20,7 +20,7 @@ Description of the columns of the `probe_infos.csv` file. If you want to use a c
 
 ``type`` : probe type, Infinium-I or Infinium-II
 
-``probe_type`` : ``cg`` (CpG), ``ch`` (CpH), ``mu`` (multi-unique), ``rp`` (repetitive element), ``rs`` (SNP probes), ``ctl`` (control), ``nb`` (somatic mutations found in cancer)
+``probe_type`` : ``cg`` (CpG), ``ch`` (CpH), ``mu`` (multi-unique), ``rp`` (repetitive element), ``rs`` (SNP probes), ``ctl`` (control), ``nb`` (somatic mutations found in cancer), ``nv`` (nucleotide variant)
 
 ``channel``: color channel, green (methylated) or red (unmethylated)
 

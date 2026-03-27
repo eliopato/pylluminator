@@ -804,7 +804,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
 
     for col in input_df.columns:
         # get colors
-        if input_df[col].dtype in ['object', 'category']:
+        if input_df[col].dtype in ['object', 'category', 'str']:
             # convert string category codes to easily get a color index for each string
             color_df[col] = pd.Categorical(input_df[col]).codes
             color_df.loc[color_df[col] == -1, col] = None
@@ -818,7 +818,7 @@ def _convert_df_values_to_colors(input_df: pd.DataFrame, legend_names: list[str]
             legend_df = pd.concat([color_df[col], input_df[col]], axis=1).drop_duplicates()
             legend_df.columns = ['color', 'name']
             legend_df = legend_df.sort_values('name')
-            if input_df[col].dtype in ['object', 'category']:
+            if input_df[col].dtype in ['object', 'category', 'str']:
                 handles += [col] + legend_df.color.apply(lambda x: Patch(color=x)).tolist()
                 labels += [''] + legend_df.name.to_numpy().tolist()
             else:
@@ -2042,7 +2042,7 @@ def plot_mean_beta_diff_per_group(samples: Samples, group_column: str, figsize=(
     # add CGI annotations to betas
     cgis = samples.annotation.probe_infos.set_index('probe_id')[annotation_column].dropna()
     cgi_betas = set_level_as_index(diff_beta_btw_group, 'probe_id', drop_others=True).join(cgis, how='inner')
-    if cgi_betas[annotation_column].dtype == 'object':
+    if cgi_betas[annotation_column].dtype in ['object', 'str']:
         cgi_betas[annotation_column] = cgi_betas[annotation_column].apply(lambda x: x.split(';'))
     cgi_betas = cgi_betas.explode(annotation_column)
 

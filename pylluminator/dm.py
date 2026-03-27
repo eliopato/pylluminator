@@ -460,7 +460,7 @@ class DM:
         LOGGER.info('add average beta delta between groups')
 
         # get column names used in the formula that are categories or string
-        cat_column_names = [c for c in factor_columns if sample_info.dtypes[c] in ['category', 'object']]
+        cat_column_names = [c for c in factor_columns if sample_info.dtypes[c] in ['category', 'object', 'str']]
         for col in cat_column_names:
             ref_factor = None
             for name, group in sample_info.groupby(col, observed=True):

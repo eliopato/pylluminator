@@ -548,7 +548,7 @@ def merge_series_values(items: pd.Series, how:str='any'):
     
     item_type = items.dtype
     
-    if item_type in ['object', 'category']: 
+    if item_type in ['object', 'category', 'str']: 
         return ';'.join(items[items != ''].dropna().astype('str').unique())
 
     if len(items) == 1:        

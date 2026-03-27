@@ -128,7 +128,7 @@ def test_dye_bias_nonlinear_all(test_samples):
     assert test_samples.get_probes('rs9363764_BC21')['PREC_500_3'].to_numpy()[0, [0, 3]] == pytest.approx(expected_values)
 
 def test_dye_bias_correction_nonlinear_distortion(test_samples):
-    test_samples._signal_df.loc['I', 'G'] = 0
+    test_samples._signal_df.loc[('I', 'G'), test_samples._signal_df.columns[:-1]] = 0
     test_samples.dye_bias_correction_nl()
 
 def test_noob(test_samples):

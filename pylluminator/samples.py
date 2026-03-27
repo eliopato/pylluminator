@@ -1676,7 +1676,7 @@ class Samples:
             for cov in covariates:
                 if cov not in sheet.columns:
                     LOGGER.warning(f'Covariate {cov} not found in sample sheet. Ignoring it.')
-                elif sheet[cov].dtype not in ['object', 'category']:
+                elif sheet[cov].dtype not in ['object', 'category', 'str']:
                     LOGGER.warning(f'Covariate {cov} must be a string or a category. Ignoring it.')
                 else:
                     checked_covariates.append(cov)
