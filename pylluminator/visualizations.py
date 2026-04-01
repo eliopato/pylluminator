@@ -1854,7 +1854,7 @@ def visualize_chromosome_region(samples: Samples, chromosome_id: int|str, start_
 
 def plot_betas_distribution(samples: Samples, group_column: str| None=None, what: list[str] | str = 'hyper',
                             annotation_column:str='cgi', orientation: str|None='h', custom_sheet:pd.DataFrame|None=None,
-                            hypo_threshold:float=0.4, hyper_threshold:float=0.6,
+                            hypo_threshold:float=0.4, hyper_threshold:float=0.6, probe_ids:list[str]|None=None,
                             save_path: None | str=None) -> None:
     """
     Plot the distribution of hyper (beta > 0.6) / hypo (beta < 0.4) methylated probes in the samples.
@@ -1883,13 +1883,16 @@ def plot_betas_distribution(samples: Samples, group_column: str| None=None, what
     :param hyper_threshold: min beta value to consider a probe hyper methylated. Default: 0.6
     :type hyper_threshold: float
 
+    :param probe_ids: list of probes to select. Default None
+    :type probe_ids: list[str] | None
+    
     :param save_path: if set, save the graph to save_path. Default: None
     :type save_path: str | None
     
     :return: None
     """
     # add CGI annotations to betas
-    betas = samples.get_betas(custom_sheet=custom_sheet)
+    betas = samples.get_betas(custom_sheet=custom_sheet, probe_ids=probe_ids)
     if betas is None or len(betas) == 0:
         return None
 
