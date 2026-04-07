@@ -137,7 +137,8 @@ def copy_number_variation(samples: Samples,
 
 def copy_number_segmentation(samples: Samples,
                              cnv_df: pd.DataFrame,
-                             cnv_column_name: str) -> tuple[pr.PyRanges, pd.DataFrame, pd.DataFrame]:
+                             cnv_column_name: str,
+                             tile_width: int = 50000) -> tuple[pr.PyRanges, pd.DataFrame, pd.DataFrame]:
     """With the output dataframe of copy_number_variation, group the genome in segments with similar CNV using the
     Circular Binary Segmentation (CBS) algorithm.
 
@@ -149,6 +150,9 @@ def copy_number_segmentation(samples: Samples,
 
     :param cnv_column_name: name of the CNV column in the dataframe (it usually corresponds to the sample name used for CNV calculation).
     :type cnv_column_name: str
+
+    :param tile_width: the genome is split into adjacent non-overlapping tiles of a given size, defined by tile_width. Default: 50 000.
+    :type tile_width: int
 
     :return: a tuple with: the bins coordinates, the bins signal, the segments
     :rtype: tuple[pyranges.PyRanges, pandas.DataFrame, pandas.DataFrame]
@@ -164,7 +168,7 @@ def copy_number_segmentation(samples: Samples,
     genome_info = samples.annotation.genome_info
 
     # make tiles
-    tile_width = 50000
+   
     tiles = pr.tile_genome(genome_info.seq_length, tile_width).reset_index(drop=True).sort_ranges()
     diff_tiles = tiles.subtract_overlaps(genome_info.gap_info).reset_index(drop=True)
 
