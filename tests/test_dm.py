@@ -177,13 +177,22 @@ def test_get_top(test_samples, caplog):
     assert 'More than one contrast available'
     assert top_10_dmrs is None
 
-def test_select_dmp(test_samples):
+def test_select_dmp(test_samples, caplog):
     my_dms = DM(test_samples, '~ sample_type')
     selected_dmps = my_dms.select_dmps()
     assert len(selected_dmps) == 937688
+
+    caplog.clear()
+    selected_dmps = my_dms.select_dmps(p_value_th=0.05, p_value_th_col='unknown')
+    assert 'Column unknown not found in DMP columns. Available columns:'
 
     sort_col = 'sample_type[T.PREC]_p_value_adjusted'
     selected_dmps = my_dms.select_dmps(p_value_th=0.01, effect_size_th=0.2, sort_by=sort_col, ascending=True)
     assert len(selected_dmps) == 307093
     assert selected_dmps.iloc[0].name == 'cg17049328_TC21'
     assert selected_dmps.iloc[0][sort_col] == min(selected_dmps[sort_col])
+
+def test_dmp_mvalues(test_samples):
+    my_dms = DM(test_samples, '~ sample_type', use_m_values=True)
+    selected_dmps = my_dms.select_dmps()
+    assert len(selected_dmps) == 937688

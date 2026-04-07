@@ -94,7 +94,7 @@ class DM:
 
     def __init__(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
-                 probe_ids: None | list[str] = None, group_column: str | None = None):
+                 probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = False):
         """Initialize the object by calculating the Differentially Methylated Probes (DMPs). It fits an Ordinary Least 
         Square model (OLS) for each probe, following the given formula. The predictors used in the formula are column names of the sample sheet.
         If a group column name is given, use a Mixed Model to account for random effects. The Benjamini-Hochberg procedure 
@@ -124,6 +124,9 @@ class DM:
             a Mixed Model will be used to account for replicates instead of an Ordinary Least Square. Default: None
         :type group_column: str | None
 
+        :param use_m_values: if True, fits the linear regression on M-values instead of beta values, so that fitted values are
+        not constrained in the [0:1] range. Default: False
+        :type use_m_values: bool
         :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
         :rtype: pandas.DataFrame, list[str]
         """
@@ -140,7 +143,7 @@ class DM:
         self.dist_cutoff = None
         self.segments = None
 
-        self.compute_dmp(samples, formula, reference_value, custom_sheet, drop_na, apply_mask, probe_ids, group_column)
+        self.compute_dmp(samples, formula, reference_value, custom_sheet, drop_na, apply_mask, probe_ids, group_column, use_m_values)
 
     def _get_default_contrast(self) -> str | None:
         if self.contrasts is None:
@@ -329,7 +332,7 @@ class DM:
 
     def compute_dmp(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
-                 probe_ids: None | list[str] = None, group_column: str | None = None):
+                 probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = False):
         """Find Differentially Methylated Probes (DMPs) by fitting an Ordinary Least Square model (OLS) for each probe,
         following the given formula. The predictors used in the formula are column names of the sample sheet. 
         If a group column name is given, use a Linear Mixed Model (LMM) to account for random effects. The Benjamini-Hochberg procedure
@@ -357,6 +360,9 @@ class DM:
         :param group_column: name of the column of the sample sheet that holds replicates information. If provided,
             a Mixed Model will be used to account for replicates instead of an Ordinary Least Square. Default: None
         :type group_column: str | None
+        :param use_m_values: if True, fits the linear regression on M-values instead of beta values, so that fitted values are
+        not constrained in the [0:1] range. Default: False
+        :type use_m_values: bool
 
         :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
         :rtype: pandas.DataFrame, list[str]
@@ -390,7 +396,10 @@ class DM:
                 LOGGER.warning(f'NA values where found in the {c} column of the sample sheet. The corresponding samples will be dropped')
                 custom_sheet = custom_sheet[~pd.isna(custom_sheet[c])].copy()
 
-        betas = samples.get_betas(drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
+        if use_m_values:
+            betas = samples.get_m_values(drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
+        else:
+            betas = samples.get_betas(drop_na=drop_na, apply_mask=apply_mask, custom_sheet=custom_sheet)
 
         if betas is None:
             LOGGER.error('No probes left')
