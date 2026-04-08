@@ -1,10 +1,11 @@
 [build-system]
-requires = ["uv_build"]
+requires = ["uv_build<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = ""
-
+wheel-exclude = ["data"]
+source-exclude=["data"]
 
 [project]
 name = "pylluminator"
@@ -15,6 +16,7 @@ requires-python = ">= 3.12"
 description = 'Tool to preprocess, analyze and visualize DNA methylation data from Illumina micro-arrays'
 readme = 'README.rst'
 license = "MIT"
+license-files = ['LICENSE']
 keywords = ["dna-methylation", "epigenetics", "illumina", "bioinformatics", "microarray", "methylation", "DMR"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
