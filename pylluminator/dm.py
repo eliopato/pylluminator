@@ -123,9 +123,8 @@ class DM:
         :param group_column: name of the column of the sample sheet that holds replicates information. If provided,
             a Mixed Model will be used to account for replicates instead of an Ordinary Least Square. Default: None
         :type group_column: str | None
-
         :param use_m_values: if True, fits the linear regression on M-values instead of beta values, so that fitted values are
-        not constrained in the [0:1] range. Default: False
+            not constrained in the [0:1] range. Default: False
         :type use_m_values: bool
         :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
         :rtype: pandas.DataFrame, list[str]
@@ -361,9 +360,8 @@ class DM:
             a Mixed Model will be used to account for replicates instead of an Ordinary Least Square. Default: None
         :type group_column: str | None
         :param use_m_values: if True, fits the linear regression on M-values instead of beta values, so that fitted values are
-        not constrained in the [0:1] range. Default: False
+            not constrained in the [0:1] range. Default: False
         :type use_m_values: bool
-
         :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
         :rtype: pandas.DataFrame, list[str]
         """
