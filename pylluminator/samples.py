@@ -696,6 +696,12 @@ class Samples:
         self.annotation.genomic_ranges.index = self.annotation.genomic_ranges.index.map(remove_probe_suffix)
         self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
+    def lift_over_probe_annotations(self, target_platform: ArrayType):
+        pass
+
+    def impute_betas(self, platform: ArrayType, celltype: str | None, sd_max = 999):
+        pass
+
     def drop_samples(self, sample_labels: str | list[str]) -> None:
         """Remove some samples. Delete the signal information, beta values, sample sheet rows and masks. Ignores
         non-existent sample names
