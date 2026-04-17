@@ -433,7 +433,7 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
     :param filename: specify the expected filename to check if the file already exists before downloaded. Default = None = last part of the dl_link url (after the last slash)
     :type filename: str | None
 
-    :param decompress: set to True to decompress the output and delete the compressed file (works with .zip and .tar). Default: False
+    :param decompress: set to True to decompress the output (works with .zip and .tar). Default: False
     :type decompress: bool
 
     :param delete_archive: set to True to delete the archive after decompressing it. Default: False
