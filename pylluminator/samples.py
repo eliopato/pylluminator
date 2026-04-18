@@ -13,13 +13,13 @@ import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
 from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_dataframe_by, get_chromosome_number
-from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path, merge_alt_chromosomes
+from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path, merge_alt_chromosomes, get_resource_folder, download_from_link
 from pylluminator.read_idat import IdatDataset
-from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion
+from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion, PYLLUMINA_DATA_LINK
 from pylluminator.mask import MaskCollection, Mask
 
 LOGGER = get_logger()
-
+SUPPORTED_IMPUTATION_PLATFORMS = [ArrayType.HUMAN_450K, ArrayType.HUMAN_EPIC, ArrayType.MAMMAL_40]
 class Samples:
     """
      Samples objects hold sample methylation signal in a dataframe, as well as annotation information, sample sheet data and probes masks.
@@ -696,11 +696,40 @@ class Samples:
         self.annotation.genomic_ranges.index = self.annotation.genomic_ranges.index.map(remove_probe_suffix)
         self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
-    def lift_over_probe_annotations(self, target_platform: ArrayType):
+    def lift_over_probe_annotations(self, target_platform: ArrayType, impute: bool = False):
         pass
 
-    def impute_betas(self, platform: ArrayType, celltype: str | None, sd_max = 999):
-        pass
+    def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str = "Blood", sd_max = 999):
+        # We only have imputation data for HM450, EPIC and Mammal40.
+        # If betas are not given and the platform is not supported,
+        # we return immediately.
+        if platform not in SUPPORTED_IMPUTATION_PLATFORMS and default_imputation is None:
+            LOGGER.warning(f"Platform {platform} is not supported for beta imputation. Supported platforms are {SUPPORTED_IMPUTATION_PLATFORMS}")
+            return
+        
+        imputation_filename = f'{platform}_imputation_defaults.csv'
+        output_directory = convert_to_path(get_resource_folder('imputations'))
+        imputation_path = output_directory.joinpath(imputation_filename)
+
+        # If we never downloaded these datas, do it only once
+        if not imputation_path.exists():
+            filename = imputation_filename + '.zip'
+            filepath = convert_to_path(output_directory).joinpath(filename)
+            
+            if not filepath.exists():
+                dl_result = download_from_link(PYLLUMINA_DATA_LINK + "/imputations/" + filename, output_directory)
+                if dl_result == -1:
+                    LOGGER.error(f"Failed to download {filename} from {PYLLUMINA_DATA_LINK}/imputations/")
+
+        imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col="Probe_ID")
+        d2q = imputation_df.loc[self._betas.index]
+
+        index_to_impute = self._betas.isna().any(axis=1)
+        median = imputation_df.loc[f"{celltype}.median",d2q[index_to_impute]]
+        sd = imputation_df.loc[f"{celltype}.sd",d2q[index_to_impute]]
+        median[sd > sd_max] = np.nan
+        self._betas[index_to_impute] = median
+
 
     def drop_samples(self, sample_labels: str | list[str]) -> None:
         """Remove some samples. Delete the signal information, beta values, sample sheet rows and masks. Ignores
