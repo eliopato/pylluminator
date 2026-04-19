@@ -13,7 +13,7 @@ import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
 from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_dataframe_by, get_chromosome_number
-from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path, merge_alt_chromosomes, get_resource_folder, download_from_link
+from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path, merge_alt_chromosomes, get_resource_folder, get_or_download_file
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion, PYLLUMINA_DATA_LINK
 from pylluminator.mask import MaskCollection, Mask
@@ -697,7 +697,16 @@ class Samples:
         self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
     def lift_over_probe_annotations(self, target_platform: ArrayType, impute: bool = False):
-        pass
+        if impute:
+            self.impute_betas(target_platform)
+
+        source_id = self.annotation.probe_infos["probe_id"]
+
+        target_probes_file = get_or_download_file(PYLLUMINA_DATA_LINK, get_resource_folder("address"), f"{target_platform}_address.csv")
+        target_probes = pd.read_csv(str(target_probes_file))
+        platforms_1 = ("EPIC", "HM450", "HM27")
+        platforms_2 = ("EPICv2", "MSA")
+        
 
     def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str = "Blood", sd_max = 999):
         # We only have imputation data for HM450, EPIC and Mammal40.
@@ -708,19 +717,7 @@ class Samples:
             return
         
         imputation_filename = f'{platform}_imputation_defaults.csv'
-        output_directory = convert_to_path(get_resource_folder('imputations'))
-        imputation_path = output_directory.joinpath(imputation_filename)
-
-        # If we never downloaded these datas, do it only once
-        if not imputation_path.exists():
-            filename = imputation_filename + '.zip'
-            filepath = convert_to_path(output_directory).joinpath(filename)
-            
-            if not filepath.exists():
-                dl_result = download_from_link(PYLLUMINA_DATA_LINK + "/imputations/" + filename, output_directory)
-                if dl_result == -1:
-                    LOGGER.error(f"Failed to download {filename} from {PYLLUMINA_DATA_LINK}/imputations/")
-
+        imputation_path = get_or_download_file(PYLLUMINA_DATA_LINK, get_resource_folder("imputations"), imputation_filename)
         imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col="Probe_ID")
         d2q = imputation_df.loc[self._betas.index]
 
