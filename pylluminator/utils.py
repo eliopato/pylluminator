@@ -478,7 +478,7 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
                 
     return 1
 
-def get_or_download_file(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike):
+def get_or_download_file(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str) -> Path:
     output_directory = convert_to_path(output_folder)
     filepath = output_directory.joinpath(filename)
 
@@ -488,9 +488,9 @@ def get_or_download_file(dl_link: str, output_folder: str | MultiplexedPath | os
         filepath = convert_to_path(output_directory).joinpath(filename)
         
         if not filepath.exists():
-            dl_result = download_from_link(dl_link + "/imputations/" + filename, output_directory)
+            dl_result = download_from_link(dl_link + "/" + filename, output_directory)
             if dl_result == -1:
-                LOGGER.error(f"Failed to download {filename} from {dl_link}/imputations/")
+                LOGGER.error(f"Failed to download {filename} from {dl_link}")
     return filepath
 
 def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFrame:

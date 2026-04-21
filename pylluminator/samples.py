@@ -19,7 +19,7 @@ from pylluminator.annotations import Annotations, Channel, ArrayType, detect_arr
 from pylluminator.mask import MaskCollection, Mask
 
 LOGGER = get_logger()
-SUPPORTED_IMPUTATION_PLATFORMS = [ArrayType.HUMAN_450K, ArrayType.HUMAN_EPIC, ArrayType.MAMMAL_40]
+SUPPORTED_IMPUTATION_PLATFORMS = [ArrayType.HUMAN_450K, ArrayType.HUMAN_EPIC]
 class Samples:
     """
      Samples objects hold sample methylation signal in a dataframe, as well as annotation information, sample sheet data and probes masks.
@@ -696,17 +696,62 @@ class Samples:
         self.annotation.genomic_ranges.index = self.annotation.genomic_ranges.index.map(remove_probe_suffix)
         self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
-    def lift_over_probe_annotations(self, target_platform: ArrayType, impute: bool = False):
-        if impute:
-            self.impute_betas(target_platform)
-
-        source_id = self.annotation.probe_infos["probe_id"]
-
-        target_probes_file = get_or_download_file(PYLLUMINA_DATA_LINK, get_resource_folder("address"), f"{target_platform}_address.csv")
-        target_probes = pd.read_csv(str(target_probes_file))
-        platforms_1 = ("EPIC", "HM450", "HM27")
-        platforms_2 = ("EPICv2", "MSA")
+    def lift_over_probe_annotations(self, target_platform: ArrayType, impute: bool = False, celltype: str | None = None):
+        if not (self.annotation.array_type.is_human() == target_platform.is_human()):
+            LOGGER.warning("Lifting probes over different organisms: the data is likely to be unusable")
+        if target_platform == ArrayType.HUMAN_EPIC_PLUS:
+            LOGGER.error("It is not possible to lift probes over to EPIC+ at the moment.")
+            return
         
+        source_id = self.annotation.probe_infos["probe_id"]
+        source_df = pd.DataFrame({"source_id": source_id.values})
+
+        target_probes_file = get_or_download_file(f"{PYLLUMINA_DATA_LINK}liftover", get_resource_folder("liftover"), f"{target_platform}_address.csv")
+        target_probes = pd.read_csv(str(target_probes_file), index_col="Probe_ID", header=0)
+        target_df = pd.DataFrame({"target_id": target_probes.index})
+
+        platforms_1 = (ArrayType.HUMAN_EPIC, ArrayType.HUMAN_450K, ArrayType.HUMAN_27K)
+        platforms_2 = (ArrayType.HUMAN_EPIC_V2, ArrayType.HUMAN_EPIC_PLUS, ArrayType.HUMAN_MSA)
+
+        if target_platform in platforms_1 and self.annotation.array_type in platforms_2:
+            source_df["prefix"] = source_id.apply(lambda x: x.split("_")[0]).values
+            target_df["prefix"] = target_probes.index
+        elif target_platform in platforms_2 and self.annotation.array_type in platforms_1:
+            source_df["prefix"] = source_id
+            target_df["prefix"] = target_probes.index.apply(lambda x: x.split("_")[0])
+        else:
+            source_df["prefix"] = source_id
+            target_df["prefix"] = target_probes.index
+
+        mapping = source_df.merge(target_df, on="prefix", how="right")
+        # Create artificial multiindex to mapping to allow the merge
+        mapping.columns = pd.MultiIndex.from_tuples([(c, "", "") for c in mapping.columns], names=["sample_name","signal_channel","methylation_state"])
+
+        # 1. Remove row indexes from signal_df to not lose them in the merge
+        # 2. Merge the mapping df with the signal df
+        # 3. Remove unnecessary columns, including the previous probe_id
+        # 4. Rename target_id to probe_id, it will be our new index
+        # 5. Reset the indexes to their correct places and order
+        level_order = self._signal_df.index.names
+        self._signal_df = self._signal_df.reset_index(
+            ).merge(
+                mapping, left_on="probe_id", right_on="source_id", how="right"
+            ).drop(
+                columns=["probe_id","source_id","prefix"], level="sample_name"
+            ).rename(
+                columns={"target_id":"probe_id"}
+            ).set_index(
+                ["type","channel","probe_type","probe_id"]
+            ).reorder_levels(level_order).sort_index()
+        
+        if target_platform.is_human():
+            self.annotation = Annotations(target_platform, genome_version=GenomeVersion.HG38)
+        else:
+            self.annotation = Annotations(target_platform, genome_version=GenomeVersion.MM39)
+
+        if impute:
+            LOGGER.info("Recalculating betas...")
+            self._betas = self.impute_betas(platform=target_platform, celltype=celltype)
 
     def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str = "Blood", sd_max = 999):
         # We only have imputation data for HM450, EPIC and Mammal40.
@@ -717,15 +762,15 @@ class Samples:
             return
         
         imputation_filename = f'{platform}_imputation_defaults.csv'
-        imputation_path = get_or_download_file(PYLLUMINA_DATA_LINK, get_resource_folder("imputations"), imputation_filename)
+        imputation_path = get_or_download_file(f"{PYLLUMINA_DATA_LINK}imputation", get_resource_folder("imputation"), imputation_filename)
         imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col="Probe_ID")
-        d2q = imputation_df.loc[self._betas.index]
+        d2q = imputation_df.index.isin(self._betas.index.get_level_values("probe_id"))
 
         index_to_impute = self._betas.isna().any(axis=1)
         median = imputation_df.loc[f"{celltype}.median",d2q[index_to_impute]]
         sd = imputation_df.loc[f"{celltype}.sd",d2q[index_to_impute]]
         median[sd > sd_max] = np.nan
-        self._betas[index_to_impute] = median
+        self._betas.iloc[index_to_impute] = median
 
 
     def drop_samples(self, sample_labels: str | list[str]) -> None:
@@ -923,7 +968,7 @@ class Samples:
             return None
 
         # patterns to find the probe IDs we need
-        if self.annotation == ArrayType.HUMAN_27K:
+        if self.annotation.array_type == ArrayType.HUMAN_27K:
             pattern_green = r'norm.green$'
             pattern_red = r'norm.red$'
         else:
