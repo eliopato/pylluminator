@@ -714,11 +714,11 @@ class Samples:
         platforms_2 = (ArrayType.HUMAN_EPIC_V2, ArrayType.HUMAN_EPIC_PLUS, ArrayType.HUMAN_MSA)
 
         if target_platform in platforms_1 and self.annotation.array_type in platforms_2:
-            source_df["prefix"] = source_id.apply(lambda x: x.split("_")[0]).values
+            source_df["prefix"] = source_id.map(remove_probe_suffix).values
             target_df["prefix"] = target_probes.index
         elif target_platform in platforms_2 and self.annotation.array_type in platforms_1:
             source_df["prefix"] = source_id
-            target_df["prefix"] = target_probes.index.apply(lambda x: x.split("_")[0])
+            target_df["prefix"] = target_probes.index.map(remove_probe_suffix)
         else:
             source_df["prefix"] = source_id
             target_df["prefix"] = target_probes.index
@@ -743,7 +743,10 @@ class Samples:
             ).set_index(
                 ["type","channel","probe_type","probe_id"]
             ).reorder_levels(level_order).sort_index()
-        
+
+        # Merge probes that became duplicates after the lift over
+        self.remove_probes_suffix(apply_mask=False)
+
         if target_platform.is_human():
             self.annotation = Annotations(target_platform, genome_version=GenomeVersion.HG38)
         else:
@@ -751,9 +754,10 @@ class Samples:
 
         if impute:
             LOGGER.info("Recalculating betas...")
-            self._betas = self.impute_betas(platform=target_platform, celltype=celltype)
+            self.calculate_betas(True)
+            self.impute_betas(platform=target_platform, celltype=celltype)
 
-    def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str = "Blood", sd_max = 999):
+    def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str | None = None, sd_max = 999):
         # We only have imputation data for HM450, EPIC and Mammal40.
         # If betas are not given and the platform is not supported,
         # we return immediately.
@@ -761,17 +765,32 @@ class Samples:
             LOGGER.warning(f"Platform {platform} is not supported for beta imputation. Supported platforms are {SUPPORTED_IMPUTATION_PLATFORMS}")
             return
         
+        # TODO: add nearest neighbor inference for celltype
+        celltype = celltype or "Blood"
+        
         imputation_filename = f'{platform}_imputation_defaults.csv'
         imputation_path = get_or_download_file(f"{PYLLUMINA_DATA_LINK}imputation", get_resource_folder("imputation"), imputation_filename)
         imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col="Probe_ID")
-        d2q = imputation_df.index.isin(self._betas.index.get_level_values("probe_id"))
+        
+        # This really doesn't feel optimized
+        # Get the probes in our beta values that are present in the imputation dataframe
+        d2q = self._betas.index.get_level_values("probe_id").isin(imputation_df.index)
+        
+        # Get the indices with NA in our beta values
+        missing_indices = self._betas[d2q].isna().any(axis=1)
 
-        index_to_impute = self._betas.isna().any(axis=1)
-        median = imputation_df.loc[f"{celltype}.median",d2q[index_to_impute]]
-        sd = imputation_df.loc[f"{celltype}.sd",d2q[index_to_impute]]
+        # Get the probe IDs that are both in the imputation dataframe and are NA
+        indices_to_impute = self._betas.index.get_level_values("probe_id")[d2q][missing_indices]
+        median = imputation_df.loc[indices_to_impute, f"{celltype}.median"]
+        sd = imputation_df.loc[indices_to_impute, f"{celltype}.sd"]
         median[sd > sd_max] = np.nan
-        self._betas.iloc[index_to_impute] = median
-
+        
+        beta_shard = self._betas[self._betas.index.get_level_values("probe_id").isin(indices_to_impute)]
+                                 
+        for sample in self._betas.columns:
+            beta_shard[sample] = median
+        
+        self._betas[self._betas.index.get_level_values("probe_id").isin(indices_to_impute)] = beta_shard.astype("float32")
 
     def drop_samples(self, sample_labels: str | list[str]) -> None:
         """Remove some samples. Delete the signal information, beta values, sample sheet rows and masks. Ignores
