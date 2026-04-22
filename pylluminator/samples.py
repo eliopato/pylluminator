@@ -791,6 +791,7 @@ class Samples:
             beta_shard[sample] = median
         
         self._betas[self._betas.index.get_level_values("probe_id").isin(indices_to_impute)] = beta_shard.astype("float32")
+        self._betas.dropna(axis=0, how="all", inplace=True)
 
     def drop_samples(self, sample_labels: str | list[str]) -> None:
         """Remove some samples. Delete the signal information, beta values, sample sheet rows and masks. Ignores
