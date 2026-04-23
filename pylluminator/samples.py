@@ -766,6 +766,7 @@ class Samples:
             return
         
         # TODO: add nearest neighbor inference for celltype
+        # The default Blood is used in SeSaMe, so we do the same
         celltype = celltype or "Blood"
         
         imputation_filename = f'{platform}_imputation_defaults.csv'
