@@ -27,11 +27,15 @@ MSA                           :raw-html:`&#x2705;`  :raw-html:`&#x2705;`  :raw-h
 EPIC                          :raw-html:`&#x2705;`  :raw-html:`&#x2705;`  :raw-html:`&#x2705;`      :raw-html:`&#x2705;`       :raw-html:`&#x2705;`   :raw-html:`&#x2705;`
 EPIC+                         :raw-html:`&#x2705;`  :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`       :raw-html:`&#x274C;`   :raw-html:`&#x274C;`
 EPICv2                        :raw-html:`&#x2705;`  :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x2705;`       :raw-html:`&#x2705;`   :raw-html:`&#x274C;`
+Updated EPICv2  [#f0]_        :raw-html:`&#x2705;`  :raw-html:`&#x274C;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`       :raw-html:`&#x274C;`   :raw-html:`&#x274C;`
 Mammal40                      :raw-html:`&#x2705;`  :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`       :raw-html:`&#x274C;`   :raw-html:`&#x274C;`
 MM285                         :raw-html:`&#x2705;`  :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`       :raw-html:`&#x274C;`   :raw-html:`&#x2705;`
 ===========================   ====================  ====================  ====================      ====================       ====================   ====================
 
+.. rubric:: Footnotes
 
+.. [#f0] see *Re-annotating the EPICv2 manifest with genes, intragenic features, and regulatory elements*, `(BioRxiv link) <https://www.biorxiv.org/content/10.1101/2025.03.12.642895v2>`_
+ 
 ==================================     =============================   ====================  ====================      =============================       ======================   ====================
 Data processing                        Pylluminator                    SeSAMe                ChAMP                     Mepylome                            CpGTools                  Methylsuite
 ==================================     =============================   ====================  ====================      =============================       ======================   ====================
@@ -39,8 +43,9 @@ Read .idat files                        :raw-html:`&#x2705;`           :raw-html
 Type-I probes channel inference         :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
 Dye bias correction [#f1]_              :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
 pOOBAH                                  :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
-NOOB   [#f9]_                           :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x2705;`      :raw-html:`&#x2705;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
+Normalization   [#f9]_                  :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x2705;`      :raw-html:`&#x2705;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
 Compute beta values                     :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x2705;`      :raw-html:`&#x2705;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
+Impute missing beta values [#f10]_      :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x2705;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x274C;`
 Batch correction (ComBat) [#f2]_        :raw-html:`&#x2705;`           :raw-html:`&#x274C;`  :raw-html:`&#x2705;`      :raw-html:`&#x274C;`                :raw-html:`&#x2705;`     :raw-html:`&#x274C;`
 Lift over                               :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x274C;`
 ==================================     =============================   ====================  ====================      =============================       ======================   ====================
@@ -49,7 +54,8 @@ Lift over                               :raw-html:`&#x2705;`           :raw-html
 
 .. [#f1] Pylluminator includes 3 methods: using normalization control probes / linear scaling / non-linear scaling. It does not include the "most balanced" method of SeSAMe. MethylSuite only implements the non-linear correction.
 .. [#f2] Pylluminator computes batch correction on M-values only; ChAMP has the option to use the beta values and CpGTools uses beta values only. The reason is that beta values "often deviates from a Gaussian distribution, exhibiting skewness and over-dispersion" (`read more <https://doi.org/10.1093/nargab/lqaf062>`_). Using the beta values for batch correction also results in values out of the 0-1 range.
-.. [#f9] Mepylome offers 3 preprocessing methods: NOOB, SWAN and Illumina
+.. [#f9] Pylluminator, SeSAMe and MethylSuite implement NOOB for normalization. Mepylome offers 3 normalization methods: NOOB, SWAN and Illumina. ChAMP offers 4 methods: PBC,BMIQ, SWAN and FunctionalNormalize.
+.. [#f10] SeSAMe implements 3 methods for beta imputation: imputation by genomic neighbor, imputation by matrix mean, and imputation based on available public data. Pylluminator only implements imputation based on public data, with the data provided by SeSAMe. ChAMP implements KNN imputation or using a provided dataset to pick default values from.
 
 ========================================     =============================   =============================  =============================      ====================       =============================   ====================
 Data analysis & visualisation                Pylluminator                    SeSAMe                         ChAMP                              Mepylome                   CpGTools                        Methylsuite

@@ -94,7 +94,7 @@ class DM:
 
     def __init__(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
-                 probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = False):
+                 probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = True):
         """Initialize the object by calculating the Differentially Methylated Probes (DMPs). It fits an Ordinary Least 
         Square model (OLS) for each probe, following the given formula. The predictors used in the formula are column names of the sample sheet.
         If a group column name is given, use a Mixed Model to account for random effects. The Benjamini-Hochberg procedure 
@@ -124,7 +124,7 @@ class DM:
             a Mixed Model will be used to account for replicates instead of an Ordinary Least Square. Default: None
         :type group_column: str | None
         :param use_m_values: if True, fits the linear regression on M-values instead of beta values, so that fitted values are
-            not constrained in the [0:1] range. Default: False
+            not constrained in the [0:1] range. Set to False to match SeSAMe. Recommended value: True. Default: True
         :type use_m_values: bool
         :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
         :rtype: pandas.DataFrame, list[str]
@@ -331,11 +331,12 @@ class DM:
 
     def compute_dmp(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
-                 probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = False):
+                 probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = True):
         """Find Differentially Methylated Probes (DMPs) by fitting an Ordinary Least Square model (OLS) for each probe,
         following the given formula. The predictors used in the formula are column names of the sample sheet. 
-        If a group column name is given, use a Linear Mixed Model (LMM) to account for random effects. The Benjamini-Hochberg procedure
-        is used to adjust the p-values.
+        To account for random effects in your model (e.g. technical replicates, batch effect), use the group_column parameter. A Linear Mixed
+        Model (LMM) will then be used instead of the OLS.
+        The Benjamini-Hochberg procedure is used to adjust the p-values.
 
         More info on  design matrices and formulas:
             - https://www.statsmodels.org/devel/gettingstarted.html
@@ -360,7 +361,7 @@ class DM:
             a Mixed Model will be used to account for replicates instead of an Ordinary Least Square. Default: None
         :type group_column: str | None
         :param use_m_values: if True, fits the linear regression on M-values instead of beta values, so that fitted values are
-            not constrained in the [0:1] range. Default: False
+            not constrained in the [0:1] range. Set to False to match SeSAMe. Recommended value: True. Default: True
         :type use_m_values: bool
         :return: dataframe with probes as rows and p_vales and model estimates in columns, list of contrast levels
         :rtype: pandas.DataFrame, list[str]

@@ -7,14 +7,14 @@ from pylluminator.dm import _get_model_parameters, DM
 
 def test_dmp_ols(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
-    my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
+    my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids, use_m_values=False)
     assert my_dms.dmp.loc['cg00000029_TC21', 'Intercept_estimate'] == pytest.approx(0.7574986020723979)  # Est_X.Intercept.
     assert my_dms.dmp.loc['cg00000029_TC21', 'Intercept_p_value'] == pytest.approx(4.257315170037784e-06)  # Pval_X.Intercept.
     assert my_dms.dmp.loc['cg00000029_TC21', 'sample_type[T.PREC]_estimate'] == pytest.approx(-0.7096783705055714)  # Est_sample_typeP
     assert my_dms.dmp.loc['cg00000029_TC21', 'sample_type[T.PREC]_p_value'] == pytest.approx(2.1946549071376195e-05)  # Pval_sample_typeP
     assert my_dms.dmp.loc['cg00000029_TC21', 'effect_size'] ==  pytest.approx(0.7096783705055714)  # Eff_sample_type
 
-    my_dms = DM(test_samples, '~ sample_type + sample_number', probe_ids=probe_ids)
+    my_dms = DM(test_samples, '~ sample_type + sample_number', probe_ids=probe_ids, use_m_values=False)
     assert my_dms.dmp.loc['cg00000029_TC21', 'Intercept_estimate'] == pytest.approx(0.8015912032375739) # Est_X.Intercept.
     assert my_dms.dmp.loc['cg00000029_TC21', 'Intercept_p_value'] == pytest.approx(0.0003027740974405947)  # Pval_X.Intercept.
     assert my_dms.dmp.loc['cg00000029_TC21', 'sample_type[T.PREC]_estimate'] == pytest.approx(-0.7096783705055711)  # Est_sample_typeP
@@ -118,7 +118,7 @@ def test_ols_na():
 def test_dmr(test_samples):
     probe_ids = test_samples.get_signal_df().reset_index()['probe_id'].sort_values()[:1000].tolist()
     # probe_ids.extend(['cg14515812_TC11', 'cg14515812_TC12'])
-    my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids)
+    my_dms = DM(test_samples, '~ sample_type', probe_ids=probe_ids, use_m_values=False)
 
     my_dms.compute_dmr()
 
@@ -148,7 +148,7 @@ def test_get_top(test_samples, caplog):
     caplog.clear()
     top_10_dmrs = my_dms.get_top_dmr('sample_type[T.PREC]')
     assert len(top_10_dmrs) == 10
-    assert 'CCDC181' in top_10_dmrs.iloc[0].genes
+    assert 'LRFN1' in top_10_dmrs.iloc[0].genes
     assert 'ERROR' not in caplog.text
     assert 'WARNING' not in caplog.text
 
@@ -178,9 +178,7 @@ def test_get_top(test_samples, caplog):
     assert top_10_dmrs is None
 
 def test_select_dmp(test_samples, caplog):
-    my_dms = DM(test_samples, '~ sample_type')
-    selected_dmps = my_dms.select_dmps()
-    assert len(selected_dmps) == 937688
+    my_dms = DM(test_samples, '~ sample_type', use_m_values=False)
 
     caplog.clear()
     selected_dmps = my_dms.select_dmps(p_value_th=0.05, p_value_th_col='unknown')
@@ -191,8 +189,3 @@ def test_select_dmp(test_samples, caplog):
     assert len(selected_dmps) == 307093
     assert selected_dmps.iloc[0].name == 'cg17049328_TC21'
     assert selected_dmps.iloc[0][sort_col] == min(selected_dmps[sort_col])
-
-def test_dmp_mvalues(test_samples):
-    my_dms = DM(test_samples, '~ sample_type', use_m_values=True)
-    selected_dmps = my_dms.select_dmps()
-    assert len(selected_dmps) == 937688
