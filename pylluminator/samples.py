@@ -663,7 +663,7 @@ class Samples:
         # and merge the sample sheet
         self.sample_sheet = merge_dataframe_by(self.sample_sheet, by).reset_index()
 
-    def remove_probes_suffix(self, apply_mask=True):
+    def remove_probes_suffix(self, apply_mask=True) -> None:
         """Merge probes that have the same ID but different suffixes (e.g. _BC11, _TC21..) by averaging their signal
         values. Resets calculated pvalues and betas.
 
@@ -696,7 +696,20 @@ class Samples:
         self.annotation.genomic_ranges.index = self.annotation.genomic_ranges.index.map(remove_probe_suffix)
         self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
-    def lift_over_probe_annotations(self, target_platform: ArrayType, impute: bool = False, celltype: str | None = None):
+    def lift_over_probe_annotations(self, target_platform: ArrayType, impute: bool = False, celltype: str | None = None) -> None:
+        """Change the samples' annotation version to the specified target_platform. Modify the probes ID to match the target platform IDs,
+            and if impute is True, use default data to fill NA beta values.
+        
+        :param target_platform: the target annotation version (eg. EPICv2)
+        :type target_platform: ArrayType
+        :param impute: if set to True, beta values that are NA after the lift over will be set to default values. Default: False
+        :type impute: bool
+        :param celltype: the samples' cell type, used in impute_betas function. So far, only Blood is supported. Default: None (Blood)
+        :type celltype: str | None
+
+        :return: None
+        """
+
         if not (self.annotation.array_type.is_human() == target_platform.is_human()):
             LOGGER.warning("Lifting probes over different organisms: the data is likely to be unusable")
         if target_platform == ArrayType.HUMAN_EPIC_PLUS:
@@ -757,7 +770,8 @@ class Samples:
             self.calculate_betas(True)
             self.impute_betas(platform=target_platform, celltype=celltype)
 
-    def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str | None = None, sd_max = 999):
+    def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str | None = None, sd_max = 999) -> None:
+        """Impute missing beta values with default values based on the """
         # We only have imputation data for HM450, EPIC and Mammal40.
         # If betas are not given and the platform is not supported,
         # we return immediately.
