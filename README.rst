@@ -49,6 +49,8 @@ Main functionalities
   * Detection p-value calculation (pOOBAH)
   * Background correction (NOOB)
   * Batch effect correction (ComBat)
+  * Missing beta values imputation
+  * Lift over annotation
 
 * data analysis and visualisation
 

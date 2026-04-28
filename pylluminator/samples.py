@@ -12,7 +12,7 @@ from inmoose.pycombat import pycombat_norm
 import pylluminator.sample_sheet as sample_sheet
 from pylluminator.stats import norm_exp_convolution, quantile_normalization_using_target, background_correction_noob_fit
 from pylluminator.stats import iqr
-from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_dataframe_by, get_chromosome_number
+from pylluminator.utils import get_column_as_flat_array, set_channel_index_as, remove_probe_suffix, merge_dataframe_by, get_chromosome_number, set_level_as_index
 from pylluminator.utils import save_object, load_object, get_files_matching, get_logger, convert_to_path, merge_alt_chromosomes, get_resource_folder, get_or_download_file
 from pylluminator.read_idat import IdatDataset
 from pylluminator.annotations import Annotations, Channel, ArrayType, detect_array, GenomeVersion, PYLLUMINA_DATA_LINK
@@ -707,61 +707,87 @@ class Samples:
         """
 
         if not (self.annotation.array_type.is_human() == target_platform.is_human()):
-            LOGGER.warning("Lifting probes over different organisms: the data is likely to be unusable")
+            LOGGER.warning('Lifting probes over different organisms: the data is likely to be unusable')
         if target_platform == ArrayType.HUMAN_EPIC_PLUS:
-            LOGGER.error("It is not possible to lift probes over to EPIC+ at the moment.")
+            LOGGER.error('It is not possible to lift probes over to EPIC+ at the moment.')
             return
         
-        source_id = self.annotation.probe_infos["probe_id"]
-        source_df = pd.DataFrame({"source_id": source_id.values})
+        source_id = self.annotation.probe_infos['probe_id']
+        source_df = pd.DataFrame({'source_id': source_id.values})
 
-        target_probes_file = get_or_download_file(f"{PYLLUMINA_DATA_LINK}liftover", get_resource_folder("liftover"), f"{target_platform}_address.csv")
-        target_probes = pd.read_csv(str(target_probes_file), index_col="Probe_ID", header=0)
-        target_df = pd.DataFrame({"target_id": target_probes.index})
+        target_probes_file = get_or_download_file(f'{PYLLUMINA_DATA_LINK}liftover', get_resource_folder('liftover'), f'{target_platform}_address.csv')
+        target_probes = pd.read_csv(str(target_probes_file), index_col='Probe_ID', header=0)
+        target_df = pd.DataFrame({'target_id': target_probes.index})
         
         platforms_1 = (ArrayType.HUMAN_EPIC, ArrayType.HUMAN_450K, ArrayType.HUMAN_27K)
         platforms_2 = (ArrayType.HUMAN_EPIC_V2, ArrayType.HUMAN_EPIC_PLUS, ArrayType.HUMAN_MSA)
 
         if target_platform in platforms_1 and self.annotation.array_type in platforms_2:
-            source_df["prefix"] = source_id.map(remove_probe_suffix).values
-            target_df["prefix"] = target_probes.index
+            source_df['prefix'] = source_id.map(remove_probe_suffix).values
+            target_df['prefix'] = target_probes.index
         elif target_platform in platforms_2 and self.annotation.array_type in platforms_1:
-            source_df["prefix"] = source_id
-            target_df["prefix"] = target_probes.index.map(remove_probe_suffix)
+            source_df['prefix'] = source_id
+            target_df['prefix'] = target_probes.index.map(remove_probe_suffix)
         else:
-            source_df["prefix"] = source_id
-            target_df["prefix"] = target_probes.index
+            source_df['prefix'] = source_id
+            target_df['prefix'] = target_probes.index
 
-        mapping = source_df.merge(target_df, on="prefix", how="right")
-        # Create artificial multiindex to mapping to allow the merge
-        mapping.columns = pd.MultiIndex.from_tuples([(c, "", "") for c in mapping.columns], names=["sample_name","signal_channel","methylation_state"])
-        
-        # 1. Remove row indexes from signal_df to not lose them in the merge
-        # 2. Merge the mapping df with the signal df
-        # 3. Remove unnecessary columns, including the previous probe_id
-        # 4. Rename target_id to probe_id, it will be our new index
-        # 5. Reset the indexes to their correct places and order
-        level_order = self._signal_df.index.names
-        self._signal_df = self._signal_df.reset_index(
-            ).merge(
-                mapping, left_on="probe_id", right_on="source_id", how="right"
-            ).drop(
-                columns=["probe_id","source_id","prefix"], level="sample_name"
-            ).rename(
-                columns={"target_id":"probe_id"}
-            ).set_index(
-                ["type","channel","probe_type","probe_id"]
-            ).reorder_levels(level_order).sort_index()
+        target_df = target_df.drop_duplicates(ignore_index=True)
+        source_df = source_df.drop_duplicates(ignore_index=True)
 
-        # Merge probes that became duplicates after the lift over
-        self.remove_probes_suffix(apply_mask=False)
-
+        # change the annotation to the target platform, latest genome version
         if target_platform.is_human():
             self.annotation = Annotations(target_platform, genome_version=GenomeVersion.HG38)
         else:
             self.annotation = Annotations(target_platform, genome_version=GenomeVersion.MM39)
 
-    def impute_betas(self, imputation_df: pd.DataFrame | None = None, celltype: str = 'Blood', sd_max: int | None = None) -> None:
+        row_level_names = self._signal_df.index.names  # ['type', 'channel', 'probe_type', 'probe_id']
+        col_level_names = self._signal_df.columns.names  # ['sample_name', 'signal_channel', 'methylation_state']
+        
+        mapping = source_df.merge(target_df, on='prefix', how='right')
+        # Create artificial multiindex to mapping to allow the merge
+        mapping.columns = pd.MultiIndex.from_tuples([(c, '', '') for c in mapping.columns], names=col_level_names)
+        
+        # 1. Remove row indexes from signal_df to not lose them in the merge
+        # 2. Remove the old annotation columns (type, channel, probe type, mask info)
+        # 3. Merge the mapping df with the signal df
+        # 4. Remove unnecessary columns, including the previous probe_id
+        # 5. Rename target_id to probe_id, it will be our new index
+        # 6. Merge probes that became duplicates after the lift over
+        self._signal_df = self._signal_df.reset_index(
+            ).drop(
+                columns=['type', 'channel', 'probe_type', 'mask_info'], level='sample_name'
+            ).merge(
+                mapping, left_on='probe_id', right_on='source_id', how='right'
+            ).drop(
+                columns=['probe_id', 'source_id', 'prefix'], level='sample_name'
+            ).rename(
+                columns={'target_id': 'probe_id'}
+            ).sort_index(
+                axis=1
+            ).groupby(
+                'probe_id'
+            ).mean()
+        
+        # extract probe info to be added to the signal dataframe
+        new_probe_info_df = self.annotation.probe_infos[row_level_names + ['mask_info']]
+        new_probe_info_df = new_probe_info_df.drop_duplicates(ignore_index=True).sort_index(axis=1)
+        new_probe_info_df.columns = pd.MultiIndex.from_tuples([(c,'', '') for c in new_probe_info_df.columns], names=col_level_names)
+        
+        self._signal_df = self._signal_df.reset_index(
+            ).merge(
+                new_probe_info_df, on='probe_id', how='left'
+            ).set_index(
+                row_level_names
+            ).sort_index(
+            ).sort_index(
+                axis=1
+            )
+        
+        self.reset_betas() # reset betas as they are not aligned anymore with the signal df
+        
+
+    def impute_betas(self, imputation_df: pd.DataFrame | None = None, celltype: str | None = None, sd_max: int | None = None) -> None:
         """Impute missing beta values with default values based on public datasets provided by SeSAMe (only available for HM450, EPIC and Mammal40 arrays) or from a provided dataframe.
         The NA values are replaced by the provided median values, if their standard deviation is below a specified threshold.
         
@@ -769,8 +795,9 @@ class Samples:
             If not provided, use SeSAMe's datasets. Optional, default: None
         :type imputation_df: pd.DataFrame
         :param celltype: Set the samples' cell type. If using the default values from SeSAMe, the following types are supported: [Blood, Bone.marrow, Brain, Breast, Buccal.cells, Esophagus, Fibroblast,
-            Inner.cell, Intestine, Kidney, Liver, Lung, Muscle, Nasal, Placenta, Prostate, Saliva, Skin, Sperm, Umbilical.cord]. Default: Blood 
-        :type celltype: str 
+            Inner.cell, Intestine, Kidney, Liver, Lung, Muscle, Nasal, Placenta, Prostate, Saliva, Skin, Sperm, Umbilical.cord]. If None, autodetect the cell type by comparing correlation between samples 
+            beta values and the imputation df betas values. Default: None 
+        :type celltype: str | None
         :param sd_max: filter out default values that have a standard deviation above this threshold. Must be in the 0-1 range. Default: None
         :type sd_max: int | None
         :return: None
@@ -782,44 +809,41 @@ class Samples:
         if imputation_df is None:
             platform = self.annotation.array_type
             if platform not in SUPPORTED_IMPUTATION_PLATFORMS:
-                LOGGER.warning(f"Platform {platform} is not supported for beta imputation. Supported platforms are {SUPPORTED_IMPUTATION_PLATFORMS}")
+                LOGGER.warning(f'Platform {platform} is not supported for beta imputation. Supported platforms are {SUPPORTED_IMPUTATION_PLATFORMS}')
                 return
             
             imputation_filename = f'{platform}_imputation_defaults.csv'
-            imputation_path = get_or_download_file(f"{PYLLUMINA_DATA_LINK}imputation", get_resource_folder("imputation"), imputation_filename)
-            imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col="Probe_ID")
+            imputation_path = get_or_download_file(f'{PYLLUMINA_DATA_LINK}imputation', get_resource_folder('imputation'), imputation_filename)
+            imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col='Probe_ID')
 
-        median_col = f"{celltype}.median"
+        imputation_df.index.name = 'probe_id'
+        
+        if self._betas is None or self._betas.empty:
+            self.calculate_betas()
+
+        # autodetect the cell type by taking the imputation column that has the maximum correlation with a sample
+        if celltype is None:
+            median_columns = [c for c in imputation_df.columns if c.endswith('median')]
+            corr_df = self._betas.apply(lambda x: imputation_df[median_columns].corrwith(x))
+            celltype = corr_df.max(axis=1).idxmax().replace('.median', '')
+            LOGGER.info(f'Autodetected {celltype} celltype with {corr_df.max(axis=1).max():.2} correlation')
+        
+        median_col = f'{celltype}.median'
         if median_col not in imputation_df.columns:
             LOGGER.error(f'Column {median_col} not found in provided imputation dataframe. Check again the cell type ? Available columns are: {imputation_df.columns}')
-            return 
-        
-        # This really doesn't feel optimized
-        # Get the probes in our beta values that are present in the imputation dataframe
-        d2q = self._betas.index.get_level_values("probe_id").isin(imputation_df.index)
-        
-        # Get the indices with NA in our beta values
-        missing_indices = self._betas[d2q].isna().any(axis=1)
+            return         
+        default_values = imputation_df[median_col]
 
-        # Get the probe IDs that are both in the imputation dataframe and are NA
-        indices_to_impute = self._betas.index.get_level_values("probe_id")[d2q][missing_indices]
-        median = imputation_df.loc[indices_to_impute, median_col]
+        # if there is a threshold on standard deviation, set values above threshold to NA
         if sd_max:
-            sd_col = f"{celltype}.sd"
+            sd_col = f'{celltype}.sd'
             if sd_col not in imputation_df.columns:
                 LOGGER.warning(f'Column {sd_col} not found in provided imputation dataframe, can\'t filter on standard deviation. Check again the cell type ? Available columns are: {imputation_df.columns}')
             else:
-                sd = imputation_df.loc[indices_to_impute, sd_col]
-                median[sd > sd_max] = np.nan
+                default_values[imputation_df[sd_col] > sd_max] = np.nan
         
-        beta_shard = self._betas[self._betas.index.get_level_values("probe_id").isin(indices_to_impute)]
-                                 
-        for sample in self._betas.columns:
-            beta_shard[sample] = median
+        self._betas = self._betas.apply(lambda x: x.fillna(default_values))
         
-        self._betas[self._betas.index.get_level_values("probe_id").isin(indices_to_impute)] = beta_shard.astype("float32")
-        self._betas.dropna(axis=0, how="all", inplace=True)
-
     def drop_samples(self, sample_labels: str | list[str]) -> None:
         """Remove some samples. Delete the signal information, beta values, sample sheet rows and masks. Ignores
         non-existent sample names
@@ -1206,18 +1230,26 @@ class Samples:
 
         :return: None"""
         LOGGER.info('Calculate beta values')
-        df = self.get_signal_df(False).sort_index()  # sort indexes returns a copy
+        df = self.get_signal_df(False).sort_index(axis=1)  # sort indexes returns a copy
+        # we reset the indexes, if there is any NA in the row indexes we can sort them and we will have a PerformanceWarning (lexsort)
+        row_indexes = df.index.names
+        df = df.reset_index()
         
         idx = pd.IndexSlice
+        typeII_idxs = df['type'] == 'II'
         # set NAs for Type II probes to 0, only where no methylation signal is expected
-        df.loc['II', idx[:, 'R', 'M']] = 0
-        df.loc['II', idx[:, 'G', 'U']] = 0
+        df.loc[typeII_idxs, idx[:, 'R', 'M']] = 0
+        df.loc[typeII_idxs, idx[:, 'G', 'U']] = 0
 
         # set out-of-band signal to 0 if the option include_out_of_band is not activated
         if not include_out_of_band:
-            df.loc[idx['I', 'G'], idx[:, 'R']] = 0
-            df.loc[idx['I', 'R'], idx[:, 'G']] = 0
+            typeI_idxs = df['type'] == 'I'
+            green_idxs = df['channel'] == 'G'
+            red_idxs = df['channel'] == 'R'
+            df.loc[typeI_idxs & green_idxs, idx[:, 'R']] = 0
+            df.loc[typeI_idxs & red_idxs, idx[:, 'G']] = 0
 
+        df = df.set_index(row_indexes)
         betas = []
         for sample_label in self.sample_labels:
             # now we can calculate beta values

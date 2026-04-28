@@ -74,7 +74,7 @@ def read_from_file(filepath: str, delimiter: str = ',') -> pd.DataFrame | None:
 
 
 def create_from_idats(idat_folder: str | os.PathLike | MultiplexedPath,
-                      output_filename='samplesheet.csv') -> (pd.DataFrame, str):
+                      output_filename='samplesheet.csv') -> tuple[pd.DataFrame, str]:
     """Creates a sample sheet file from a folder containing .idat files.
 
     Files need to follow one of the following formats :
