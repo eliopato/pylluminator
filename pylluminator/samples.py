@@ -20,6 +20,7 @@ from pylluminator.mask import MaskCollection, Mask
 
 LOGGER = get_logger()
 SUPPORTED_IMPUTATION_PLATFORMS = [ArrayType.HUMAN_450K, ArrayType.HUMAN_EPIC]
+
 class Samples:
     """
      Samples objects hold sample methylation signal in a dataframe, as well as annotation information, sample sheet data and probes masks.
@@ -696,16 +697,11 @@ class Samples:
         self.annotation.genomic_ranges.index = self.annotation.genomic_ranges.index.map(remove_probe_suffix)
         self.annotation.genomic_ranges = self.annotation.genomic_ranges.reset_index().drop_duplicates(ignore_index=True).set_index('probe_id')
 
-    def lift_over_probe_annotations(self, target_platform: ArrayType, impute: bool = False, celltype: str | None = None) -> None:
-        """Change the samples' annotation version to the specified target_platform. Modify the probes ID to match the target platform IDs,
-            and if impute is True, use default data to fill NA beta values.
+    def lift_over_probe_annotations(self, target_platform: ArrayType) -> None:
+        """Change the samples' annotation version to the specified target_platform. Modify the probes ID in the signal dataframe to match the target platform IDs,
         
         :param target_platform: the target annotation version (eg. EPICv2)
         :type target_platform: ArrayType
-        :param impute: if set to True, beta values that are NA after the lift over will be set to default values. Default: False
-        :type impute: bool
-        :param celltype: the samples' cell type, used in impute_betas function. So far, only Blood is supported. Default: None (Blood)
-        :type celltype: str | None
 
         :return: None
         """
@@ -722,7 +718,7 @@ class Samples:
         target_probes_file = get_or_download_file(f"{PYLLUMINA_DATA_LINK}liftover", get_resource_folder("liftover"), f"{target_platform}_address.csv")
         target_probes = pd.read_csv(str(target_probes_file), index_col="Probe_ID", header=0)
         target_df = pd.DataFrame({"target_id": target_probes.index})
-
+        
         platforms_1 = (ArrayType.HUMAN_EPIC, ArrayType.HUMAN_450K, ArrayType.HUMAN_27K)
         platforms_2 = (ArrayType.HUMAN_EPIC_V2, ArrayType.HUMAN_EPIC_PLUS, ArrayType.HUMAN_MSA)
 
@@ -739,7 +735,7 @@ class Samples:
         mapping = source_df.merge(target_df, on="prefix", how="right")
         # Create artificial multiindex to mapping to allow the merge
         mapping.columns = pd.MultiIndex.from_tuples([(c, "", "") for c in mapping.columns], names=["sample_name","signal_channel","methylation_state"])
-
+        
         # 1. Remove row indexes from signal_df to not lose them in the merge
         # 2. Merge the mapping df with the signal df
         # 3. Remove unnecessary columns, including the previous probe_id
@@ -765,27 +761,38 @@ class Samples:
         else:
             self.annotation = Annotations(target_platform, genome_version=GenomeVersion.MM39)
 
-        if impute:
-            LOGGER.info("Recalculating betas...")
-            self.calculate_betas(True)
-            self.impute_betas(platform=target_platform, celltype=celltype)
+    def impute_betas(self, imputation_df: pd.DataFrame | None = None, celltype: str = 'Blood', sd_max: int | None = None) -> None:
+        """Impute missing beta values with default values based on public datasets provided by SeSAMe (only available for HM450, EPIC and Mammal40 arrays) or from a provided dataframe.
+        The NA values are replaced by the provided median values, if their standard deviation is below a specified threshold.
+        
+        :param imputation_df: dataframe from which to lookup default values. It needs a "Probe_ID" index column, a [celltype].median column (e.g. Blood.median) and a [celltype].sd column if sd_max is defined (e.g. Blood.sd). 
+            If not provided, use SeSAMe's datasets. Optional, default: None
+        :type imputation_df: pd.DataFrame
+        :param celltype: Set the samples' cell type. If using the default values from SeSAMe, the following types are supported: [Blood, Bone.marrow, Brain, Breast, Buccal.cells, Esophagus, Fibroblast,
+            Inner.cell, Intestine, Kidney, Liver, Lung, Muscle, Nasal, Placenta, Prostate, Saliva, Skin, Sperm, Umbilical.cord]. Default: Blood 
+        :type celltype: str 
+        :param sd_max: filter out default values that have a standard deviation above this threshold. Must be in the 0-1 range. Default: None
+        :type sd_max: int | None
+        :return: None
+        """
 
-    def impute_betas(self, platform: ArrayType, default_imputation: pd.DataFrame | None = None, celltype: str | None = None, sd_max = 999) -> None:
-        """Impute missing beta values with default values based on the """
         # We only have imputation data for HM450, EPIC and Mammal40.
         # If betas are not given and the platform is not supported,
         # we return immediately.
-        if platform not in SUPPORTED_IMPUTATION_PLATFORMS and default_imputation is None:
-            LOGGER.warning(f"Platform {platform} is not supported for beta imputation. Supported platforms are {SUPPORTED_IMPUTATION_PLATFORMS}")
-            return
-        
-        # TODO: add nearest neighbor inference for celltype
-        # The default Blood is used in SeSaMe, so we do the same
-        celltype = celltype or "Blood"
-        
-        imputation_filename = f'{platform}_imputation_defaults.csv'
-        imputation_path = get_or_download_file(f"{PYLLUMINA_DATA_LINK}imputation", get_resource_folder("imputation"), imputation_filename)
-        imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col="Probe_ID")
+        if imputation_df is None:
+            platform = self.annotation.array_type
+            if platform not in SUPPORTED_IMPUTATION_PLATFORMS:
+                LOGGER.warning(f"Platform {platform} is not supported for beta imputation. Supported platforms are {SUPPORTED_IMPUTATION_PLATFORMS}")
+                return
+            
+            imputation_filename = f'{platform}_imputation_defaults.csv'
+            imputation_path = get_or_download_file(f"{PYLLUMINA_DATA_LINK}imputation", get_resource_folder("imputation"), imputation_filename)
+            imputation_df = pd.read_csv(str(imputation_path), header = 0, index_col="Probe_ID")
+
+        median_col = f"{celltype}.median"
+        if median_col not in imputation_df.columns:
+            LOGGER.error(f'Column {median_col} not found in provided imputation dataframe. Check again the cell type ? Available columns are: {imputation_df.columns}')
+            return 
         
         # This really doesn't feel optimized
         # Get the probes in our beta values that are present in the imputation dataframe
@@ -796,9 +803,14 @@ class Samples:
 
         # Get the probe IDs that are both in the imputation dataframe and are NA
         indices_to_impute = self._betas.index.get_level_values("probe_id")[d2q][missing_indices]
-        median = imputation_df.loc[indices_to_impute, f"{celltype}.median"]
-        sd = imputation_df.loc[indices_to_impute, f"{celltype}.sd"]
-        median[sd > sd_max] = np.nan
+        median = imputation_df.loc[indices_to_impute, median_col]
+        if sd_max:
+            sd_col = f"{celltype}.sd"
+            if sd_col not in imputation_df.columns:
+                LOGGER.warning(f'Column {sd_col} not found in provided imputation dataframe, can\'t filter on standard deviation. Check again the cell type ? Available columns are: {imputation_df.columns}')
+            else:
+                sd = imputation_df.loc[indices_to_impute, sd_col]
+                median[sd > sd_max] = np.nan
         
         beta_shard = self._betas[self._betas.index.get_level_values("probe_id").isin(indices_to_impute)]
                                  
@@ -1187,7 +1199,7 @@ class Samples:
         """Calculate beta values for all probes. Values are stored in a dataframe and can be accessed via the betas()
         function
 
-        :param include_out_of_band: is set to true, the Type 1 probes beta values will be calculated on
+        :param include_out_of_band: if set to true, the Type 1 probes beta values will be calculated on
             in-band AND out-of-band signal values. If set to false, they will be calculated on in-band values only.
             equivalent to sumTypeI in sesame. Default: False
         :type include_out_of_band: bool
