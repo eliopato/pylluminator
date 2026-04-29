@@ -433,7 +433,7 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
     :param filename: specify the expected filename to check if the file already exists before downloaded. Default = None = last part of the dl_link url (after the last slash)
     :type filename: str | None
 
-    :param decompress: set to True to decompress the output and delete the compressed file (works with .zip and .tar). Default: False
+    :param decompress: set to True to decompress the output (works with .zip and .tar). Default: False
     :type decompress: bool
 
     :param delete_archive: set to True to delete the archive after decompressing it. Default: False
@@ -478,6 +478,20 @@ def download_from_link(dl_link: str, output_folder: str | MultiplexedPath | os.P
                 
     return 1
 
+def get_or_download_file(dl_link: str, output_folder: str | MultiplexedPath | os.PathLike, filename: str) -> Path:
+    output_directory = convert_to_path(output_folder)
+    filepath = output_directory.joinpath(filename)
+
+    # If we never downloaded these datas, do it only once
+    if not filepath.exists():
+        filename = filename + '.zip'
+        filepath = convert_to_path(output_directory).joinpath(filename)
+        
+        if not filepath.exists():
+            dl_result = download_from_link(dl_link + "/" + filename, output_directory)
+            if dl_result == -1:
+                LOGGER.error(f"Failed to download {filename} from {dl_link}")
+    return filepath
 
 def set_channel_index_as(df: pd.DataFrame, column: str, drop=True) -> pd.DataFrame:
     """Use an existing column specified by argument `column` as the new channel index. To keep the column, set
