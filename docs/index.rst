@@ -9,4 +9,4 @@ Contents
    tutorials
    annotations
    api
-   tools_comparison
+   tool_comparison

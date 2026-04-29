@@ -1,19 +1,17 @@
-# .readthedocs.yaml
-# Read the Docs configuration file
-# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
-
-# Required
 version: 2
 
-# Set the version of Python and other tools you might need
 build:
-   os: ubuntu-24.04
-   tools:
-     python: "miniconda3-3.12-24.9"
+  os: ubuntu-24.04
+  tools:
+    python: "3.14"
 
-conda:
-  environment: environment.yml
-  
-# Build documentation in the docs/ directory with Sphinx
+python:
+  install:
+    - method: uv
+      command: sync
+      extras:
+        - docs
+        - gsea
+        
 sphinx:
-   configuration: docs/conf.py
+  configuration: docs/conf.py

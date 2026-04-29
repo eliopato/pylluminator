@@ -55,9 +55,6 @@ Documentation = "https://pylluminator.readthedocs.io/"
 Repository = "https://github.com/eliopato/pylluminator"
 Issues = "https://github.com/eliopato/pylluminator/issues"
 
-[dependency-groups]
-dev = []
-
 [tool.pytest.ini_options]
 filterwarnings = [
   "ignore::DeprecationWarning:numpy.matrixlib",

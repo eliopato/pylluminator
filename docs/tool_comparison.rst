@@ -1,10 +1,10 @@
-Tools comparison
+Tool comparison
 ----------------
 
 Several tools are available for Illumina microarray data analysis, either in R (e.g. `SeSAMe <https://bioconductor.org/packages/release/bioc/html/sesame.html>`_, `ChAMP <https://bioconductor.org/packages/release/bioc/html/ChAMP.html>`_) or in Python (e.g. `Mepylome <https://mepylome.readthedocs.io/en/latest/>`_, `CpGTools <https://cpgtools.readthedocs.io/en/latest/overview.html>`_, `Methylsuite <https://life-epigenetics-methylprep.readthedocs-hosted.com/en/latest/>`_). 
-The following summary highlights the main features of each tool and can guide the selection of the most appropriate option for a given study.
+The following summary highlights the main features of each tool and can guide the selection of the most appropriate option for a given study and dataset.
 
-Unless otherwise stated, Pylluminator provides at least the same functionality as SeSAMe and ChAMP for each method mentioned, since it builds upon these tools. This overview is not exhaustive, and was conducted on the latest available package versions as of april 2026
+Unless otherwise stated, Pylluminator provides at least the same functionality as SeSAMe and ChAMP for each method mentioned, since it builds upon these tools. This overview is not exhaustive, and was conducted on the latest available package versions as of April 2026
 
 Compared versions:
    * Pylluminator 2.2
@@ -48,7 +48,7 @@ Lift over                               :raw-html:`&#x2705;`           :raw-html
 .. rubric:: Footnotes
 
 .. [#f1] Pylluminator includes 3 methods: using normalization control probes / linear scaling / non-linear scaling. It does not include the "most balanced" method of SeSAMe. MethylSuite only implements the non-linear correction.
-.. [#f2] Pylluminator computes batch correction on M-values only, where ChAMP has the option to use the beta values and CpGTools uses beta values only. The reason for that beta values "often deviates from a Gaussian distribution, exhibiting skewness and over-dispersion" (`read more <https://doi.org/10.1093/nargab/lqaf062>`_). Using the beta values also results in values out of the 0-1 range.
+.. [#f2] Pylluminator computes batch correction on M-values only; ChAMP has the option to use the beta values and CpGTools uses beta values only. The reason is that beta values "often deviates from a Gaussian distribution, exhibiting skewness and over-dispersion" (`read more <https://doi.org/10.1093/nargab/lqaf062>`_). Using the beta values for batch correction also results in values out of the 0-1 range.
 .. [#f9] Mepylome offers 3 preprocessing methods: NOOB, SWAN and Illumina
 
 ========================================     =============================   =============================  =============================      ====================       =============================   ====================
@@ -72,9 +72,9 @@ Interactive plot interface                   :raw-html:`&#x274C;`            :ra
 
 .. rubric:: Footnotes
 
-.. [#f3] Pylluminator focuses on plotting beta density by sample and sample metadata (e.g control vs patients), SeSaMe on density by probes design (type I vs type II)
-.. [#f4] Pylluminator offers 14 different methods (MDS, PCA, NMF, UMAP, FA...), ChAMP implements MDS, Mepylome UMAP, CpGTools t-SNE, PCA and UMAP.
-.. [#f7] Pylluminator adds the option to accout for random effects
+.. [#f3] Pylluminator focuses on plotting beta density by sample and sample metadata (e.g control vs patient), SeSaMe on density by probes design (type I vs type II)
+.. [#f4] Pylluminator offers 14 different methods (e.g., MDS, PCA, NMF, UMAP, FA), ChAMP implements MDS, Mepylome UMAP, CpGTools t-SNE, PCA, and UMAP.
+.. [#f7] Pylluminator adds the option to account for random effects
 .. [#f5] ChAMP offers several methods (bumphunter, dmrcate, probelasso), where SeSAMe and Pylluminator implement one. Methylsuite implements bumphunter and comb-p.
 .. [#f6] Pylluminator offers a wide range of options for GSEA analysis, thanks to the `GSEApy <https://gseapy.readthedocs.io/en/latest/>`_ package. SeSAMe provides basic GSEA functions through the `KYCG <https://bioconductor.org/packages/release/bioc/html/knowYourCG.html>`_ package, that provides an advanced framework for CpG-centered analysis.
 .. [#f8] CpGTools and MethylSuite implement sex inference only
