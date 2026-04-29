@@ -9,7 +9,7 @@ source-exclude=["data"]
 
 [project]
 name = "pylluminator"
-version = "2.1"
+version = "2.2"
 authors = [{name = "Elio", email = "elio.fanchon@univ-amu.fr"}]
 maintainers = [{name = "Elio", email = "elio.fanchon@univ-amu.fr"}]
 requires-python = ">= 3.12"

@@ -95,11 +95,15 @@ class DM:
     def __init__(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
                  probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = True):
-        """Initialize the object by calculating the Differentially Methylated Probes (DMPs). It fits an Ordinary Least 
-        Square model (OLS) for each probe, following the given formula. The predictors used in the formula are column names of the sample sheet.
-        If a group column name is given, use a Mixed Model to account for random effects. The Benjamini-Hochberg procedure 
-        is used to adjust the p-values.
-           
+        """Initalize the object by calling the `compute_dmp` function, which estimate Differentially Methylated Probes (DMPs) 
+        by fitting an Ordinary Least Square (OLS) linear regression model to each probe's 
+        methylation value (either M-values (default) or beta values), following the given `formula`. 
+        The predictors used in the `formula` must be column names of the sample sheet. 
+        To account for random effects in the model (e.g. technical replicates, batch effect), set the `group_column` parameter to the 
+        column name of the sample sheet describing the random effect (e.g. "batch_id"). If this parameter is set, a Linear Mixed Model (LMM)
+        will be used instead of the OLS model.
+        The Benjamini-Hochberg procedure is used to adjust the p-values.
+
         More info on  design matrices and formulas:
             - https://www.statsmodels.org/devel/gettingstarted.html
             - https://patsy.readthedocs.io/en/latest/overview.html
@@ -332,10 +336,12 @@ class DM:
     def compute_dmp(self, samples: Samples, formula: str, reference_value: dict | None = None,
                  custom_sheet: None | pd.DataFrame = None, drop_na=False, apply_mask=True,
                  probe_ids: None | list[str] = None, group_column: str | None = None, use_m_values: bool = True):
-        """Find Differentially Methylated Probes (DMPs) by fitting an Ordinary Least Square model (OLS) for each probe,
-        following the given formula. The predictors used in the formula are column names of the sample sheet. 
-        To account for random effects in your model (e.g. technical replicates, batch effect), use the group_column parameter. A Linear Mixed
-        Model (LMM) will then be used instead of the OLS.
+        """Estimate Differentially Methylated Probes (DMPs) by fitting an Ordinary Least Square (OLS) linear regression model to each probe's 
+        methylation value (either M-values (default) or beta values), following the given `formula`. 
+        The predictors used in the `formula` must be column names of the sample sheet. 
+        To account for random effects in the model (e.g. technical replicates, batch effect), set the `group_column` parameter to the 
+        column name of the sample sheet describing the random effect (e.g. "batch_id"). If this parameter is set, a Linear Mixed Model (LMM)
+        will be used instead of the OLS model.
         The Benjamini-Hochberg procedure is used to adjust the p-values.
 
         More info on  design matrices and formulas:

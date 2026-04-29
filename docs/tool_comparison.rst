@@ -34,12 +34,13 @@ MM285                         :raw-html:`&#x2705;`  :raw-html:`&#x2705;`  :raw-h
 
 .. rubric:: Footnotes
 
-.. [#f0] see *Re-annotating the EPICv2 manifest with genes, intragenic features, and regulatory elements*, `(BioRxiv link) <https://www.biorxiv.org/content/10.1101/2025.03.12.642895v2>`_
+.. [#f0] ref: `Re-annotating the EPICv2 manifest with genes, intragenic features, and regulatory elements <https://www.biorxiv.org/content/10.1101/2025.03.12.642895v2>`_
  
 ==================================     =============================   ====================  ====================      =============================       ======================   ====================
 Data processing                        Pylluminator                    SeSAMe                ChAMP                     Mepylome                            CpGTools                  Methylsuite
 ==================================     =============================   ====================  ====================      =============================       ======================   ====================
 Read .idat files                        :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x2705;`      :raw-html:`&#x2705;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
+Probes masking/filtering                :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x2705;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
 Type-I probes channel inference         :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
 Dye bias correction [#f1]_              :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
 pOOBAH                                  :raw-html:`&#x2705;`           :raw-html:`&#x2705;`  :raw-html:`&#x274C;`      :raw-html:`&#x274C;`                :raw-html:`&#x274C;`     :raw-html:`&#x2705;`
@@ -63,7 +64,6 @@ Data analysis & visualisation                Pylluminator                    SeS
 Beta values density  [#f3]_                  :raw-html:`&#x2705;`            :raw-html:`&#x2705;`           :raw-html:`&#x2705;`               :raw-html:`&#x274C;`        :raw-html:`&#x274C;`           :raw-html:`&#x2705;`
 Beta values dimension reduction  [#f4]_      :raw-html:`&#x2705;`            :raw-html:`&#x274C;`           :raw-html:`&#x2705;`               :raw-html:`&#x2705;`        :raw-html:`&#x2705;`           :raw-html:`&#x274C;`
 Beta values dendrogram                       :raw-html:`&#x2705;`            :raw-html:`&#x274C;`           :raw-html:`&#x2705;`               :raw-html:`&#x274C;`        :raw-html:`&#x274C;`           :raw-html:`&#x274C;`
-Beta values imputation                       :raw-html:`&#x2705;`            :raw-html:`&#x2705;`           :raw-html:`&#x2705;`               :raw-html:`&#x274C;`        :raw-html:`&#x274C;`           :raw-html:`&#x274C;`
 Quality control                              :raw-html:`&#x2705;`            :raw-html:`&#x2705;`           :raw-html:`&#x2705;`               :raw-html:`&#x274C;`        :raw-html:`&#x2705;`           :raw-html:`&#x2705;`
 Gene visualisation                           :raw-html:`&#x2705;`            :raw-html:`&#x2705;`           :raw-html:`&#x2705;`               :raw-html:`&#x274C;`        :raw-html:`&#x274C;`           :raw-html:`&#x274C;`
 Genomic regions analysis                     :raw-html:`&#x2705;`            :raw-html:`&#x2705;`           :raw-html:`&#x2705;`               :raw-html:`&#x274C;`        :raw-html:`&#x2705;`           :raw-html:`&#x274C;`
