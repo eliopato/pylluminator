@@ -168,7 +168,7 @@ Citing
 -------
 
 Pylluminator is described in detail in: 
-*Pylluminator: fast and scalable analysis of DNA methylation data in Python*, available on `BioRxiv <https://www.biorxiv.org/content/10.1101/2025.09.16.676547v1>`_
+*Pylluminator: fast and scalable analysis of DNA methylation data in Python*, published in Bioinformatics Advances, Volume 6, Issue 1, 2026, (https://doi.org/10.1093/bioadv/vbag146)
 
 If you use this package in your research, please cite our work.
 
